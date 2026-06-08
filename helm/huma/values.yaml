@@ -1,0 +1,20 @@
+deployment:
+  replicas: 1
+  image:
+    repository: huma
+    tag: latest
+    pullPolicy: IfNotPresent
+  args: [""]
+  container:
+    port: 8000
+
+service:
+  port: 8000
+
+secret:
+  database:
+    readWriteUrl: ""
+
+job:
+  migration:
+    enabled: false

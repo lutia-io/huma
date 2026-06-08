@@ -1,0 +1,39 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: huma-app
+
+build:
+  artifacts:
+    - image: huma
+      docker:
+        dockerfile: Dockerfile
+
+# test:
+#   - image: huma
+#     custom:
+#       - command: go test --cover ./...
+#         timeoutSeconds: 600
+#         dependencies:
+#           paths:
+#             - "**/*.go"
+#             - "**/*_test.go"
+#             - "go.mod"
+#             - "go.sum"
+
+deploy:
+  helm:
+    releases:
+      - name: api
+        chartPath: ./helm/huma
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        skipBuildDependencies: true
+        setValueTemplates:
+          deployment.replicas: "{{.API_DEPLOYMENT_REPLICAS}}"
+          deployment.image.repository: "{{.IMAGE_REPO_huma}}"
+          deployment.image.tag: "{{.IMAGE_TAG_huma}}@{{.IMAGE_DIGEST_huma}}"
+          deployment.args[0]: "{{.API_DEPLOYMENT_ARG}}"
+          deployment.container.name: "{{.API_DEPLOYMENT_CONTAINER_NAME}}"
+          deployment.container.port: "{{.API_DEPLOYMENT_CONTAINER_PORT}}"
+          service.port: "{{.API_SERVICE_PORT}}"

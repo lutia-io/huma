@@ -1,0 +1,30 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+          cache: true
+
+      - name: Test
+        run: |
+          go test ./... -coverprofile=coverage.out
+
+      - name: Coverage
+        run: |
+          {
+            echo "## Coverage"
+            echo
+            go tool cover -func=coverage.out
+          } | tee coverage.txt >> "$GITHUB_STEP_SUMMARY"
