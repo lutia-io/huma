@@ -24,7 +24,7 @@ test:
 deploy:
   helm:
     releases:
-      - name: huma-db
+      - name: db
         remoteChart: mongodb
         repo: https://charts.bitnami.com/bitnami
         version: 19.1.4
@@ -34,6 +34,9 @@ deploy:
         setValueTemplates:
           architecture: standalone
           useStatefulSet: true
+          auth.databases[0]: "{{.DB_DATABASE_NAME}}"
+          auth.usernames[0]: "{{.DB_USERNAME}}"
+          auth.passwords[0]: "{{.DB_PASSWORD}}"
 
       - name: api
         chartPath: ./helm/huma
@@ -48,3 +51,4 @@ deploy:
           deployment.container.name: "{{.API_DEPLOYMENT_CONTAINER_NAME}}"
           deployment.container.port: "{{.API_DEPLOYMENT_CONTAINER_PORT}}"
           service.port: "{{.API_SERVICE_PORT}}"
+          secret.database.mongoUri: "mongodb://{{.DB_USERNAME}}:{{.DB_PASSWORD}}@{{.DB_HOST}}:{{.DB_PORT}}/{{.DB_DATABASE_NAME}}?authSource={{.DB_DATABASE_NAME}}"

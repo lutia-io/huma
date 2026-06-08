@@ -13,8 +13,4 @@ service:
 
 secret:
   database:
-    readWriteUrl: ""
-
-job:
-  migration:
-    enabled: false
+    mongoUri: ""

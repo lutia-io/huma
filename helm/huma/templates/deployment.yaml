@@ -20,4 +20,10 @@ spec:
           ports:
             - containerPort: {{ .Values.deployment.container.port }}
           env:
- 
+            - name: API_SERVICE_PORT
+              value: {{ .Values.service.port | quote }}
+            - name: API_SERVICE_MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secret
+                  key: database.mongoUri
