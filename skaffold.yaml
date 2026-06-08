@@ -9,21 +9,32 @@ build:
       docker:
         dockerfile: Dockerfile
 
-# test:
-#   - image: huma
-#     custom:
-#       - command: go test --cover ./...
-#         timeoutSeconds: 600
-#         dependencies:
-#           paths:
-#             - "**/*.go"
-#             - "**/*_test.go"
-#             - "go.mod"
-#             - "go.sum"
+test:
+  - image: huma
+    custom:
+      - command: go test --cover ./...
+        timeoutSeconds: 600
+        dependencies:
+          paths:
+            - "**/*.go"
+            - "**/*_test.go"
+            - "go.mod"
+            - "go.sum"
 
 deploy:
   helm:
     releases:
+      - name: huma-db
+        remoteChart: mongodb
+        repo: https://charts.bitnami.com/bitnami
+        version: 19.1.4
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          architecture: standalone
+          useStatefulSet: true
+
       - name: api
         chartPath: ./helm/huma
         namespace: "{{.NAMESPACE}}"

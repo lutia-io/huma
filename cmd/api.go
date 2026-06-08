@@ -10,5 +10,5 @@ var flags = flag.NewFlagSet("api", flag.ExitOnError)
 
 func NewApi(args []string) {
 	flags.Parse(args)
-	api.NewApi()
+	api.New()
 }
