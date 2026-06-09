@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/lutia-io/huma/pkg/apperror"
@@ -30,10 +32,39 @@ func (s *service) Find(ctx context.Context) ([]user, error) {
 	return users, nil
 }
 
-func (s *service) Insert(ctx context.Context, user *user) (string, error) {
+func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, error) {
+
+	firstName := strings.TrimSpace(req.FirstName)
+	if firstName == "" {
+		return "", apperror.NewBadRequestError("user.service.Insert", "First name is required", nil)
+	}
+
+	lastName := strings.TrimSpace(req.LastName)
+	if lastName == "" {
+		return "", apperror.NewBadRequestError("user.service.Insert", "Last name is required", nil)
+	}
+
+	email := strings.TrimSpace(req.Email)
+	if email == "" {
+		return "", apperror.NewBadRequestError("user.service.Insert", "Email is required", nil)
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return "", apperror.NewBadRequestError("user.service.Insert", "Email is invalid", err)
+	}
+
+	if req.Password == "" {
+		return "", apperror.NewBadRequestError("user.service.Insert", "Password is required", nil)
+	}
+
 	now := time.Now().UTC()
-	user.CreatedAt = now
-	user.UpdatedAt = now
+	user := &user{
+		FirstName: firstName,
+		LastName:  lastName,
+		Email:     email,
+		Password:  req.Password,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
 
 	id, err := s.store.Insert(ctx, user)
 	if err != nil {
