@@ -18,6 +18,13 @@ const RequestIDHeader = "X-Request-Id"
 // and write into every log line for the request.
 const maxRequestIDLen = 128
 
+// ContextWithRequestID returns a copy of ctx that carries id. It is the single
+// writer of the request-ID context value, used by NewRequestID and available
+// to callers (e.g. tests, background jobs) that need to propagate an ID.
+func ContextWithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDKey{}, id)
+}
+
 // RequestIDFromContext returns the request ID stored by NewRequestID, if any.
 // The boolean is false when no (non-empty) ID is present.
 func RequestIDFromContext(ctx context.Context) (string, bool) {
@@ -46,7 +53,7 @@ func NewRequestID(next http.Handler) http.Handler {
 		}
 
 		w.Header().Set(RequestIDHeader, id)
-		ctx := context.WithValue(r.Context(), requestIDKey{}, id)
+		ctx := ContextWithRequestID(r.Context(), id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

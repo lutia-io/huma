@@ -1,6 +1,7 @@
 package render
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -12,8 +13,11 @@ func WriteInternalError(w http.ResponseWriter) {
 	WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal error"})
 }
 
-func WriteError(logger *slog.Logger, w http.ResponseWriter, err error) {
+func WriteError(ctx context.Context, logger *slog.Logger, w http.ResponseWriter, err error) {
 	if err == nil {
+		if logger != nil {
+			logger.ErrorContext(ctx, "Handler returned nil error")
+		}
 		WriteInternalError(w)
 		return
 	}
@@ -30,12 +34,16 @@ func WriteError(logger *slog.Logger, w http.ResponseWriter, err error) {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"error": e.Msg})
 			return
 		default:
-			logger.Error("Request failed", "op", e.Op, "err", e.Err)
+			if logger != nil {
+				logger.ErrorContext(ctx, "Internal application error", "op", e.Op, "msg", e.Msg, "error", e.Err)
+			}
 			WriteInternalError(w)
 			return
 		}
 	}
 
-	logger.Error("Request failed", "err", err)
+	if logger != nil {
+		logger.ErrorContext(ctx, "Unhandled error", "error", err)
+	}
 	WriteInternalError(w)
 }

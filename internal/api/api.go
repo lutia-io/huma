@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lutia-io/huma/pkg/middleware"
+	"github.com/lutia-io/huma/pkg/user"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
@@ -18,7 +19,9 @@ func New() {
 	logger := slog.Default()
 
 	uri := os.Getenv("API_SERVICE_MONGO_URI")
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(options.Client().
+		ApplyURI(uri).
+		SetBSONOptions(&options.BSONOptions{ObjectIDAsHexString: true}))
 	if err != nil {
 		logger.Error("failed to connect to mongo", "error", err)
 	}
@@ -34,6 +37,8 @@ func New() {
 
 	mux := http.NewServeMux()
 	handler := http.Handler(mux)
+
+	user.Init(logger, client, mux)
 
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)

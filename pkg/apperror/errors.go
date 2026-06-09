@@ -37,12 +37,25 @@ func (e *Error) Error() string {
 	}
 }
 
+// Unwrap exposes the wrapped cause so errors.Is/errors.As can traverse the
+// chain (e.g. matching a sentinel or driver error behind an *Error).
+func (e *Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
 func NewBadRequestError(op, msg string, err error) error {
 	return &Error{Variant: ErrorVariantBadRequest, Op: op, Msg: msg, Err: err}
 }
 
 func NewConflictError(op, msg string, err error) error {
 	return &Error{Variant: ErrorVariantConflict, Op: op, Msg: msg, Err: err}
+}
+
+func NewNotFoundError(op, msg string, err error) error {
+	return &Error{Variant: ErrorVariantNotFound, Op: op, Msg: msg, Err: err}
 }
 
 func NewInternalError(op, msg string, err error) error {
