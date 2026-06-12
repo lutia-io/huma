@@ -10,5 +10,5 @@ import (
 func Init(logger *slog.Logger, client *mongo.Client, mux *http.ServeMux) {
 	store := NewMongoStore(client)
 	service := NewService(logger, store)
-	newHTTPHandler(logger, service, mux)
+	newHTTPHandler(service, mux)
 }

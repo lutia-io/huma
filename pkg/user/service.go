@@ -36,23 +36,28 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 
 	firstName := strings.TrimSpace(req.FirstName)
 	if firstName == "" {
+		s.logger.WarnContext(ctx, "Empty first name")
 		return "", apperror.NewBadRequestError("user.service.Insert", "First name is required", nil)
 	}
 
 	lastName := strings.TrimSpace(req.LastName)
 	if lastName == "" {
+		s.logger.WarnContext(ctx, "Empty last name")
 		return "", apperror.NewBadRequestError("user.service.Insert", "Last name is required", nil)
 	}
 
 	email := strings.TrimSpace(req.Email)
 	if email == "" {
+		s.logger.WarnContext(ctx, "Empty email")
 		return "", apperror.NewBadRequestError("user.service.Insert", "Email is required", nil)
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
+		s.logger.WarnContext(ctx, "Invalid email", "email", email, "error", err)
 		return "", apperror.NewBadRequestError("user.service.Insert", "Email is invalid", err)
 	}
 
 	if req.Password == "" {
+		s.logger.WarnContext(ctx, "Empty password")
 		return "", apperror.NewBadRequestError("user.service.Insert", "Password is required", nil)
 	}
 
