@@ -1,14 +1,14 @@
 package user
 
 import (
-	"log/slog"
 	"net/http"
 
+	"github.com/lutia-io/huma/pkg/logger"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func Init(logger *slog.Logger, client *mongo.Client, mux *http.ServeMux) {
-	store := NewMongoStore(client)
-	service := NewService(logger, store)
+func New(logger *logger.Logger, client *mongo.Client, mux *http.ServeMux) {
+	store := newMongoStore(client)
+	service := newService(logger, store)
 	newHTTPHandler(service, mux)
 }

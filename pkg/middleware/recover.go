@@ -1,10 +1,10 @@
 package middleware
 
 import (
-	"log/slog"
 	"net/http"
 	"runtime/debug"
 
+	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/render"
 )
 
@@ -15,7 +15,7 @@ import (
 //
 // http.ErrAbortHandler is intentionally re-panicked: the standard library uses
 // it as a sentinel to silently abort a connection.
-func NewRecover(logger *slog.Logger, next http.Handler) http.Handler {
+func NewRecover(log *logger.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			rec := recover()
@@ -26,16 +26,12 @@ func NewRecover(logger *slog.Logger, next http.Handler) http.Handler {
 				panic(rec)
 			}
 
-			attrs := []any{
-				slog.Any("panic", rec),
-				slog.String("path", r.URL.Path),
-				slog.String("method", r.Method),
-				slog.String("stack", string(debug.Stack())),
-			}
-			if rid, ok := RequestIDFromContext(r.Context()); ok {
-				attrs = append(attrs, slog.String("request_id", rid))
-			}
-			logger.ErrorContext(r.Context(), "Panic recovered", attrs...)
+			log.ErrorContext(r.Context(), "Panic recovered",
+				logger.KeyPanic, rec,
+				logger.KeyPath, r.URL.Path,
+				logger.KeyMethod, r.Method,
+				logger.KeyStack, string(debug.Stack()),
+			)
 			render.WriteInternalError(w)
 		}()
 		next.ServeHTTP(w, r)

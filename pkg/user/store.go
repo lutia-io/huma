@@ -23,7 +23,7 @@ type mongoStore struct {
 	client *mongo.Client
 }
 
-func NewMongoStore(client *mongo.Client) store {
+func newMongoStore(client *mongo.Client) store {
 	store := &mongoStore{client: client}
 	if err := registerIndexes(context.Background(), client); err != nil {
 		panic(err)

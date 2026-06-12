@@ -3,20 +3,20 @@ package user
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/mail"
 	"strings"
 	"time"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/logger"
 )
 
 type service struct {
-	logger *slog.Logger
+	logger *logger.Logger
 	store  store
 }
 
-func NewService(logger *slog.Logger, store store) *service {
+func newService(logger *logger.Logger, store store) *service {
 	return &service{
 		logger: logger,
 		store:  store,
@@ -28,7 +28,7 @@ func (s *service) Find(ctx context.Context) ([]user, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.logger.InfoContext(ctx, "Successfully fetched users", "count", len(users))
+	s.logger.InfoContext(ctx, "Successfully fetched users", logger.KeyCount, len(users))
 	return users, nil
 }
 
@@ -52,7 +52,7 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 		return "", apperror.NewBadRequestError("user.service.Insert", "Email is required", nil)
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
-		s.logger.WarnContext(ctx, "Invalid email", "email", email, "error", err)
+		s.logger.WarnContext(ctx, "Invalid email", logger.KeyEmail, email, logger.KeyError, err)
 		return "", apperror.NewBadRequestError("user.service.Insert", "Email is invalid", err)
 	}
 
@@ -60,6 +60,8 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 		s.logger.WarnContext(ctx, "Empty password")
 		return "", apperror.NewBadRequestError("user.service.Insert", "Password is required", nil)
 	}
+
+	// TODO: Hash password
 
 	now := time.Now().UTC()
 	user := &user{
@@ -75,10 +77,10 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 	if err != nil {
 		var appErr *apperror.Error
 		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
-			s.logger.WarnContext(ctx, "Rejected duplicate user", "email", user.Email)
+			s.logger.WarnContext(ctx, "Rejected duplicate user", logger.KeyEmail, user.Email)
 		}
 		return "", err
 	}
-	s.logger.InfoContext(ctx, "Successfully created user", "id", id, "email", user.Email)
+	s.logger.InfoContext(ctx, "Successfully created user", logger.KeyID, id, logger.KeyEmail, user.Email)
 	return id, nil
 }

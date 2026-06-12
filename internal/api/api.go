@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/user"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -16,35 +16,35 @@ import (
 )
 
 func New() {
-	logger := slog.Default()
+	log := logger.New()
 
 	uri := os.Getenv("API_SERVICE_MONGO_URI")
 	client, err := mongo.Connect(options.Client().
 		ApplyURI(uri).
 		SetBSONOptions(&options.BSONOptions{ObjectIDAsHexString: true}))
 	if err != nil {
-		logger.Error("failed to connect to mongo", "error", err)
+		log.Error("failed to connect to mongo", logger.KeyError, err)
 	}
 	defer func() {
 		if err := client.Disconnect(context.Background()); err != nil {
-			logger.Error("failed to disconnect from mongo", "error", err)
+			log.Error("failed to disconnect from mongo", logger.KeyError, err)
 		}
 	}()
 
 	if err := client.Ping(context.Background(), readpref.Primary()); err != nil {
-		logger.Error("failed to ping mongo", "error", err)
+		log.Error("failed to ping mongo", logger.KeyError, err)
 	}
 
 	mux := http.NewServeMux()
 	handler := http.Handler(mux)
 
-	user.Init(logger, client, mux)
+	user.New(log, client, mux)
 
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)
 	handler = middleware.NewTimeout(30*time.Second, handler)
-	handler = middleware.NewRecover(logger, handler)
-	handler = middleware.NewLogger(logger, handler)
+	handler = middleware.NewRecover(log, handler)
+	handler = middleware.NewLogger(log, handler)
 	handler = middleware.NewRequestID(handler)
 	handler = middleware.NewRealIP(handler)
 
@@ -55,8 +55,8 @@ func New() {
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	logger.Info("API is listening and serving", "port", port)
+	log.Info("API is listening and serving", "port", port)
 	if err := srv.ListenAndServe(); err != nil {
-		logger.Error("Failed to listen and serve", "error", err)
+		log.Error("Failed to listen and serve", logger.KeyError, err)
 	}
 }

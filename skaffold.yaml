@@ -24,7 +24,7 @@ test:
 deploy:
   helm:
     releases:
-      - name: db
+      - name: mongodb
         remoteChart: mongodb
         repo: https://charts.bitnami.com/bitnami
         version: 19.1.4
