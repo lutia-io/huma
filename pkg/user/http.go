@@ -22,6 +22,7 @@ func newHTTPHandler(service *service, mux *http.ServeMux) *httpHandler {
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /users", h.List)
+	mux.HandleFunc("GET /users/{id}", h.Get)
 	mux.HandleFunc("POST /users", h.Insert)
 }
 
@@ -34,6 +35,15 @@ func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
 	render.WriteJSON(w, http.StatusOK, users)
 }
 
+func (h *httpHandler) Get(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	user, err := h.service.FindById(r.Context(), id)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, user)
+}
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 	var req insertUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

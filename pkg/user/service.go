@@ -32,6 +32,16 @@ func (s *service) Find(ctx context.Context) ([]user, error) {
 	return users, nil
 }
 
+func (s *service) FindById(ctx context.Context, id string) (*user, error) {
+	user, err := s.store.FindById(ctx, id)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to fetch user", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+	s.logger.InfoContext(ctx, "Successfully fetched user", logger.KeyID, user.ID)
+	return user, nil
+}
+
 func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, error) {
 
 	firstName := strings.TrimSpace(req.FirstName)

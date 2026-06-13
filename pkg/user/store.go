@@ -16,6 +16,7 @@ const (
 
 type store interface {
 	Find(ctx context.Context) ([]user, error)
+	FindById(ctx context.Context, id string) (*user, error)
 	Insert(ctx context.Context, user *user) (string, error)
 }
 
@@ -40,7 +41,7 @@ func registerIndexes(ctx context.Context, client *mongo.Client) error {
 }
 
 func (store *mongoStore) Find(ctx context.Context) ([]user, error) {
-	filter := bson.M{"deletedAt": nil}
+	filter := bson.M{"deleted_at": nil}
 
 	cursor, err := store.client.Database(databaseName).Collection(collectionName).Find(ctx, filter)
 	if err != nil {
@@ -54,6 +55,20 @@ func (store *mongoStore) Find(ctx context.Context) ([]user, error) {
 	}
 
 	return users, nil
+}
+
+func (store *mongoStore) FindById(ctx context.Context, id string) (*user, error) {
+	objectID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, apperror.NewNotFoundError("user.store.FindById", "User not found", err)
+	}
+
+	filter := bson.M{"_id": objectID, "deleted_at": nil}
+	var user user
+	if err := store.client.Database(databaseName).Collection(collectionName).FindOne(ctx, filter).Decode(&user); err != nil {
+		return nil, apperror.NewNotFoundError("user.store.FindById", "User not found", err)
+	}
+	return &user, nil
 }
 
 func (store *mongoStore) Insert(ctx context.Context, user *user) (string, error) {
