@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/hasher"
 	"github.com/lutia-io/huma/pkg/logger"
 )
 
@@ -38,7 +39,7 @@ func (s *service) FindById(ctx context.Context, id string) (*user, error) {
 		s.logger.ErrorContext(ctx, "Failed to fetch user", logger.KeyID, id, logger.KeyError, err)
 		return nil, err
 	}
-	s.logger.InfoContext(ctx, "Successfully fetched user", logger.KeyID, user.ID)
+	s.logger.InfoContext(ctx, "Successfully fetched user", logger.KeyID, user.ID, logger.KeyEmail, user.Email)
 	return user, nil
 }
 
@@ -71,14 +72,19 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 		return "", apperror.NewBadRequestError("user.service.Insert", "Password is required", nil)
 	}
 
-	// TODO: Hash password
+	hasher := hasher.NewArgon2IDHasher()
+	password, err := hasher.Hash(req.Password)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to hash password", logger.KeyError, err)
+		return "", apperror.NewInternalError("user.service.Insert", "Failed to hash password", err)
+	}
 
 	now := time.Now().UTC()
 	user := &user{
 		FirstName: firstName,
 		LastName:  lastName,
 		Email:     email,
-		Password:  req.Password,
+		Password:  password,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
