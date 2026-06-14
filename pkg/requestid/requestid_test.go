@@ -22,6 +22,13 @@ func TestFromContext(t *testing.T) {
 	}
 }
 
+func TestNew(t *testing.T) {
+	id := New()
+	if len(id) != 32 { // 16-byte ID hex-encoded
+		t.Fatalf("id length: got %d (%q) want 32", len(id), id)
+	}
+}
+
 func TestNew_randFallback(t *testing.T) {
 	orig := randRead
 	randRead = func(b []byte) (int, error) { return 0, errors.New("no entropy") }

@@ -61,3 +61,10 @@ func TestRequestIDFromContext_presentButEmpty(t *testing.T) {
 		t.Fatalf("expected empty/false for empty value, got %q/%v", id, ok)
 	}
 }
+
+func TestContextWithRequestID(t *testing.T) {
+	ctx := ContextWithRequestID(context.Background(), "test-id")
+	if id, ok := RequestIDFromContext(ctx); !ok || id != "test-id" {
+		t.Fatalf("got %q/%v want test-id/true", id, ok)
+	}
+}
