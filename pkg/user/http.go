@@ -24,6 +24,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /users", h.List)
 	mux.HandleFunc("GET /users/{id}", h.Get)
 	mux.HandleFunc("POST /users", h.Insert)
+	mux.HandleFunc("PATCH /users/{id}", h.Update)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -56,4 +57,19 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *httpHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req updateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("user.http.Update", "Invalid request body", err))
+		return
+	}
+	err := h.service.Update(r.Context(), id, req)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusNoContent, nil)
 }

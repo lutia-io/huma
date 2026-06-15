@@ -44,7 +44,6 @@ func (s *service) FindById(ctx context.Context, id string) (*user, error) {
 }
 
 func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, error) {
-
 	firstName := strings.TrimSpace(req.FirstName)
 	if firstName == "" {
 		s.logger.WarnContext(ctx, "Empty first name")
@@ -95,8 +94,40 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
 			s.logger.WarnContext(ctx, "Rejected duplicate user", logger.KeyEmail, user.Email)
 		}
+		s.logger.ErrorContext(ctx, "Failed to insert user", logger.KeyEmail, user.Email, logger.KeyError, err)
 		return "", err
 	}
-	s.logger.InfoContext(ctx, "Successfully created user", logger.KeyID, id, logger.KeyEmail, user.Email)
+	s.logger.InfoContext(ctx, "Successfully created user", logger.KeyID, id)
 	return id, nil
+}
+
+func (s *service) Update(ctx context.Context, id string, req updateUserRequest) error {
+	user, err := s.store.FindById(ctx, id)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to fetch user", logger.KeyID, id, logger.KeyError, err)
+		return err
+	}
+
+	firstName := strings.TrimSpace(req.FirstName)
+	if firstName == "" {
+		s.logger.WarnContext(ctx, "Empty first name")
+		return apperror.NewBadRequestError("user.service.Update", "First name is required", nil)
+	}
+	lastName := strings.TrimSpace(req.LastName)
+	if lastName == "" {
+		s.logger.WarnContext(ctx, "Empty last name")
+		return apperror.NewBadRequestError("user.service.Update", "Last name is required", nil)
+	}
+
+	user.FirstName = firstName
+	user.LastName = lastName
+	user.UpdatedAt = time.Now().UTC()
+
+	err = s.store.Update(ctx, id, user)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to update user", logger.KeyID, id, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully updated user", logger.KeyID, id)
+	return nil
 }

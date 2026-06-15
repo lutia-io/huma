@@ -23,3 +23,8 @@ type insertUserRequest struct {
 	Email     string `json:"email"`
 	Password  string `json:"password"`
 }
+
+type updateUserRequest struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+}
