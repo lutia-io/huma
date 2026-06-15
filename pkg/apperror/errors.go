@@ -37,8 +37,6 @@ func (e *Error) Error() string {
 	}
 }
 
-// Unwrap exposes the wrapped cause so errors.Is/errors.As can traverse the
-// chain (e.g. matching a sentinel or driver error behind an *Error).
 func (e *Error) Unwrap() error {
 	if e == nil {
 		return nil
