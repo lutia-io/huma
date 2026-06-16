@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -17,21 +18,22 @@ const (
 
 type store interface {
 	Find(ctx context.Context) ([]user, error)
-	FindById(ctx context.Context, id string) (*user, error)
+	FindByID(ctx context.Context, id string) (*user, error)
 	Insert(ctx context.Context, user *user) (string, error)
-	Update(ctx context.Context, id string, user *user) error
+	UpdateByID(ctx context.Context, id string, user *user) error
+	SoftDeleteByID(ctx context.Context, id string) error
 }
 
 type mongoStore struct {
 	client *mongo.Client
 }
 
-func newMongoStore(client *mongo.Client) store {
+func newMongoStore(client *mongo.Client) (store, error) {
 	store := &mongoStore{client: client}
 	if err := registerIndexes(context.Background(), client); err != nil {
-		panic(err)
+		return nil, err
 	}
-	return store
+	return store, nil
 }
 
 func registerIndexes(ctx context.Context, client *mongo.Client) error {
@@ -57,19 +59,19 @@ func (store *mongoStore) Find(ctx context.Context) ([]user, error) {
 	return users, nil
 }
 
-func (store *mongoStore) FindById(ctx context.Context, id string) (*user, error) {
+func (store *mongoStore) FindByID(ctx context.Context, id string) (*user, error) {
 	objectID, err := bson.ObjectIDFromHex(id)
 	if err != nil {
-		return nil, apperror.NewNotFoundError("user.store.FindById", "User not found", err)
+		return nil, apperror.NewNotFoundError("user.store.FindByID", "User not found", err)
 	}
 
 	filter := bson.M{"_id": objectID, "deleted_at": nil}
 	var user user
 	if err := store.client.Database(databaseName).Collection(collectionName).FindOne(ctx, filter).Decode(&user); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, apperror.NewNotFoundError("user.store.FindById", "User not found", err)
+			return nil, apperror.NewNotFoundError("user.store.FindByID", "User not found", err)
 		}
-		return nil, apperror.NewInternalError("user.store.FindById", "Failed to find user", err)
+		return nil, apperror.NewInternalError("user.store.FindByID", "Failed to find user", err)
 	}
 	return &user, nil
 }
@@ -87,7 +89,7 @@ func (store *mongoStore) Insert(ctx context.Context, user *user) (string, error)
 	return user.ID, nil
 }
 
-func (store *mongoStore) Update(ctx context.Context, id string, user *user) error {
+func (store *mongoStore) UpdateByID(ctx context.Context, id string, user *user) error {
 	objectID, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		return apperror.NewNotFoundError("user.store.Update", "User not found", err)
@@ -107,6 +109,29 @@ func (store *mongoStore) Update(ctx context.Context, id string, user *user) erro
 	}
 	if result.MatchedCount == 0 {
 		return apperror.NewNotFoundError("user.store.Update", "User not found", nil)
+	}
+	return nil
+}
+
+func (store *mongoStore) SoftDeleteByID(ctx context.Context, id string) error {
+	objectID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return apperror.NewNotFoundError("user.store.SoftDelete", "User not found", err)
+	}
+	now := time.Now().UTC()
+	filter := bson.M{"_id": objectID, "deleted_at": nil}
+	update := bson.M{
+		"$set": bson.M{
+			"deleted_at": now,
+			"updated_at": now,
+		},
+	}
+	result, err := store.client.Database(databaseName).Collection(collectionName).UpdateOne(ctx, filter, update)
+	if err != nil {
+		return apperror.NewInternalError("user.store.SoftDelete", "Failed to delete user", err)
+	}
+	if result.MatchedCount == 0 {
+		return apperror.NewNotFoundError("user.store.SoftDelete", "User not found", nil)
 	}
 	return nil
 }

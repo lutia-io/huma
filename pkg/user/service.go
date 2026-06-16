@@ -15,12 +15,14 @@ import (
 type service struct {
 	logger *logger.Logger
 	store  store
+	hasher hasher.Hasher
 }
 
-func newService(logger *logger.Logger, store store) *service {
+func newService(logger *logger.Logger, store store, hasher hasher.Hasher) *service {
 	return &service{
 		logger: logger,
 		store:  store,
+		hasher: hasher,
 	}
 }
 
@@ -33,8 +35,8 @@ func (s *service) Find(ctx context.Context) ([]user, error) {
 	return users, nil
 }
 
-func (s *service) FindById(ctx context.Context, id string) (*user, error) {
-	user, err := s.store.FindById(ctx, id)
+func (s *service) FindByID(ctx context.Context, id string) (*user, error) {
+	user, err := s.store.FindByID(ctx, id)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to fetch user", logger.KeyID, id, logger.KeyError, err)
 		return nil, err
@@ -71,8 +73,7 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 		return "", apperror.NewBadRequestError("user.service.Insert", "Password is required", nil)
 	}
 
-	hasher := hasher.NewArgon2IDHasher()
-	password, err := hasher.Hash(req.Password)
+	hashedPassword, err := s.hasher.Hash(req.Password)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to hash password", logger.KeyError, err)
 		return "", apperror.NewInternalError("user.service.Insert", "Failed to hash password", err)
@@ -83,7 +84,7 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 		FirstName: firstName,
 		LastName:  lastName,
 		Email:     email,
-		Password:  password,
+		Password:  hashedPassword,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -93,6 +94,7 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 		var appErr *apperror.Error
 		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
 			s.logger.WarnContext(ctx, "Rejected duplicate user", logger.KeyEmail, user.Email)
+			return "", err
 		}
 		s.logger.ErrorContext(ctx, "Failed to insert user", logger.KeyEmail, user.Email, logger.KeyError, err)
 		return "", err
@@ -101,8 +103,8 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 	return id, nil
 }
 
-func (s *service) Update(ctx context.Context, id string, req updateUserRequest) error {
-	user, err := s.store.FindById(ctx, id)
+func (s *service) UpdateByID(ctx context.Context, id string, req updateUserRequest) error {
+	user, err := s.store.FindByID(ctx, id)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to fetch user", logger.KeyID, id, logger.KeyError, err)
 		return err
@@ -123,11 +125,21 @@ func (s *service) Update(ctx context.Context, id string, req updateUserRequest) 
 	user.LastName = lastName
 	user.UpdatedAt = time.Now().UTC()
 
-	err = s.store.Update(ctx, id, user)
+	err = s.store.UpdateByID(ctx, id, user)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to update user", logger.KeyID, id, logger.KeyError, err)
 		return err
 	}
 	s.logger.InfoContext(ctx, "Successfully updated user", logger.KeyID, id)
+	return nil
+}
+
+func (s *service) DeleteByID(ctx context.Context, id string) error {
+	const op = "user.service.Delete"
+	if err := s.store.SoftDeleteByID(ctx, id); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to delete user", logger.KeyID, id, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully deleted user", logger.KeyID, id)
 	return nil
 }

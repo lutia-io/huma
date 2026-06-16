@@ -25,6 +25,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /users/{id}", h.Get)
 	mux.HandleFunc("POST /users", h.Insert)
 	mux.HandleFunc("PATCH /users/{id}", h.Update)
+	mux.HandleFunc("DELETE /users/{id}", h.Delete)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +39,7 @@ func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *httpHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	user, err := h.service.FindById(r.Context(), id)
+	user, err := h.service.FindByID(r.Context(), id)
 	if err != nil {
 		render.WriteError(w, err)
 		return
@@ -66,7 +67,17 @@ func (h *httpHandler) Update(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("user.http.Update", "Invalid request body", err))
 		return
 	}
-	err := h.service.Update(r.Context(), id, req)
+	err := h.service.UpdateByID(r.Context(), id, req)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusNoContent, nil)
+}
+
+func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	err := h.service.DeleteByID(r.Context(), id)
 	if err != nil {
 		render.WriteError(w, err)
 		return
