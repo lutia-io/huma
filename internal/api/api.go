@@ -11,6 +11,7 @@ import (
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/user"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
@@ -39,6 +40,14 @@ func New() {
 	mux := http.NewServeMux()
 	handler := http.Handler(mux)
 
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	mux.Handle("GET /metrics", promhttp.Handler())
 	user.New(log, client, mux)
 	network.New(log, client, mux)
 
@@ -47,6 +56,7 @@ func New() {
 	handler = middleware.NewTimeout(30*time.Second, handler)
 	handler = middleware.NewRecover(log, handler)
 	handler = middleware.NewLogger(log, handler)
+	handler = middleware.NewMetrics(handler)
 	handler = middleware.NewRequestID(handler)
 	handler = middleware.NewRealIP(handler)
 

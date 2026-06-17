@@ -21,7 +21,7 @@ deploy:
       - name: mongodb
         remoteChart: mongodb
         repo: https://charts.bitnami.com/bitnami
-        version: 19.1.4
+        version: 19.1.11
         namespace: "{{.NAMESPACE}}"
         createNamespace: true
         wait: true
@@ -31,6 +31,28 @@ deploy:
           auth.databases[0]: "{{.MONGODB_DATABASE_NAME}}"
           auth.usernames[0]: "{{.MONGODB_USERNAME}}"
           auth.passwords[0]: "{{.MONGODB_PASSWORD}}"
+
+      - name: prometheus
+        remoteChart: prometheus
+        repo: https://prometheus-community.github.io/helm-charts
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          alertmanager.enabled: false
+          kube-state-metrics.enabled: false
+          prometheus-pushgateway.enabled: false
+
+      - name: grafana
+        remoteChart: grafana
+        repo: https://grafana-community.github.io/helm-charts
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          persistence.enabled: true
+          service.type: LoadBalancer
+          service.port: 3000
 
       - name: api
         chartPath: ./helm/huma

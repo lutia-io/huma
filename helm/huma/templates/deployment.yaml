@@ -19,6 +19,14 @@ spec:
           args: {{ toYaml .Values.deployment.args | nindent 12 }}
           ports:
             - containerPort: {{ .Values.deployment.container.port }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.deployment.container.port }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.deployment.container.port }}
           env:
             - name: API_SERVICE_PORT
               value: {{ .Values.service.port | quote }}

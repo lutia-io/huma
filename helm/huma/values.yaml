@@ -9,7 +9,12 @@ deployment:
     port: 8000
 
 service:
+  type: LoadBalancer
   port: 8000
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8000"
 
 secret:
   database:

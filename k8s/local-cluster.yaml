@@ -4,6 +4,11 @@ name: local-cluster
 nodes:
   - role: control-plane
     extraPortMappings:
+    # API
       - containerPort: 8000
         hostPort: 8000
+        protocol: TCP
+    # Grafana
+      - containerPort: 3000
+        hostPort: 3000
         protocol: TCP
