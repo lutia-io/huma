@@ -28,6 +28,17 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestNew_withStdoutWriter(t *testing.T) {
+	log := New()
+
+	if log == nil {
+		t.Fatal("New: expected non-nil logger")
+	}
+	if log.Slog() == nil {
+		t.Fatal("Slog: expected non-nil inner logger")
+	}
+}
+
 func TestInfo(t *testing.T) {
 	log, buf := testLogger(t)
 
