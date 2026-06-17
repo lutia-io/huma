@@ -135,7 +135,6 @@ func (s *service) UpdateByID(ctx context.Context, id string, req updateUserReque
 }
 
 func (s *service) DeleteByID(ctx context.Context, id string) error {
-	const op = "user.service.Delete"
 	if err := s.store.SoftDeleteByID(ctx, id); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to delete user", logger.KeyID, id, logger.KeyError, err)
 		return err

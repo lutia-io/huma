@@ -16,4 +16,7 @@ const (
 	KeyID         = "id"
 	KeyPanic      = "panic"
 	KeyStack      = "stack"
+	KeyName       = "name"
+	KeySlug       = "slug"
+	KeyUserID     = "user_id"
 )

@@ -9,6 +9,7 @@ import (
 
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/middleware"
+	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/user"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -39,6 +40,7 @@ func New() {
 	handler := http.Handler(mux)
 
 	user.New(log, client, mux)
+	network.New(log, client, mux)
 
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)
