@@ -2,7 +2,9 @@ package logger
 
 import (
 	"context"
+	"io"
 	"log/slog"
+	"os"
 
 	"github.com/lutia-io/huma/pkg/requestid"
 )
@@ -12,8 +14,14 @@ type Logger struct {
 }
 
 func New() *Logger {
+	return NewWithWriter(os.Stdout)
+}
+
+func NewWithWriter(w io.Writer) *Logger {
 	return &Logger{
-		inner: slog.Default(),
+		inner: slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		})),
 	}
 }
 

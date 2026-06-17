@@ -3,7 +3,6 @@ package logger
 import (
 	"bytes"
 	"context"
-	"log/slog"
 	"strings"
 	"testing"
 
@@ -14,12 +13,8 @@ func testLogger(t *testing.T) (*Logger, *bytes.Buffer) {
 	t.Helper()
 
 	var buf bytes.Buffer
-	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	old := slog.Default()
-	slog.SetDefault(slog.New(h))
-	t.Cleanup(func() { slog.SetDefault(old) })
 
-	return New(), &buf
+	return NewWithWriter(&buf), &buf
 }
 
 func TestNew(t *testing.T) {

@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,12 +14,8 @@ func testLogger(t *testing.T) (*logger.Logger, *bytes.Buffer) {
 	t.Helper()
 
 	var buf bytes.Buffer
-	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	old := slog.Default()
-	slog.SetDefault(slog.New(h))
-	t.Cleanup(func() { slog.SetDefault(old) })
 
-	return logger.New(), &buf
+	return logger.NewWithWriter(&buf), &buf
 }
 
 func TestResponseRecorder_writeHeaderOnce(t *testing.T) {
