@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-func TestMongoStoreIntegration(t *testing.T) {
+func TestMongoStore(t *testing.T) {
 	ctx := context.Background()
 	container, err := mongodb.Run(ctx, "mongo:6")
 	if err != nil {
