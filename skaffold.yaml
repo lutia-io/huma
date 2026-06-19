@@ -32,6 +32,74 @@ deploy:
           auth.usernames[0]: "{{.MONGODB_USERNAME}}"
           auth.passwords[0]: "{{.MONGODB_PASSWORD}}"
 
+      - name: rustfs
+        remoteChart: rustfs
+        repo: https://charts.rustfs.com
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          mode.standalone.enabled: true
+          mode.distributed.enabled: false
+          storageclass.dataStorageSize: "8Gi"
+          secret.rustfs.access_key: "admin"
+          secret.rustfs.secret_key: "admin"
+          storageclass.name: "standard"
+
+      - name: loki
+        remoteChart: loki
+        repo: https://grafana-community.github.io/helm-charts
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          loki.commonConfig.replication_factor: 1
+          loki.commonConfig.ring.kvstore.store: inmemory
+          loki.schemaConfig.configs[0].from: "2024-04-01"
+          loki.schemaConfig.configs[0].object_store: s3
+          loki.schemaConfig.configs[0].store: tsdb
+          loki.schemaConfig.configs[0].schema: v13
+          loki.schemaConfig.configs[0].index.prefix: loki_index_
+          loki.schemaConfig.configs[0].index.period: 24h
+          loki.pattern_ingester.enabled: true
+          loki.limits_config.allow_structured_metadata: true
+          loki.limits_config.volume_enabled: true
+          loki.limits_config.retention_period: 672h
+          loki.storage.type: s3
+          loki.storage.bucketNames.chunks: huma-loki-chunks
+          loki.storage.bucketNames.ruler: huma-loki-ruler
+          loki.storage.bucketNames.admin: huma-loki-admin
+          loki.storage.s3.endpoint: "rustfs-svc.{{.NAMESPACE}}.svc.cluster.local:9000"
+          loki.storage.s3.region: us-east-1
+          loki.storage.s3.accessKeyId: admin
+          loki.storage.s3.secretAccessKey: admin
+          loki.storage.s3.signatureVersion: v4
+          loki.storage.s3.s3ForcePathStyle: true
+          loki.storage.s3.insecure: true
+          minio.enabled: false
+          deploymentMode: SingleBinary
+          singleBinary.replicas: 1
+          singleBinary.persistence.size: 8Gi
+          lokiCanary.enabled: false
+          gateway.enabled: false
+          chunksCache.enabled: false
+          resultsCache.enabled: false
+          ruler.enabled: false
+          test.enabled: false
+          backend.replicas: 0
+          read.replicas: 0
+          write.replicas: 0
+          ingester.replicas: 0
+          querier.replicas: 0
+          queryFrontend.replicas: 0
+          queryScheduler.replicas: 0
+          distributor.replicas: 0
+          compactor.replicas: 0
+          indexGateway.replicas: 0
+          bloomPlanner.replicas: 0
+          bloomBuilder.replicas: 0
+          bloomGateway.replicas: 0
+
       - name: prometheus
         remoteChart: prometheus
         repo: https://prometheus-community.github.io/helm-charts
@@ -50,7 +118,10 @@ deploy:
         createNamespace: true
         wait: true
         setValueTemplates:
+          adminUser: admin
+          adminPassword: admin
           persistence.enabled: true
+          persistence.size: 8Gi
           service.type: LoadBalancer
           service.port: 3000
 
