@@ -7,34 +7,22 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/user"
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
-	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
 func New() {
 	log := logger.New()
 
-	uri := os.Getenv("API_SERVICE_MONGO_URI")
-	client, err := mongo.Connect(options.Client().
-		ApplyURI(uri).
-		SetBSONOptions(&options.BSONOptions{ObjectIDAsHexString: true}))
+	pool, err := pgxpool.New(context.Background(), os.Getenv("API_SERVICE_POSTGRES_RW_URI"))
 	if err != nil {
-		log.Error("failed to connect to mongo", logger.KeyError, err)
+		log.Error("Unable to create db connection pool", logger.KeyError, err)
+		os.Exit(1)
 	}
-	defer func() {
-		if err := client.Disconnect(context.Background()); err != nil {
-			log.Error("failed to disconnect from mongo", logger.KeyError, err)
-		}
-	}()
-
-	if err := client.Ping(context.Background(), readpref.Primary()); err != nil {
-		log.Error("failed to ping mongo", logger.KeyError, err)
-	}
+	defer pool.Close()
 
 	mux := http.NewServeMux()
 	handler := http.Handler(mux)
@@ -46,8 +34,8 @@ func New() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	user.New(log, client, mux)
-	network.New(log, client, mux)
+	user.New(log, pool, mux)
+	network.New(log, pool, mux)
 
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)
@@ -64,7 +52,7 @@ func New() {
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Info("API is listening and serving", "port", port)
+	log.Info("API is listening and serving", logger.KeyPort, port)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Error("Failed to listen and serve", logger.KeyError, err)
 	}
