@@ -3,22 +3,18 @@ package network
 import "time"
 
 type network struct {
-	ID   string `json:"id" bson:"_id,omitempty"`
-	Name string `json:"name" bson:"name"`
-	Slug string `json:"slug" bson:"slug"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
 
-	UserID string `json:"userId" bson:"user_id"`
+	UserID string `json:"userId"`
 
-	CreatedAt time.Time  `json:"createdAt" bson:"created_at"`
-	UpdatedAt time.Time  `json:"updatedAt" bson:"updated_at"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty" bson:"deleted_at,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
 type insertNetworkRequest struct {
 	Name   string `json:"name"`
 	UserID string `json:"userId"`
-}
-
-type updateNetworkRequest struct {
-	Name string `json:"name"`
 }

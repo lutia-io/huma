@@ -17,5 +17,7 @@ service:
     prometheus.io/port: "8000"
 
 secret:
-  database:
-    mongoUri: ""
+  store:
+    postgresRwUri: ""
+    postgresRoUri: ""
+    postgresRUri: ""

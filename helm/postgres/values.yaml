@@ -1,0 +1,6 @@
+cluster:
+  instances: 1
+  image:
+    version: "18.3"
+  storage:
+    size: 1Gi

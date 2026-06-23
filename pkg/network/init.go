@@ -3,15 +3,12 @@ package network
 import (
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/logger"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func New(logger *logger.Logger, client *mongo.Client, mux *http.ServeMux) {
-	store, err := newMongoStore(client)
-	if err != nil {
-		panic(err)
-	}
+func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
+	store := newPostgresStore(pool)
 	service := newService(logger, store)
 	newHTTPHandler(service, mux)
 }

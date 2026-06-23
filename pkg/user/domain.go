@@ -1,20 +1,37 @@
 package user
 
 import (
+	"log/slog"
 	"time"
 )
 
 type user struct {
-	ID string `json:"id" bson:"_id,omitempty"`
+	ID string `json:"id"`
 
-	FirstName string `json:"firstName" bson:"first_name"`
-	LastName  string `json:"lastName" bson:"last_name"`
-	Email     string `json:"email" bson:"email"`
-	Password  string `json:"-" bson:"password"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	Email     string `json:"email"`
+	Password  string `json:"-"`
 
-	CreatedAt time.Time  `json:"createdAt" bson:"created_at"`
-	UpdatedAt time.Time  `json:"updatedAt" bson:"updated_at"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty" bson:"deleted_at,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+}
+
+// LogValue implements slog.LogValuer so the password is redacted in logs.
+func (u user) LogValue() slog.Value {
+	attrs := []slog.Attr{
+		slog.String("ID", u.ID),
+		slog.String("firstName", u.FirstName),
+		slog.String("lastName", u.LastName),
+		slog.String("email", u.Email),
+		slog.Time("createdAt", u.CreatedAt),
+		slog.Time("updatedAt", u.UpdatedAt),
+	}
+	if u.DeletedAt != nil {
+		attrs = append(attrs, slog.Time("deletedAt", *u.DeletedAt))
+	}
+	return slog.GroupValue(attrs...)
 }
 
 type insertUserRequest struct {
@@ -22,9 +39,4 @@ type insertUserRequest struct {
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`
 	Password  string `json:"password"`
-}
-
-type updateUserRequest struct {
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
 }

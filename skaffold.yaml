@@ -18,19 +18,33 @@ test:
 deploy:
   helm:
     releases:
-      - name: mongodb
-        remoteChart: mongodb
-        repo: https://charts.bitnami.com/bitnami
-        version: 19.1.11
-        namespace: "{{.NAMESPACE}}"
+      - name: cnpg-operator
+        remoteChart: cloudnative-pg
+        repo: https://cloudnative-pg.github.io/charts
+        namespace: cnpg-system
         createNamespace: true
         wait: true
+
+      - name: huma-db
+        chartPath: ./helm/postgres
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
         setValueTemplates:
-          architecture: standalone
-          useStatefulSet: true
-          auth.databases[0]: "{{.MONGODB_DATABASE_NAME}}"
-          auth.usernames[0]: "{{.MONGODB_USERNAME}}"
-          auth.passwords[0]: "{{.MONGODB_PASSWORD}}"
+          cluster.instances: "{{.HUMA_DB_INSTANCES}}"
+          cluster.image.version: "{{.HUMA_DB_IMAGE_VERSION}}"
+          cluster.storage.size: "{{.HUMA_DB_STORAGE_SIZE}}"
+          cluster.database.name: "{{.HUMA_DB_DATABASE_NAME}}"
+          cluster.database.user: "{{.HUMA_DB_DATABASE_USER}}"
+          cluster.database.secretName: "{{.HUMA_DB_DATABASE_PASSWORD_SECRET_NAME}}"
+          cluster.database.password: "{{.HUMA_DB_DATABASE_PASSWORD}}"
+
+      - name: huma-db-migrate
+        chartPath: ./helm/migrate
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        setValueTemplates:
+          secret.store.postgresRwUri: "{{.HUMA_DB_RW_DATABASE_URL}}"
+          job.migration.down: "{{.HUMA_DB_MIGRATE_MIGRATION_DOWN}}"
 
       - name: api
         chartPath: ./helm/huma
@@ -45,4 +59,6 @@ deploy:
           deployment.container.name: "{{.API_DEPLOYMENT_CONTAINER_NAME}}"
           deployment.container.port: "{{.API_DEPLOYMENT_CONTAINER_PORT}}"
           service.port: "{{.API_SERVICE_PORT}}"
-          secret.database.mongoUri: "mongodb://{{.MONGODB_USERNAME}}:{{.MONGODB_PASSWORD}}@{{.MONGODB_HOST}}:{{.MONGODB_PORT}}/{{.MONGODB_DATABASE_NAME}}?authSource={{.MONGODB_DATABASE_NAME}}"
+          secret.store.postgresRwUri: "{{.HUMA_DB_RW_DATABASE_URL}}"
+          secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
+          secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"

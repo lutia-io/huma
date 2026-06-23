@@ -19,4 +19,5 @@ const (
 	KeyName       = "name"
 	KeySlug       = "slug"
 	KeyUserID     = "user_id"
+	KeyPort       = "port"
 )

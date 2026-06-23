@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+        - name: migrate-db
+          image: migrate/migrate:v4.18.2
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for DB DNS resolution..."
+              until nslookup huma-db-rw.huma.svc.cluster.local; do
+                echo "DB DNS not available yet. Sleeping 3 seconds..."
+                sleep 3
+              done
+              echo "DB DNS resolved. Running migrations..."
+              
+              if [ "$MIGRATE_DOWN" = "true" ]; then
+                echo "Running down migrations..."
+                until migrate -path /migrations -database "${POSTGRES_RW_URI}" down; do
+                  echo "Down migrations failed. Retrying in 3 seconds..."
+                  sleep 3
+                done
+              else
+                echo "Running up migrations..."
+                until migrate -path /migrations -database "${POSTGRES_RW_URI}" up; do
+                  echo "Up migrations failed. Retrying in 3 seconds..."
+                  sleep 3
+                done
+              fi
+          env:
+            - name: POSTGRES_RW_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-migrate
+                  key: postgresRwUri
+            - name: MIGRATE_DOWN
+              value: {{ .Values.job.migration.down | quote }}
+          volumeMounts:
+            - name: db-migrate-files
+              mountPath: /migrations
+      restartPolicy: Never
+      volumes:
+        - name: db-migrate-files
+          configMap:
+            name: {{ .Release.Name }}-db-migrate-files
