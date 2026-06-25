@@ -25,6 +25,14 @@ deploy:
         createNamespace: true
         wait: true
 
+      - name: atlas-operator
+        remoteChart: oci://ghcr.io/ariga/charts/atlas-operator
+        namespace: atlas-operator
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          prewarmDevDB: false
+
       - name: huma-db
         chartPath: ./helm/postgres
         namespace: "{{.NAMESPACE}}"
@@ -44,7 +52,6 @@ deploy:
         createNamespace: true
         setValueTemplates:
           secret.store.postgresRwUri: "{{.HUMA_DB_RW_DATABASE_URL}}"
-          job.migration.down: "{{.HUMA_DB_MIGRATE_MIGRATION_DOWN}}"
 
       - name: api
         chartPath: ./helm/huma

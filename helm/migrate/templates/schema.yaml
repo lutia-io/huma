@@ -1,0 +1,17 @@
+apiVersion: db.atlasgo.io/v1alpha1
+kind: AtlasSchema
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    release: {{ .Release.Name }}
+spec:
+  urlFrom:
+    secretKeyRef:
+      name: {{ .Release.Name }}
+      key: url
+  schema:
+    sql: |
+{{ range $path, $_ := .Files.Glob "sql/*.sql" }}{{ $.Files.Get $path | trim | indent 6 }}
+
+{{ end }}
