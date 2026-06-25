@@ -10,7 +10,7 @@ import (
 )
 
 type store interface {
-	Insert(ctx context.Context, organization *organization) error
+	Insert(ctx context.Context, organization *organization) (string, error)
 }
 
 type postgresStore struct {
@@ -21,7 +21,7 @@ func newPostgresStore(pool *pgxpool.Pool) store {
 	return &postgresStore{db: pool}
 }
 
-func (store *postgresStore) Insert(ctx context.Context, organization *organization) error {
+func (store *postgresStore) Insert(ctx context.Context, organization *organization) (string, error) {
 	const sql = `
 		INSERT INTO public.organizations (
 			name,
@@ -31,22 +31,23 @@ func (store *postgresStore) Insert(ctx context.Context, organization *organizati
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5,
+			$1, $2, $3, $4,
 			now(), now()
-		)`
+		)
+		RETURNING id`
 
-	_, err := store.db.Exec(ctx, sql,
+	err := store.db.QueryRow(ctx, sql,
 		organization.Name,
 		organization.Slug,
 		organization.NetworkID,
 		organization.UserID,
-	)
+	).Scan(&organization.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return apperror.NewConflictError("organization.store.Insert", "Organization already exists", err)
+			return "", apperror.NewConflictError("organization.store.Insert", "Organization already exists", err)
 		}
-		return err
+		return "", err
 	}
-	return nil
+	return organization.ID, nil
 }

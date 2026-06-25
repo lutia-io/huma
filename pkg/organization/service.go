@@ -25,29 +25,29 @@ func newService(logger *logger.Logger, store store, hasher hasher.Hasher) *servi
 	}
 }
 
-func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) error {
+func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) (string, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		s.logger.WarnContext(ctx, "Empty name")
-		return apperror.NewBadRequestError("organization.service.Insert", "Name is required", nil)
+		return "", apperror.NewBadRequestError("organization.service.Insert", "Name is required", nil)
 	}
 
 	slug := slug.Slugify(req.Name)
 	if slug == "" {
 		s.logger.WarnContext(ctx, "Empty slug")
-		return apperror.NewBadRequestError("organization.service.Insert", "Slug is required", nil)
+		return "", apperror.NewBadRequestError("organization.service.Insert", "Slug is required", nil)
 	}
 
 	networkID := strings.TrimSpace(req.NetworkID)
 	if networkID == "" {
 		s.logger.WarnContext(ctx, "Empty network ID")
-		return apperror.NewBadRequestError("organization.service.Insert", "Network ID is required", nil)
+		return "", apperror.NewBadRequestError("organization.service.Insert", "Network ID is required", nil)
 	}
 
 	userID := strings.TrimSpace(req.UserID)
 	if userID == "" {
 		s.logger.WarnContext(ctx, "Empty user ID")
-		return apperror.NewBadRequestError("organization.service.Insert", "User ID is required", nil)
+		return "", apperror.NewBadRequestError("organization.service.Insert", "User ID is required", nil)
 	}
 
 	organization := &organization{
@@ -57,16 +57,16 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) err
 		UserID:    userID,
 	}
 
-	err := s.store.Insert(ctx, organization)
+	id, err := s.store.Insert(ctx, organization)
 	if err != nil {
 		var appErr *apperror.Error
 		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
 			s.logger.WarnContext(ctx, "Rejected duplicate organization", logger.KeySlug, slug)
-			return err
+			return "", err
 		}
 		s.logger.ErrorContext(ctx, "Failed to insert organization", logger.KeySlug, slug, logger.KeyError, err)
-		return err
+		return "", err
 	}
 	s.logger.InfoContext(ctx, "Successfully created organization", logger.KeySlug, slug)
-	return nil
+	return id, nil
 }

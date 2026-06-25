@@ -10,7 +10,7 @@ import (
 )
 
 type store interface {
-	Insert(ctx context.Context, user *user) error
+	Insert(ctx context.Context, user *user) (string, error)
 }
 
 type postgresStore struct {
@@ -21,7 +21,7 @@ func newPostgresStore(pool *pgxpool.Pool) store {
 	return &postgresStore{db: pool}
 }
 
-func (store *postgresStore) Insert(ctx context.Context, user *user) error {
+func (store *postgresStore) Insert(ctx context.Context, user *user) (string, error) {
 	const sql = `
 		INSERT INTO public.users (
 			first_name,
@@ -33,20 +33,21 @@ func (store *postgresStore) Insert(ctx context.Context, user *user) error {
 		) VALUES (
 			$1, $2, $3, $4,
 			now(), now()
-		)`
+		)
+		RETURNING id`
 
-	_, err := store.db.Exec(ctx, sql,
+	err := store.db.QueryRow(ctx, sql,
 		user.FirstName,
 		user.LastName,
 		user.Email,
 		user.Password,
-	)
+	).Scan(&user.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return apperror.NewConflictError("user.store.Insert", "User already exists", err)
+			return "", apperror.NewConflictError("user.store.Insert", "User already exists", err)
 		}
-		return err
+		return "", err
 	}
-	return nil
+	return user.ID, nil
 }

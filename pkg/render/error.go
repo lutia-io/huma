@@ -8,7 +8,7 @@ import (
 )
 
 func WriteInternalError(w http.ResponseWriter) {
-	WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal error"})
+	WriteJSON(w, http.StatusInternalServerError, map[string]string{"message": "Internal error"})
 }
 
 func WriteError(w http.ResponseWriter, err error) {
@@ -20,13 +20,13 @@ func WriteError(w http.ResponseWriter, err error) {
 	if e, ok := errors.AsType[*apperror.Error](err); ok {
 		switch e.Variant {
 		case apperror.ErrorVariantBadRequest:
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": e.Msg})
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"message": e.Msg})
 			return
 		case apperror.ErrorVariantConflict:
-			WriteJSON(w, http.StatusConflict, map[string]string{"error": e.Msg})
+			WriteJSON(w, http.StatusConflict, map[string]string{"message": e.Msg})
 			return
 		case apperror.ErrorVariantNotFound:
-			WriteJSON(w, http.StatusNotFound, map[string]string{"error": e.Msg})
+			WriteJSON(w, http.StatusNotFound, map[string]string{"message": e.Msg})
 			return
 		default:
 			WriteInternalError(w)

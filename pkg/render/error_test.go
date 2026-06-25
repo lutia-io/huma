@@ -83,7 +83,7 @@ func assertErrorResponse(t *testing.T, rec *httptest.ResponseRecorder, wantStatu
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("Content-Type: got %q want application/json", ct)
 	}
-	wantBody := `{"error":"` + wantMsg + `"}`
+	wantBody := `{"message":"` + wantMsg + `"}`
 	if got := strings.TrimSpace(rec.Body.String()); got != wantBody {
 		t.Fatalf("body: got %q want %q", got, wantBody)
 	}

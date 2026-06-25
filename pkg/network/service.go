@@ -22,41 +22,41 @@ func newService(logger *logger.Logger, store store) *service {
 	}
 }
 
-func (s *service) Insert(ctx context.Context, req insertNetworkRequest) error {
+func (s *service) Insert(ctx context.Context, req insertNetworkRequest) (string, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		s.logger.WarnContext(ctx, "Empty name")
-		return apperror.NewBadRequestError("network.service.Insert", "Name is required", nil)
+		return "", apperror.NewBadRequestError("network.service.Insert", "Name is required", nil)
 	}
 
 	slug := slug.Slugify(req.Name)
 	if slug == "" {
 		s.logger.WarnContext(ctx, "Empty slug")
-		return apperror.NewBadRequestError("network.service.Insert", "Slug is required", nil)
+		return "", apperror.NewBadRequestError("network.service.Insert", "Slug is required", nil)
 	}
 
 	userID := strings.TrimSpace(req.UserID)
 	if userID == "" {
 		s.logger.WarnContext(ctx, "Empty user ID")
-		return apperror.NewBadRequestError("network.service.Insert", "User ID is required", nil)
+		return "", apperror.NewBadRequestError("network.service.Insert", "User ID is required", nil)
 	}
 
 	network := &network{
 		Name:   name,
 		Slug:   slug,
-		UserID: req.UserID,
+		UserID: userID,
 	}
 
-	err := s.store.Insert(ctx, network)
+	id, err := s.store.Insert(ctx, network)
 	if err != nil {
 		var appErr *apperror.Error
 		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
 			s.logger.WarnContext(ctx, "Rejected duplicate network", logger.KeySlug, slug)
-			return err
+			return "", err
 		}
 		s.logger.ErrorContext(ctx, "Failed to insert network", logger.KeySlug, slug, logger.KeyError, err)
-		return err
+		return "", err
 	}
-	s.logger.InfoContext(ctx, "Successfully created network", logger.KeyID, network.ID)
-	return nil
+	s.logger.InfoContext(ctx, "Successfully created network", logger.KeyID, id)
+	return id, nil
 }

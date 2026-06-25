@@ -30,10 +30,10 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("user.http.Insert", "Invalid request body", err))
 		return
 	}
-	err := h.service.Insert(r.Context(), req)
+	id, err := h.service.Insert(r.Context(), req)
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusCreated, nil)
+	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
 }
