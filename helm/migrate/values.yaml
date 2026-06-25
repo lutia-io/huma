@@ -1,7 +1,3 @@
 secret:
   store:
     postgresRwUri: ""
-
-schema:
-  sql: |
-    CREATE EXTENSION "pgcrypto";

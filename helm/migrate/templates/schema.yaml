@@ -12,6 +12,34 @@ spec:
       key: url
   schema:
     sql: |
-{{ range $path, $_ := .Files.Glob "sql/*.sql" }}{{ $.Files.Get $path | trim | indent 6 }}
+      CREATE TABLE public.users (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          deleted_at TIMESTAMPTZ
+      );
 
-{{ end }}
+      CREATE TABLE public.networks (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL,
+          slug TEXT UNIQUE NOT NULL,
+          user_id UUID NOT NULL REFERENCES public.users(id),
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          deleted_at TIMESTAMPTZ
+      );
+
+      CREATE TABLE public.organizations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL,
+          slug TEXT UNIQUE NOT NULL,
+          network_id UUID NOT NULL REFERENCES public.networks(id),
+          user_id UUID NOT NULL REFERENCES public.users(id),
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          deleted_at TIMESTAMPTZ
+      );
