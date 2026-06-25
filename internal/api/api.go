@@ -12,6 +12,8 @@ import (
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/organization"
+	"github.com/lutia-io/huma/pkg/record"
+	"github.com/lutia-io/huma/pkg/schema"
 	"github.com/lutia-io/huma/pkg/user"
 )
 
@@ -38,6 +40,8 @@ func New() {
 	user.New(log, pool, mux)
 	network.New(log, pool, mux)
 	organization.New(log, pool, mux)
+	schema.New(log, pool, mux)
+	record.New(log, pool, mux)
 
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)
