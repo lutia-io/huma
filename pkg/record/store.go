@@ -23,13 +23,12 @@ func (store *postgresStore) Insert(ctx context.Context, record *record) (string,
 		INSERT INTO public.records (
 			data,
 			schema_id,
-			network_id,
 			organization_id,
-			user_id,
+			organization_user_id,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5,
+			$1, $2, $3, $4,
 			now(), now()
 		)
 		RETURNING id`
@@ -37,9 +36,8 @@ func (store *postgresStore) Insert(ctx context.Context, record *record) (string,
 	err := store.db.QueryRow(ctx, sql,
 		record.Data,
 		record.SchemaID,
-		record.NetworkID,
 		record.OrganizationID,
-		record.UserID,
+		record.OrganizationUserID,
 	).Scan(&record.ID)
 	if err != nil {
 		return "", err

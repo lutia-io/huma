@@ -10,10 +10,9 @@ type record struct {
 
 	Data json.RawMessage `json:"data"`
 
-	SchemaID       string `json:"schemaId"`
-	NetworkID      string `json:"networkId"`
-	OrganizationID string `json:"organizationId"`
-	UserID         string `json:"userId"`
+	SchemaID           string `json:"schemaId"`
+	OrganizationID     string `json:"organizationId"`
+	OrganizationUserID string `json:"organizationUserId"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -23,8 +22,7 @@ type record struct {
 type insertRecordRequest struct {
 	Data json.RawMessage `json:"data"`
 
-	SchemaID       string `json:"schemaId"`
-	NetworkID      string `json:"networkId"`
-	OrganizationID string `json:"organizationId"`
-	UserID         string `json:"userId"`
+	SchemaID           string `json:"schemaId"`
+	OrganizationID     string `json:"organizationId"`
+	OrganizationUserID string `json:"organizationUserId"`
 }

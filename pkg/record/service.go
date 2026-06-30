@@ -32,30 +32,23 @@ func (s *service) Insert(ctx context.Context, req insertRecordRequest) (string, 
 		return "", apperror.NewBadRequestError("record.service.Insert", "Schema ID is required", nil)
 	}
 
-	networkID := strings.TrimSpace(req.NetworkID)
-	if networkID == "" {
-		s.logger.WarnContext(ctx, "Empty network ID")
-		return "", apperror.NewBadRequestError("record.service.Insert", "Network ID is required", nil)
-	}
-
 	organizationID := strings.TrimSpace(req.OrganizationID)
 	if organizationID == "" {
 		s.logger.WarnContext(ctx, "Empty organization ID")
 		return "", apperror.NewBadRequestError("record.service.Insert", "Organization ID is required", nil)
 	}
 
-	userID := strings.TrimSpace(req.UserID)
-	if userID == "" {
-		s.logger.WarnContext(ctx, "Empty user ID")
-		return "", apperror.NewBadRequestError("record.service.Insert", "User ID is required", nil)
+	organizationUserID := strings.TrimSpace(req.OrganizationUserID)
+	if organizationUserID == "" {
+		s.logger.WarnContext(ctx, "Empty organization user ID")
+		return "", apperror.NewBadRequestError("record.service.Insert", "Organization user ID is required", nil)
 	}
 
 	record := &record{
-		Data:           req.Data,
-		SchemaID:       schemaID,
-		NetworkID:      networkID,
-		OrganizationID: organizationID,
-		UserID:         userID,
+		Data:               req.Data,
+		SchemaID:           schemaID,
+		OrganizationID:     organizationID,
+		OrganizationUserID: organizationUserID,
 	}
 
 	id, err := s.store.Insert(ctx, record)
