@@ -50,6 +50,8 @@ func (s *service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 	schema := &schema{
 		Name:       name,
 		Slug:       slug,
+		Active:     req.Active,
+		Internal:   req.Internal,
 		Definition: req.Definition,
 		NetworkID:  networkID,
 		UserID:     userID,

@@ -30,6 +30,10 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("schema.http.Insert", "Invalid request body", err))
 		return
 	}
+
+	// Internal schemas are not allowed to be created via the API
+	req.Internal = false
+
 	id, err := h.service.Insert(r.Context(), req)
 	if err != nil {
 		render.WriteError(w, err)

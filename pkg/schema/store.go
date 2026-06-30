@@ -26,13 +26,15 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 		INSERT INTO public.schemas (
 			name,
 			slug,
+			active,
+			internal,
 			definition,
 			network_id,
 			user_id,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5,
+			$1, $2, $3, $4, $5, $6, $7,
 			now(), now()
 		)
 		RETURNING id`
@@ -40,6 +42,8 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 	err := store.db.QueryRow(ctx, sql,
 		schema.Name,
 		schema.Slug,
+		schema.Active,
+		schema.Internal,
 		schema.Definition,
 		schema.NetworkID,
 		schema.UserID,
