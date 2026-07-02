@@ -50,6 +50,7 @@ deploy:
         chartPath: ./helm/migrate
         namespace: "{{.NAMESPACE}}"
         createNamespace: true
+        wait: true
         setValueTemplates:
           secret.store.postgresRwUri: "{{.HUMA_DB_RW_DATABASE_URL}}"
 

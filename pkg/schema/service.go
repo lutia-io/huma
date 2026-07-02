@@ -47,6 +47,15 @@ func (s *service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 		return "", apperror.NewBadRequestError("schema.service.Insert", "User ID is required", nil)
 	}
 
+	if len(req.Definition) == 0 {
+		s.logger.WarnContext(ctx, "Empty definition")
+		return "", apperror.NewBadRequestError("schema.service.Insert", "Definition is required", nil)
+	}
+	if err := ValidateDefinition(req.Definition); err != nil {
+		s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
+		return "", apperror.NewBadRequestError("schema.service.Insert", err.Error(), err)
+	}
+
 	schema := &schema{
 		Name:       name,
 		Slug:       slug,

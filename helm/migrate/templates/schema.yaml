@@ -12,6 +12,6 @@ spec:
       key: url
   schema:
     sql: |
-{{- range $path, $_ := .Files.Glob "schemas/*.sql" }}
+{{- range $path, $_ := .Files.Glob "sql/*.sql" }}
 {{ $.Files.Get $path | nindent 6 }}
 {{- end }}
