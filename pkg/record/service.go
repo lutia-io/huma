@@ -6,17 +6,20 @@ import (
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/schema"
 )
 
 type service struct {
-	logger *logger.Logger
-	store  store
+	logger        *logger.Logger
+	store         store
+	schemaService *schema.Service
 }
 
-func newService(logger *logger.Logger, store store) *service {
+func NewService(logger *logger.Logger, store store, schemaService *schema.Service) *service {
 	return &service{
-		logger: logger,
-		store:  store,
+		logger:        logger,
+		store:         store,
+		schemaService: schemaService,
 	}
 }
 
@@ -42,6 +45,10 @@ func (s *service) Insert(ctx context.Context, req insertRecordRequest) (string, 
 	if organizationUserID == "" {
 		s.logger.WarnContext(ctx, "Empty organization user ID")
 		return "", apperror.NewBadRequestError("record.service.Insert", "Organization user ID is required", nil)
+	}
+
+	if err := s.schemaService.ValidateRecordData(ctx, schemaID, req.Data); err != nil {
+		return "", err
 	}
 
 	record := &record{

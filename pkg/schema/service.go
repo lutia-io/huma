@@ -2,6 +2,7 @@ package schema
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -10,19 +11,36 @@ import (
 	"github.com/lutia-io/huma/pkg/slug"
 )
 
-type service struct {
+type Service struct {
 	logger *logger.Logger
 	store  store
 }
 
-func newService(logger *logger.Logger, store store) *service {
-	return &service{
+func NewService(logger *logger.Logger, store store) *Service {
+	return &Service{
 		logger: logger,
 		store:  store,
 	}
 }
 
-func (s *service) Insert(ctx context.Context, req insertSchemaRequest) (string, error) {
+func (s *Service) ValidateRecordData(ctx context.Context, schemaID string, data json.RawMessage) error {
+	sch, err := s.store.GetByID(ctx, schemaID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to load schema", "schema_id", schemaID, logger.KeyError, err)
+		return err
+	}
+	if !sch.Active {
+		s.logger.WarnContext(ctx, "Inactive schema", "schema_id", schemaID)
+		return apperror.NewBadRequestError("schema.service.ValidateRecord", "Schema is not active", nil)
+	}
+	if err := ValidateData(sch.Definition, data); err != nil {
+		s.logger.WarnContext(ctx, "Invalid record data", "schema_id", schemaID, logger.KeyError, err)
+		return apperror.NewBadRequestError("schema.service.ValidateRecord", err.Error(), err)
+	}
+	return nil
+}
+
+func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		s.logger.WarnContext(ctx, "Empty name")
