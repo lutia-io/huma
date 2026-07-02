@@ -26,19 +26,19 @@ func (s *service) Insert(ctx context.Context, req insertNetworkRequest) (string,
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		s.logger.WarnContext(ctx, "Empty name")
-		return "", apperror.NewBadRequestError("network.service.Insert", "Name is required", nil)
+		return "", apperror.NewBadRequestError("Name is required", nil)
 	}
 
 	slug := slug.Slugify(req.Name)
 	if slug == "" {
 		s.logger.WarnContext(ctx, "Empty slug")
-		return "", apperror.NewBadRequestError("network.service.Insert", "Slug is required", nil)
+		return "", apperror.NewBadRequestError("Slug is required", nil)
 	}
 
 	userID := strings.TrimSpace(req.UserID)
 	if userID == "" {
 		s.logger.WarnContext(ctx, "Empty user ID")
-		return "", apperror.NewBadRequestError("network.service.Insert", "User ID is required", nil)
+		return "", apperror.NewBadRequestError("User ID is required", nil)
 	}
 
 	network := &network{

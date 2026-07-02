@@ -47,7 +47,7 @@ func (store *postgresStore) Insert(ctx context.Context, organizationUser *organi
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", apperror.NewConflictError("organizationuser.store.Insert", "Organization user already exists", err)
+			return "", apperror.NewConflictError("Organization user already exists", err)
 		}
 		return "", err
 	}

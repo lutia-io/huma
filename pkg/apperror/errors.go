@@ -1,9 +1,5 @@
 package apperror
 
-import (
-	"fmt"
-)
-
 type ErrorVariant string
 
 const (
@@ -15,7 +11,6 @@ const (
 
 type Error struct {
 	Variant ErrorVariant
-	Op      string
 	Msg     string
 	Err     error
 }
@@ -24,17 +19,10 @@ func (e *Error) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
-	if e.Op == "" && e.Msg == "" {
-		return "user error"
+	if e.Msg == "" {
+		return "application error"
 	}
-	switch {
-	case e.Op != "" && e.Msg != "":
-		return fmt.Sprintf("%s: %s", e.Op, e.Msg)
-	case e.Op != "":
-		return e.Op
-	default:
-		return e.Msg
-	}
+	return e.Msg
 }
 
 func (e *Error) Unwrap() error {
@@ -44,18 +32,18 @@ func (e *Error) Unwrap() error {
 	return e.Err
 }
 
-func NewBadRequestError(op, msg string, err error) error {
-	return &Error{Variant: ErrorVariantBadRequest, Op: op, Msg: msg, Err: err}
+func NewBadRequestError(msg string, err error) error {
+	return &Error{Variant: ErrorVariantBadRequest, Msg: msg, Err: err}
 }
 
-func NewConflictError(op, msg string, err error) error {
-	return &Error{Variant: ErrorVariantConflict, Op: op, Msg: msg, Err: err}
+func NewConflictError(msg string, err error) error {
+	return &Error{Variant: ErrorVariantConflict, Msg: msg, Err: err}
 }
 
-func NewNotFoundError(op, msg string, err error) error {
-	return &Error{Variant: ErrorVariantNotFound, Op: op, Msg: msg, Err: err}
+func NewNotFoundError(msg string, err error) error {
+	return &Error{Variant: ErrorVariantNotFound, Msg: msg, Err: err}
 }
 
-func NewInternalError(op, msg string, err error) error {
-	return &Error{Variant: ErrorVariantInternal, Op: op, Msg: msg, Err: err}
+func NewInternalError(msg string, err error) error {
+	return &Error{Variant: ErrorVariantInternal, Msg: msg, Err: err}
 }

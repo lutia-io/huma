@@ -45,7 +45,7 @@ func (store *postgresStore) Insert(ctx context.Context, organization *organizati
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", apperror.NewConflictError("organization.store.Insert", "Organization already exists", err)
+			return "", apperror.NewConflictError("Organization already exists", err)
 		}
 		return "", err
 	}

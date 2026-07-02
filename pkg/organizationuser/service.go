@@ -29,40 +29,40 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationUserRequest)
 	firstName := strings.TrimSpace(req.FirstName)
 	if firstName == "" {
 		s.logger.WarnContext(ctx, "Empty first name")
-		return "", apperror.NewBadRequestError("organizationuser.service.Insert", "First name is required", nil)
+		return "", apperror.NewBadRequestError("First name is required", nil)
 	}
 
 	lastName := strings.TrimSpace(req.LastName)
 	if lastName == "" {
 		s.logger.WarnContext(ctx, "Empty last name")
-		return "", apperror.NewBadRequestError("organizationuser.service.Insert", "Last name is required", nil)
+		return "", apperror.NewBadRequestError("Last name is required", nil)
 	}
 
 	email := strings.TrimSpace(req.Email)
 	if email == "" {
 		s.logger.WarnContext(ctx, "Empty email")
-		return "", apperror.NewBadRequestError("organizationuser.service.Insert", "Email is required", nil)
+		return "", apperror.NewBadRequestError("Email is required", nil)
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
 		s.logger.WarnContext(ctx, "Invalid email", logger.KeyEmail, email, logger.KeyError, err)
-		return "", apperror.NewBadRequestError("organizationuser.service.Insert", "Email is invalid", err)
+		return "", apperror.NewBadRequestError("Email is invalid", err)
 	}
 
 	if req.Password == "" {
 		s.logger.WarnContext(ctx, "Empty password")
-		return "", apperror.NewBadRequestError("organizationuser.service.Insert", "Password is required", nil)
+		return "", apperror.NewBadRequestError("Password is required", nil)
 	}
 
 	hashedPassword, err := s.hasher.Hash(req.Password)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to hash password", logger.KeyError, err)
-		return "", apperror.NewInternalError("organizationuser.service.Insert", "Failed to hash password", err)
+		return "", apperror.NewInternalError("Failed to hash password", err)
 	}
 
 	organizationID := strings.TrimSpace(req.OrganizationID)
 	if organizationID == "" {
 		s.logger.WarnContext(ctx, "Empty organization ID")
-		return "", apperror.NewBadRequestError("organizationuser.service.Insert", "Organization ID is required", nil)
+		return "", apperror.NewBadRequestError("Organization ID is required", nil)
 	}
 
 	organizationUser := &organizationUser{

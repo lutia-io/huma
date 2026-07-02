@@ -53,7 +53,7 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", apperror.NewConflictError("schema.store.Insert", "Schema already exists", err)
+			return "", apperror.NewConflictError("Schema already exists", err)
 		}
 		return "", err
 	}
@@ -71,7 +71,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*schema, er
 	err := store.db.QueryRow(ctx, sql, id).Scan(&sch.ID, &sch.Definition, &sch.Active)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperror.NewNotFoundError("schema.store.GetByID", "Schema not found", err)
+			return nil, apperror.NewNotFoundError("Schema not found", err)
 		}
 		return nil, err
 	}

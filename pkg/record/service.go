@@ -26,25 +26,25 @@ func NewService(logger *logger.Logger, store store, schemaService *schema.Servic
 func (s *service) Insert(ctx context.Context, req insertRecordRequest) (string, error) {
 	if len(req.Data) == 0 {
 		s.logger.WarnContext(ctx, "Empty data")
-		return "", apperror.NewBadRequestError("record.service.Insert", "Data is required", nil)
+		return "", apperror.NewBadRequestError("Data is required", nil)
 	}
 
 	schemaID := strings.TrimSpace(req.SchemaID)
 	if schemaID == "" {
 		s.logger.WarnContext(ctx, "Empty schema ID")
-		return "", apperror.NewBadRequestError("record.service.Insert", "Schema ID is required", nil)
+		return "", apperror.NewBadRequestError("Schema ID is required", nil)
 	}
 
 	organizationID := strings.TrimSpace(req.OrganizationID)
 	if organizationID == "" {
 		s.logger.WarnContext(ctx, "Empty organization ID")
-		return "", apperror.NewBadRequestError("record.service.Insert", "Organization ID is required", nil)
+		return "", apperror.NewBadRequestError("Organization ID is required", nil)
 	}
 
 	organizationUserID := strings.TrimSpace(req.OrganizationUserID)
 	if organizationUserID == "" {
 		s.logger.WarnContext(ctx, "Empty organization user ID")
-		return "", apperror.NewBadRequestError("record.service.Insert", "Organization user ID is required", nil)
+		return "", apperror.NewBadRequestError("Organization user ID is required", nil)
 	}
 
 	if err := s.schemaService.ValidateRecordData(ctx, schemaID, req.Data); err != nil {

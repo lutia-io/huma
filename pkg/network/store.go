@@ -42,7 +42,7 @@ func (store *postgresStore) Insert(ctx context.Context, network *network) (strin
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", apperror.NewConflictError("network.store.Insert", "Network already exists", err)
+			return "", apperror.NewConflictError("Network already exists", err)
 		}
 		return "", err
 	}

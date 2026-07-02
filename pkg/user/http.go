@@ -27,7 +27,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 	var req insertUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		render.WriteError(w, apperror.NewBadRequestError("user.http.Insert", "Invalid request body", err))
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
 	id, err := h.service.Insert(r.Context(), req)

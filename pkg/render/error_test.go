@@ -29,7 +29,7 @@ func TestWriteError_nil(t *testing.T) {
 func TestWriteError_badRequest(t *testing.T) {
 	rec := httptest.NewRecorder()
 
-	WriteError(rec, apperror.NewBadRequestError("op", "invalid input", nil))
+	WriteError(rec, apperror.NewBadRequestError("invalid input", nil))
 
 	assertErrorResponse(t, rec, http.StatusBadRequest, "invalid input")
 }
@@ -37,7 +37,7 @@ func TestWriteError_badRequest(t *testing.T) {
 func TestWriteError_conflict(t *testing.T) {
 	rec := httptest.NewRecorder()
 
-	WriteError(rec, apperror.NewConflictError("op", "already exists", nil))
+	WriteError(rec, apperror.NewConflictError("already exists", nil))
 
 	assertErrorResponse(t, rec, http.StatusConflict, "already exists")
 }
@@ -45,7 +45,7 @@ func TestWriteError_conflict(t *testing.T) {
 func TestWriteError_notFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 
-	WriteError(rec, apperror.NewNotFoundError("op", "missing", nil))
+	WriteError(rec, apperror.NewNotFoundError("missing", nil))
 
 	assertErrorResponse(t, rec, http.StatusNotFound, "missing")
 }
@@ -53,7 +53,7 @@ func TestWriteError_notFound(t *testing.T) {
 func TestWriteError_internalVariant(t *testing.T) {
 	rec := httptest.NewRecorder()
 
-	WriteError(rec, apperror.NewInternalError("op", "db down", nil))
+	WriteError(rec, apperror.NewInternalError("db down", nil))
 
 	assertErrorResponse(t, rec, http.StatusInternalServerError, "Internal error")
 }

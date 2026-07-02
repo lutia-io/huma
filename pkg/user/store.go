@@ -45,7 +45,7 @@ func (store *postgresStore) Insert(ctx context.Context, user *user) (string, err
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", apperror.NewConflictError("user.store.Insert", "User already exists", err)
+			return "", apperror.NewConflictError("User already exists", err)
 		}
 		return "", err
 	}
