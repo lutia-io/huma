@@ -64,5 +64,6 @@ func (s *service) Insert(ctx context.Context, req insertRecordRequest) (string, 
 		return "", err
 	}
 	s.logger.InfoContext(ctx, "Successfully created record", logger.KeyID, id)
+
 	return id, nil
 }

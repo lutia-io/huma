@@ -33,7 +33,7 @@ deploy:
         setValueTemplates:
           prewarmDevDB: false
 
-      - name: huma-db
+      - name: db
         chartPath: ./helm/postgres
         namespace: "{{.NAMESPACE}}"
         createNamespace: true
@@ -46,7 +46,7 @@ deploy:
           cluster.database.secretName: "{{.HUMA_DB_DATABASE_PASSWORD_SECRET_NAME}}"
           cluster.database.password: "{{.HUMA_DB_DATABASE_PASSWORD}}"
 
-      - name: huma-db-migrate
+      - name: db-migrate
         chartPath: ./helm/migrate
         namespace: "{{.NAMESPACE}}"
         createNamespace: true

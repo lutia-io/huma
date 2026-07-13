@@ -16,6 +16,7 @@ import (
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/schema"
 	"github.com/lutia-io/huma/pkg/user"
+	"github.com/lutia-io/huma/pkg/workflow"
 )
 
 func New() {
@@ -44,6 +45,7 @@ func New() {
 	organizationuser.New(log, pool, mux)
 	schemaService := schema.New(log, pool, mux)
 	record.New(log, pool, mux, schemaService)
+	workflow.New(log, pool, mux)
 
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)
