@@ -5,6 +5,7 @@ CREATE TABLE public.workflow_definitions (
     active BOOLEAN NOT NULL,
     internal BOOLEAN NOT NULL,
     definition JSONB NOT NULL,
+    schema_id UUID NOT NULL REFERENCES public.schemas(id),
     network_id UUID NOT NULL REFERENCES public.networks(id),
     user_id UUID NOT NULL REFERENCES public.users(id),
     created_at TIMESTAMPTZ NOT NULL,
