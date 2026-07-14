@@ -71,6 +71,7 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationUserRequest)
 		Email:          email,
 		Password:       hashedPassword,
 		OrganizationID: organizationID,
+		NetworkID:      req.NetworkID,
 	}
 
 	id, err := s.store.Insert(ctx, organizationUser)

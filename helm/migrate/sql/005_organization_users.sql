@@ -5,8 +5,9 @@ CREATE TABLE public.organization_users (
     email TEXT NOT NULL,
     password TEXT NOT NULL,
     organization_id UUID NOT NULL REFERENCES public.organizations(id),
+    network_id UUID NOT NULL REFERENCES public.networks(id),
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     deleted_at TIMESTAMPTZ,
-    UNIQUE (organization_id, email)
+    UNIQUE (network_id, email)
 );

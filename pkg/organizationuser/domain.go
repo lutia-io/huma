@@ -14,6 +14,7 @@ type organizationUser struct {
 	Password  string `json:"-"`
 
 	OrganizationID string `json:"organizationId"`
+	NetworkID      string `json:"networkId"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -28,6 +29,7 @@ func (u organizationUser) LogValue() slog.Value {
 		slog.String("lastName", u.LastName),
 		slog.String("email", u.Email),
 		slog.String("organizationID", u.OrganizationID),
+		slog.String("networkID", u.NetworkID),
 		slog.Time("createdAt", u.CreatedAt),
 		slog.Time("updatedAt", u.UpdatedAt),
 	}
@@ -38,9 +40,10 @@ func (u organizationUser) LogValue() slog.Value {
 }
 
 type insertOrganizationUserRequest struct {
-	OrganizationID string `json:"organizationId"`
 	FirstName      string `json:"firstName"`
 	LastName       string `json:"lastName"`
 	Email          string `json:"email"`
 	Password       string `json:"password"`
+	OrganizationID string `json:"organizationId"`
+	NetworkID      string `json:"networkId"`
 }

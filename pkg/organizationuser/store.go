@@ -29,11 +29,12 @@ func (store *postgresStore) Insert(ctx context.Context, organizationUser *organi
 			email,
 			password,
 			organization_id,
+			network_id,
 			created_at,
 			updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			now(), now()
+			$6, now(), now()
 		)
 		RETURNING id`
 
@@ -43,6 +44,7 @@ func (store *postgresStore) Insert(ctx context.Context, organizationUser *organi
 		organizationUser.Email,
 		organizationUser.Password,
 		organizationUser.OrganizationID,
+		organizationUser.NetworkID,
 	).Scan(&organizationUser.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError

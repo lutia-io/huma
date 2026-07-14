@@ -54,7 +54,7 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefini
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", apperror.NewConflictError("Workflow already exists", err)
+			return "", apperror.NewConflictError("Workflow definition already exists", err)
 		}
 		return "", err
 	}

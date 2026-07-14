@@ -58,7 +58,7 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 		return "", apperror.NewBadRequestError("Schema ID is required", nil)
 	}
 
-	workflow := &workflowDefinition{
+	wfd := &workflowDefinition{
 		Name:       name,
 		Slug:       slug,
 		Active:     req.Active,
@@ -69,7 +69,7 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 		UserID:     userID,
 	}
 
-	id, err := s.store.Insert(ctx, workflow)
+	id, err := s.store.Insert(ctx, wfd)
 	if err != nil {
 		var appErr *apperror.Error
 		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
