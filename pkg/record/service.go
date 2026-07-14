@@ -7,19 +7,22 @@ import (
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/schema"
+	"github.com/lutia-io/huma/pkg/workflow"
 )
 
 type service struct {
-	logger        *logger.Logger
-	store         store
-	schemaService *schema.Service
+	logger          *logger.Logger
+	store           store
+	schemaService   *schema.Service
+	workflowService *workflow.Service
 }
 
-func NewService(logger *logger.Logger, store store, schemaService *schema.Service) *service {
+func NewService(logger *logger.Logger, store store, schemaService *schema.Service, workflowService *workflow.Service) *service {
 	return &service{
-		logger:        logger,
-		store:         store,
-		schemaService: schemaService,
+		logger:          logger,
+		store:           store,
+		schemaService:   schemaService,
+		workflowService: workflowService,
 	}
 }
 
@@ -64,6 +67,10 @@ func (s *service) Insert(ctx context.Context, req insertRecordRequest) (string, 
 		return "", err
 	}
 	s.logger.InfoContext(ctx, "Successfully created record", logger.KeyID, id)
+
+	if err := s.workflowService.ExecuteForRecord(ctx, schemaID, id, record.Data); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to execute workflows after record insert", logger.KeyID, id, "schema_id", schemaID, logger.KeyError, err)
+	}
 
 	return id, nil
 }

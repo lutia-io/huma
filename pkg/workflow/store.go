@@ -11,6 +11,7 @@ import (
 
 type store interface {
 	Insert(ctx context.Context, workflow *workflowDefinition) (string, error)
+	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflowDefinition, error)
 }
 
 type postgresStore struct {
@@ -29,12 +30,13 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefini
 			active,
 			internal,
 			definition,
+			schema_id,
 			network_id,
 			user_id,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
+			$1, $2, $3, $4, $5, $6, $7, $8,
 			now(), now()
 		)
 		RETURNING id`
@@ -45,6 +47,7 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefini
 		workflow.Active,
 		workflow.Internal,
 		workflow.Definition,
+		workflow.SchemaID,
 		workflow.NetworkID,
 		workflow.UserID,
 	).Scan(&workflow.ID)
@@ -56,4 +59,57 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefini
 		return "", err
 	}
 	return workflow.ID, nil
+}
+
+func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflowDefinition, error) {
+	const sql = `
+		SELECT
+			id,
+			name,
+			slug,
+			active,
+			internal,
+			definition,
+			schema_id,
+			network_id,
+			user_id,
+			created_at,
+			updated_at,
+			deleted_at
+		FROM public.workflow_definitions
+		WHERE schema_id = $1
+			AND active = true
+			AND deleted_at IS NULL`
+
+	rows, err := store.db.Query(ctx, sql, schemaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var workflows []*workflowDefinition
+	for rows.Next() {
+		wf := &workflowDefinition{}
+		if err := rows.Scan(
+			&wf.ID,
+			&wf.Name,
+			&wf.Slug,
+			&wf.Active,
+			&wf.Internal,
+			&wf.Definition,
+			&wf.SchemaID,
+			&wf.NetworkID,
+			&wf.UserID,
+			&wf.CreatedAt,
+			&wf.UpdatedAt,
+			&wf.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		workflows = append(workflows, wf)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return workflows, nil
 }

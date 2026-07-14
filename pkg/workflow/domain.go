@@ -29,6 +29,7 @@ type insertWorkflowDefinitionRequest struct {
 	Active     bool            `json:"active"`
 	Internal   bool            `json:"internal"`
 	Definition json.RawMessage `json:"definition"`
+	SchemaID   string          `json:"schemaId"`
 	NetworkID  string          `json:"networkId"`
 	UserID     string          `json:"userId"`
 }

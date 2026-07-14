@@ -52,12 +52,19 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 		return "", apperror.NewBadRequestError("Definition is required", nil)
 	}
 
+	schemaID := strings.TrimSpace(req.SchemaID)
+	if schemaID == "" {
+		s.logger.WarnContext(ctx, "Empty schema ID")
+		return "", apperror.NewBadRequestError("Schema ID is required", nil)
+	}
+
 	workflow := &workflowDefinition{
 		Name:       name,
 		Slug:       slug,
 		Active:     req.Active,
 		Internal:   req.Internal,
 		Definition: req.Definition,
+		SchemaID:   schemaID,
 		NetworkID:  networkID,
 		UserID:     userID,
 	}

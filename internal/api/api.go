@@ -44,8 +44,8 @@ func New() {
 	organization.New(log, pool, mux)
 	organizationuser.New(log, pool, mux)
 	schemaService := schema.New(log, pool, mux)
-	record.New(log, pool, mux, schemaService)
-	workflow.New(log, pool, mux)
+	workflowService := workflow.New(log, pool, mux)
+	record.New(log, pool, mux, schemaService, workflowService)
 
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)
