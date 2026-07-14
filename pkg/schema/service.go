@@ -8,6 +8,7 @@ import (
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/schema/validator"
 	"github.com/lutia-io/huma/pkg/slug"
 )
 
@@ -33,7 +34,7 @@ func (s *Service) ValidateRecordData(ctx context.Context, schemaID string, data 
 		s.logger.WarnContext(ctx, "Inactive schema", "schema_id", schemaID)
 		return apperror.NewBadRequestError("Schema is not active", nil)
 	}
-	if err := ValidateData(sch.Definition, data); err != nil {
+	if err := validator.ValidateData(sch.Definition, data); err != nil {
 		s.logger.WarnContext(ctx, "Invalid record data", "schema_id", schemaID, logger.KeyError, err)
 		return apperror.NewBadRequestError(err.Error(), err)
 	}
@@ -69,7 +70,7 @@ func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 		s.logger.WarnContext(ctx, "Empty definition")
 		return "", apperror.NewBadRequestError("Definition is required", nil)
 	}
-	if err := ValidateDefinition(req.Definition); err != nil {
+	if err := validator.ValidateDefinition(req.Definition); err != nil {
 		s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
 		return "", apperror.NewBadRequestError(err.Error(), err)
 	}
