@@ -37,6 +37,7 @@ deploy:
         chartPath: ./helm/postgres
         namespace: "{{.NAMESPACE}}"
         createNamespace: true
+        wait: true
         setValueTemplates:
           cluster.instances: "{{.HUMA_DB_INSTANCES}}"
           cluster.image.version: "{{.HUMA_DB_IMAGE_VERSION}}"
@@ -53,6 +54,18 @@ deploy:
         wait: true
         setValueTemplates:
           secret.store.postgresRwUri: "{{.HUMA_DB_RW_DATABASE_URL}}"
+
+      - name: nats
+        remoteChart: nats
+        repo: https://nats-io.github.io/k8s/helm/charts/
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          config.jetstream.enabled: "{{.HUMA_NATS_JETSTREAM_ENABLED}}"
+          config.jetstream.fileStore.enabled: "{{.HUMA_NATS_JETSTREAM_FILESTORE_ENABLED}}"
+          config.jetstream.fileStore.pvc.enabled: "{{.HUMA_NATS_JETSTREAM_PVC_ENABLED}}"
+          config.jetstream.fileStore.pvc.size: "{{.HUMA_NATS_JETSTREAM_STORAGE_SIZE}}"
 
       - name: api
         chartPath: ./helm/huma
