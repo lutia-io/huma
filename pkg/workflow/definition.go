@@ -5,7 +5,7 @@ import (
 	"github.com/lutia-io/huma/pkg/criteria"
 )
 
-type Definition struct {
+type definition struct {
 	Criteria criteria.Criteria `json:"criteria"`
 	Actions  []action.Action   `json:"actions"`
 }

@@ -36,7 +36,7 @@ func (s *Service) ExecuteForRecord(ctx context.Context, schemaID, recordID strin
 }
 
 func (s *Service) executeOne(ctx context.Context, wf *workflowDefinition, recordID string, data map[string]any) error {
-	var def Definition
+	var def definition
 	if err := json.Unmarshal(wf.Definition, &def); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to unmarshal workflow definition", logger.KeyID, wf.ID, logger.KeyError, err)
 		return err
