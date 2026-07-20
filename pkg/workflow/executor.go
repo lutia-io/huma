@@ -27,16 +27,16 @@ func (s *Service) ExecuteForRecord(ctx context.Context, schemaID, recordID strin
 	}
 
 	for _, wf := range workflows {
-		if err := s.executeOne(ctx, wf, recordID, recordData); err != nil {
+		if err := s.executeWorkflow(ctx, wf, recordID, recordData); err != nil {
 			s.logger.ErrorContext(ctx, "Workflow execution failed", logger.KeyID, wf.ID, "record_id", recordID, logger.KeyError, err)
-			// TODO: do we fail rest or continue other workflows? insert already succeeded
+			// TODO: do we fail on first failure or continue other workflows? insert already succeeded
 		}
 	}
 	return nil
 }
 
-func (s *Service) executeOne(ctx context.Context, wf *workflowDefinition, recordID string, data map[string]any) error {
-	var def Definition
+func (s *Service) executeWorkflow(ctx context.Context, wf *workflowDefinition, recordID string, data map[string]any) error {
+	var def definition
 	if err := json.Unmarshal(wf.Definition, &def); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to unmarshal workflow definition", logger.KeyID, wf.ID, logger.KeyError, err)
 		return err

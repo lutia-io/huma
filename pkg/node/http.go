@@ -1,4 +1,4 @@
-package network
+package node
 
 import (
 	"encoding/json"
@@ -9,10 +9,10 @@ import (
 )
 
 type httpHandler struct {
-	service *service
+	service *Service
 }
 
-func newHTTPHandler(service *service, mux *http.ServeMux) *httpHandler {
+func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 	handler := &httpHandler{
 		service: service,
 	}
@@ -21,15 +21,19 @@ func newHTTPHandler(service *service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /network", h.Insert)
+	mux.HandleFunc("POST /node-definition", h.Insert)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
-	var req insertNetworkRequest
+	var req insertNodeDefinitionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
+
+	// Internal node definitions are not allowed to be created via the API
+	req.Internal = false
+
 	id, err := h.service.Insert(r.Context(), req)
 	if err != nil {
 		render.WriteError(w, err)

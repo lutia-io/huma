@@ -11,8 +11,10 @@ import (
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/network"
+	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/organization"
 	"github.com/lutia-io/huma/pkg/organizationuser"
+	"github.com/lutia-io/huma/pkg/pipeline"
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/schema"
 	"github.com/lutia-io/huma/pkg/user"
@@ -30,7 +32,15 @@ func New() {
 	defer pool.Close()
 
 	mux := http.NewServeMux()
-	handler := http.Handler(mux)
+	user.New(log, pool, mux)
+	network.New(log, pool, mux)
+	organization.New(log, pool, mux)
+	organizationuser.New(log, pool, mux)
+	schemaService := schema.New(log, pool, mux)
+	node.New(log, pool, mux)
+	pipeline.New(log, pool, mux)
+	workflowService := workflow.New(log, pool, mux)
+	record.New(log, pool, mux, schemaService, workflowService)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -39,14 +49,7 @@ func New() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	user.New(log, pool, mux)
-	network.New(log, pool, mux)
-	organization.New(log, pool, mux)
-	organizationuser.New(log, pool, mux)
-	schemaService := schema.New(log, pool, mux)
-	workflowService := workflow.New(log, pool, mux)
-	record.New(log, pool, mux, schemaService, workflowService)
-
+	handler := http.Handler(mux)
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	handler = middleware.NewBodySizeLimit(5<<20, handler)
 	handler = middleware.NewTimeout(30*time.Second, handler)

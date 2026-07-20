@@ -21,7 +21,7 @@ func newHTTPHandler(service *service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /records", h.Insert)
+	mux.HandleFunc("POST /record", h.Insert)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
