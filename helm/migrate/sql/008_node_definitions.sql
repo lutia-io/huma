@@ -4,6 +4,7 @@ CREATE TABLE public.node_definitions (
     slug TEXT NOT NULL,
     active BOOLEAN NOT NULL,
     internal BOOLEAN NOT NULL,
+    type TEXT NOT NULL,
     definition JSONB NOT NULL,
     network_id UUID NOT NULL REFERENCES public.networks(id),
     user_id UUID NOT NULL REFERENCES public.users(id),

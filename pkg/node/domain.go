@@ -12,6 +12,7 @@ type nodeDefinition struct {
 	Slug     string `json:"slug"`
 	Active   bool   `json:"active"`
 	Internal bool   `json:"internal"`
+	Type     Type   `json:"type"`
 
 	Definition json.RawMessage `json:"definition"`
 
@@ -27,8 +28,8 @@ type insertNodeDefinitionRequest struct {
 	Name       string          `json:"name"`
 	Active     bool            `json:"active"`
 	Internal   bool            `json:"internal"`
+	Type       Type            `json:"type"`
 	Definition json.RawMessage `json:"definition"`
-	SchemaID   string          `json:"schemaId"`
 	NetworkID  string          `json:"networkId"`
 	UserID     string          `json:"userId"`
 }

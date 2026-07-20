@@ -47,9 +47,19 @@ func (s *Service) Insert(ctx context.Context, req insertNodeDefinitionRequest) (
 		return "", apperror.NewBadRequestError("User ID is required", nil)
 	}
 
+	if req.Type == "" {
+		s.logger.WarnContext(ctx, "Empty type")
+		return "", apperror.NewBadRequestError("Type is required", nil)
+	}
+
 	if len(req.Definition) == 0 {
 		s.logger.WarnContext(ctx, "Empty definition")
 		return "", apperror.NewBadRequestError("Definition is required", nil)
+	}
+
+	if _, err := parseDefinition(req.Type, req.Definition); err != nil {
+		s.logger.WarnContext(ctx, "Invalid definition", "type", req.Type, logger.KeyError, err)
+		return "", apperror.NewBadRequestError("Invalid definition", err)
 	}
 
 	node := &nodeDefinition{
@@ -57,6 +67,7 @@ func (s *Service) Insert(ctx context.Context, req insertNodeDefinitionRequest) (
 		Slug:       slug,
 		Active:     req.Active,
 		Internal:   req.Internal,
+		Type:       req.Type,
 		Definition: req.Definition,
 		NetworkID:  networkID,
 		UserID:     userID,

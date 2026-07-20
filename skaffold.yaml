@@ -37,6 +37,7 @@ deploy:
         chartPath: ./helm/postgres
         namespace: "{{.NAMESPACE}}"
         createNamespace: true
+        wait: true
         setValueTemplates:
           cluster.instances: "{{.HUMA_DB_INSTANCES}}"
           cluster.image.version: "{{.HUMA_DB_IMAGE_VERSION}}"

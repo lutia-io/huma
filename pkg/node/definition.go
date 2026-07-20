@@ -15,29 +15,15 @@ type NoopContext struct {
 	Message string `json:"message"`
 }
 
-type definition struct {
-	Context any `json:"context"`
-}
-
-func (d *definition) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		Type    Type            `json:"type"`
-		Context json.RawMessage `json:"context"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	switch raw.Type {
+func parseDefinition(t Type, data json.RawMessage) (any, error) {
+	switch t {
 	case TypeNoop:
 		var ctx NoopContext
-		if err := json.Unmarshal(raw.Context, &ctx); err != nil {
-			return fmt.Errorf("invalid NOOP context: %w", err)
+		if err := json.Unmarshal(data, &ctx); err != nil {
+			return nil, fmt.Errorf("invalid NOOP definition: %w", err)
 		}
-		d.Context = ctx
+		return ctx, nil
 	default:
-		return fmt.Errorf("unknown node type %q", raw.Type)
+		return nil, fmt.Errorf("unknown node type %q", t)
 	}
-
-	return nil
 }
