@@ -15,7 +15,6 @@ type nodeDefinition struct {
 
 	Definition json.RawMessage `json:"definition"`
 
-	SchemaID  string `json:"schemaId"`
 	NetworkID string `json:"networkId"`
 	UserID    string `json:"userId"`
 

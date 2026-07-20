@@ -21,7 +21,7 @@ func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /node-definitions", h.Insert)
+	mux.HandleFunc("POST /node-definition", h.Insert)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {

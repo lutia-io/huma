@@ -29,13 +29,12 @@ func (store *postgresStore) Insert(ctx context.Context, pipeline *pipelineDefini
 			active,
 			internal,
 			definition,
-			schema_id,
 			network_id,
 			user_id,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
+			$1, $2, $3, $4, $5, $6, $7,
 			now(), now()
 		)
 		RETURNING id`
@@ -46,7 +45,6 @@ func (store *postgresStore) Insert(ctx context.Context, pipeline *pipelineDefini
 		pipeline.Active,
 		pipeline.Internal,
 		pipeline.Definition,
-		pipeline.SchemaID,
 		pipeline.NetworkID,
 		pipeline.UserID,
 	).Scan(&pipeline.ID)

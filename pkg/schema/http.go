@@ -21,7 +21,7 @@ func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /schemas", h.Insert)
+	mux.HandleFunc("POST /schema", h.Insert)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {

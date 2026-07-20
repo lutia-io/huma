@@ -29,13 +29,12 @@ func (store *postgresStore) Insert(ctx context.Context, node *nodeDefinition) (s
 			active,
 			internal,
 			definition,
-			schema_id,
 			network_id,
 			user_id,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
+			$1, $2, $3, $4, $5, $6, $7,
 			now(), now()
 		)
 		RETURNING id`
@@ -46,7 +45,6 @@ func (store *postgresStore) Insert(ctx context.Context, node *nodeDefinition) (s
 		node.Active,
 		node.Internal,
 		node.Definition,
-		node.SchemaID,
 		node.NetworkID,
 		node.UserID,
 	).Scan(&node.ID)
