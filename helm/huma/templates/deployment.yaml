@@ -36,3 +36,5 @@ spec:
               value: {{ .Values.secret.store.postgresRoUri | quote }}
             - name: API_SERVICE_POSTGRES_R_URI
               value: {{ .Values.secret.store.postgresRUri | quote }}
+            - name: API_SERVICE_NATS_URI
+              value: {{ .Values.secret.nats.uri | quote }}

@@ -7,10 +7,11 @@ import (
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/schema"
 	"github.com/lutia-io/huma/pkg/workflow"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
-func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, schemaService *schema.Service, workflowService *workflow.Service) {
+func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, js jetstream.JetStream, schemaService *schema.Service, workflowService *workflow.Service) {
 	store := newPostgresStore(pool)
-	service := NewService(logger, store, schemaService, workflowService)
+	service := NewService(logger, store, js, schemaService, workflowService)
 	newHTTPHandler(service, mux)
 }

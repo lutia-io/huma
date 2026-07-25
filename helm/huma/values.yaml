@@ -21,3 +21,5 @@ secret:
     postgresRwUri: ""
     postgresRoUri: ""
     postgresRUri: ""
+  nats:
+    uri: ""
