@@ -28,13 +28,13 @@ spec:
               path: /readyz
               port: {{ .Values.deployment.container.port }}
           env:
-            - name: API_SERVICE_PORT
+            - name: HUMA_SERVICE_PORT
               value: {{ .Values.service.port | quote }}
-            - name: API_SERVICE_POSTGRES_RW_URI
+            - name: HUMA_SERVICE_POSTGRES_RW_URI
               value: {{ .Values.secret.store.postgresRwUri | quote }}
-            - name: API_SERVICE_POSTGRES_RO_URI
+            - name: HUMA_SERVICE_POSTGRES_RO_URI
               value: {{ .Values.secret.store.postgresRoUri | quote }}
-            - name: API_SERVICE_POSTGRES_R_URI
+            - name: HUMA_SERVICE_POSTGRES_R_URI
               value: {{ .Values.secret.store.postgresRUri | quote }}
-            - name: API_SERVICE_NATS_URI
+            - name: HUMA_SERVICE_NATS_URI
               value: {{ .Values.secret.nats.uri | quote }}

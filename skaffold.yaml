@@ -84,3 +84,21 @@ deploy:
           secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
           secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
           secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"
+      
+      - name: workflow
+        chartPath: ./helm/huma
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        skipBuildDependencies: true
+        setValueTemplates:
+          deployment.replicas: "{{.WORKFLOW_DEPLOYMENT_REPLICAS}}"
+          deployment.image.repository: "{{.IMAGE_REPO_huma}}"
+          deployment.image.tag: "{{.IMAGE_TAG_huma}}@{{.IMAGE_DIGEST_huma}}"
+          deployment.args[0]: "{{.WORKFLOW_DEPLOYMENT_ARG}}"
+          deployment.container.name: "{{.WORKFLOW_DEPLOYMENT_CONTAINER_NAME}}"
+          deployment.container.port: "{{.WORKFLOW_DEPLOYMENT_CONTAINER_PORT}}"
+          service.port: "{{.WORKFLOW_SERVICE_PORT}}"
+          secret.store.postgresRwUri: "{{.HUMA_DB_RW_DATABASE_URL}}"
+          secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
+          secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
+          secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"

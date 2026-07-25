@@ -17,6 +17,8 @@ func Execute() {
 	switch cmd {
 	case "api":
 		NewApi(args)
+	case "workflow":
+		NewWorkflow(args)
 	case "-h", "--help", "help":
 		printUsage()
 	default:
@@ -30,5 +32,6 @@ func printUsage() {
 	prog := os.Args[0]
 	fmt.Fprintf(os.Stdout, "Usage: %s <command> [options]\n\n", prog)
 	fmt.Fprintln(os.Stdout, "Commands:")
-	fmt.Fprintln(os.Stdout, "  api      The api service serves the main public api.")
+	fmt.Fprintln(os.Stdout, "  api      	The api service serves the main public api.")
+	fmt.Fprintln(os.Stdout, "  workflow 	The workflow service serves the workflow evaluator and executor.")
 }

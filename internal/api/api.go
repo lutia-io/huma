@@ -26,14 +26,14 @@ import (
 func New() {
 	log := logger.New()
 
-	pool, err := pgxpool.New(context.Background(), os.Getenv("API_SERVICE_POSTGRES_RW_URI"))
+	pool, err := pgxpool.New(context.Background(), os.Getenv("HUMA_SERVICE_POSTGRES_RW_URI"))
 	if err != nil {
 		log.Error("Unable to create db connection pool", logger.KeyError, err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	nc, err := nats.Connect(os.Getenv("API_SERVICE_NATS_URI"))
+	nc, err := nats.Connect(os.Getenv("HUMA_SERVICE_NATS_URI"))
 	if err != nil {
 		log.Error("Unable to create NATS connection", logger.KeyError, err)
 		os.Exit(1)
@@ -85,7 +85,7 @@ func New() {
 	handler = middleware.NewRequestID(handler)
 	handler = middleware.NewRealIP(handler)
 
-	port := os.Getenv("API_SERVICE_PORT")
+	port := os.Getenv("HUMA_SERVICE_PORT")
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%s", port),
 		Handler:           handler,
