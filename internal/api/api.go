@@ -66,8 +66,8 @@ func New() {
 	schemaService := schema.New(log, pool, mux)
 	node.New(log, pool, mux)
 	pipeline.New(log, pool, mux)
-	workflowService := workflow.New(log, pool, mux)
-	record.New(log, pool, mux, js, schemaService, workflowService)
+	workflow.New(log, pool, mux)
+	record.New(log, pool, mux, js, schemaService)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
