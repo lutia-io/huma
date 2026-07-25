@@ -44,9 +44,9 @@ func New() {
 	svc := wf.NewService(log, store)
 
 	consumer, err := js.CreateOrUpdateConsumer(ctx, record.StreamName, jetstream.ConsumerConfig{
-		Durable:       "workflow-executor",
-		FilterSubject: record.SubjectCreated,
-		AckPolicy:     jetstream.AckExplicitPolicy,
+		Durable:        "workflow-executor",
+		FilterSubjects: []string{record.SubjectCreated},
+		AckPolicy:      jetstream.AckExplicitPolicy,
 	})
 	if err != nil {
 		log.Error("Unable to create consumer", logger.KeyError, err)
@@ -59,15 +59,12 @@ func New() {
 		var event record.CreatedEvent
 		if err := json.Unmarshal(msg.Data(), &event); err != nil {
 			log.Error("Failed to unmarshal record created event", logger.KeyError, err)
-			_ = msg.Term() // poison message
+			_ = msg.Term()
 			return
 		}
 
-		log.Info("Executing workflows for record", logger.KeyID, event.ID, "schema_id", event.SchemaID)
-
 		if err := svc.ExecuteForRecord(msgCtx, event.SchemaID, event.ID, event.Data); err != nil {
-			log.Error("Failed to execute workflows for record",
-				logger.KeyID, event.ID, logger.KeyError, err)
+			log.Error("Failed to execute workflows for record", logger.KeyID, event.ID, logger.KeyError, err)
 			_ = msg.Nak()
 			return
 		}
@@ -79,7 +76,6 @@ func New() {
 		os.Exit(1)
 	}
 
-	// health endpoints for k8s (unchanged)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
