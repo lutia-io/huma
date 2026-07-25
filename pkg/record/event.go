@@ -10,6 +10,7 @@ const (
 )
 
 type CreatedEvent struct {
-	ID   string          `json:"id"`
-	Data json.RawMessage `json:"data"`
+	ID       string          `json:"id"`
+	Data     json.RawMessage `json:"data"`
+	SchemaID string          `json:"schema_id"`
 }

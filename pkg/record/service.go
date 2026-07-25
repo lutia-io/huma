@@ -70,8 +70,9 @@ func (s *service) Insert(ctx context.Context, req insertRecordRequest) (string, 
 	s.logger.InfoContext(ctx, "Successfully created record", logger.KeyID, id)
 
 	payload, err := json.Marshal(CreatedEvent{
-		ID:   id,
-		Data: record.Data,
+		ID:       id,
+		Data:     record.Data,
+		SchemaID: record.SchemaID,
 	})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to marshal record created event", logger.KeyError, err)
