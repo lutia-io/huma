@@ -1,12 +1,36 @@
-package workflow
+package executor
 
 import (
 	"context"
 	"encoding/json"
 
 	"github.com/lutia-io/huma/pkg/action"
+	"github.com/lutia-io/huma/pkg/criteria"
+	"github.com/lutia-io/huma/pkg/evaluator"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/workflow"
 )
+
+type definition struct {
+	Criteria criteria.Criteria `json:"criteria"`
+	Actions  []action.Action   `json:"actions"`
+}
+
+type Store interface {
+	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflow.WorkflowDefinition, error)
+}
+
+type Service struct {
+	logger *logger.Logger
+	store  Store
+}
+
+func NewService(logger *logger.Logger, store Store) *Service {
+	return &Service{
+		logger: logger,
+		store:  store,
+	}
+}
 
 // ExecuteForRecord loads active workflows for the record's schema, evaluates
 // each definition's criteria against the record data, and runs matching actions.
@@ -35,14 +59,14 @@ func (s *Service) ExecuteForRecord(ctx context.Context, schemaID, recordID strin
 	return nil
 }
 
-func (s *Service) executeWorkflow(ctx context.Context, wf *workflowDefinition, recordID string, data map[string]any) error {
+func (s *Service) executeWorkflow(ctx context.Context, wf *workflow.WorkflowDefinition, recordID string, data map[string]any) error {
 	var def definition
 	if err := json.Unmarshal(wf.Definition, &def); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to unmarshal workflow definition", logger.KeyID, wf.ID, logger.KeyError, err)
 		return err
 	}
 
-	if !def.Criteria.Match(data) {
+	if !evaluator.Match(def.Criteria, data) {
 		s.logger.InfoContext(ctx, "Workflow criteria not met", logger.KeyID, wf.ID, "record_id", recordID)
 		return nil
 	}

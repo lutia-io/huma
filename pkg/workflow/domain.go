@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type workflowDefinition struct {
+type WorkflowDefinition struct {
 	ID string `json:"id"`
 
 	Name     string `json:"name"`

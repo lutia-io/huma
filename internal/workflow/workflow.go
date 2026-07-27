@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/executor"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/record"
 	wf "github.com/lutia-io/huma/pkg/workflow"
@@ -41,7 +42,7 @@ func New() {
 	}
 
 	store := wf.NewPostgresStore(pool)
-	svc := wf.NewService(log, store)
+	svc := executor.NewService(log, store)
 
 	consumer, err := js.CreateOrUpdateConsumer(ctx, record.StreamName, jetstream.ConsumerConfig{
 		Durable:        "workflow-executor",

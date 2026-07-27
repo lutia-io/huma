@@ -1,15 +1,17 @@
-package criteria
+package evaluator
 
 import (
 	"reflect"
 	"strings"
+
+	"github.com/lutia-io/huma/pkg/criteria"
 )
 
 // Match evaluates the criteria tree against record data.
 // Missing fields fail leaf comparisons. Malformed nodes fail.
-func (c Criteria) Match(data map[string]any) bool {
+func Match(c criteria.Criteria, data map[string]any) bool {
 	if c.Logic != "" {
-		return c.matchGroup(data)
+		return matchGroup(c, data)
 	}
 	if c.Field == "" || c.Operator == "" {
 		return false
@@ -21,33 +23,33 @@ func (c Criteria) Match(data map[string]any) bool {
 	return compare(value, c.Operator, c.Value)
 }
 
-func (c Criteria) matchGroup(data map[string]any) bool {
+func matchGroup(c criteria.Criteria, data map[string]any) bool {
 	switch c.Logic {
-	case LogicAnd:
+	case criteria.LogicAnd:
 		if len(c.Conditions) == 0 {
 			return false
 		}
 		for _, child := range c.Conditions {
-			if !child.Match(data) {
+			if !Match(child, data) {
 				return false
 			}
 		}
 		return true
-	case LogicOr:
+	case criteria.LogicOr:
 		if len(c.Conditions) == 0 {
 			return false
 		}
 		for _, child := range c.Conditions {
-			if child.Match(data) {
+			if Match(child, data) {
 				return true
 			}
 		}
 		return false
-	case LogicNot:
+	case criteria.LogicNot:
 		if len(c.Conditions) != 1 {
 			return false
 		}
-		return !c.Conditions[0].Match(data)
+		return !Match(c.Conditions[0], data)
 	default:
 		return false
 	}
@@ -62,7 +64,7 @@ func lookupField(data map[string]any, field string) (any, bool) {
 		return v, ok
 	}
 	var cur any = data
-	for _, part := range strings.Split(field, ".") {
+	for part := range strings.SplitSeq(field, ".") {
 		m, ok := cur.(map[string]any)
 		if !ok {
 			return nil, false
@@ -75,27 +77,27 @@ func lookupField(data map[string]any, field string) (any, bool) {
 	return cur, true
 }
 
-func compare(left any, op CompareOp, right any) bool {
+func compare(left any, op criteria.CompareOp, right any) bool {
 	switch op {
-	case OpEq:
+	case criteria.OpEq:
 		return equalValues(left, right)
-	case OpNeq:
+	case criteria.OpNeq:
 		return !equalValues(left, right)
-	case OpIn:
+	case criteria.OpIn:
 		return containsValue(right, left)
-	case OpGt, OpGte, OpLt, OpLte:
+	case criteria.OpGt, criteria.OpGte, criteria.OpLt, criteria.OpLte:
 		cmp, ok := compareOrdered(left, right)
 		if !ok {
 			return false
 		}
 		switch op {
-		case OpGt:
+		case criteria.OpGt:
 			return cmp > 0
-		case OpGte:
+		case criteria.OpGte:
 			return cmp >= 0
-		case OpLt:
+		case criteria.OpLt:
 			return cmp < 0
-		case OpLte:
+		case criteria.OpLte:
 			return cmp <= 0
 		}
 	}

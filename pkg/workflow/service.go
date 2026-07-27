@@ -58,7 +58,7 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 		return "", apperror.NewBadRequestError("Schema ID is required", nil)
 	}
 
-	wfd := &workflowDefinition{
+	wfd := &WorkflowDefinition{
 		Name:       name,
 		Slug:       slug,
 		Active:     req.Active,

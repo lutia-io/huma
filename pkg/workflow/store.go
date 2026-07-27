@@ -10,8 +10,8 @@ import (
 )
 
 type store interface {
-	Insert(ctx context.Context, workflow *workflowDefinition) (string, error)
-	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflowDefinition, error)
+	Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error)
+	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error)
 }
 
 type postgresStore struct {
@@ -22,7 +22,7 @@ func NewPostgresStore(pool *pgxpool.Pool) store {
 	return &postgresStore{db: pool}
 }
 
-func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefinition) (string, error) {
+func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error) {
 	const sql = `
 		INSERT INTO public.workflow_definitions (
 			name,
@@ -61,7 +61,7 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefini
 	return workflow.ID, nil
 }
 
-func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflowDefinition, error) {
+func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error) {
 	const sql = `
 		SELECT
 			id,
@@ -87,9 +87,9 @@ func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID s
 	}
 	defer rows.Close()
 
-	var workflows []*workflowDefinition
+	var workflows []*WorkflowDefinition
 	for rows.Next() {
-		wf := &workflowDefinition{}
+		wf := &WorkflowDefinition{}
 		if err := rows.Scan(
 			&wf.ID,
 			&wf.Name,
