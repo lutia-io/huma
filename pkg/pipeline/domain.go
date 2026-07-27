@@ -1,9 +1,6 @@
 package pipeline
 
-import (
-	"encoding/json"
-	"time"
-)
+import "time"
 
 type pipelineDefinition struct {
 	ID string `json:"id"`
@@ -13,7 +10,7 @@ type pipelineDefinition struct {
 	Active   bool   `json:"active"`
 	Internal bool   `json:"internal"`
 
-	Definition json.RawMessage `json:"definition"`
+	Definition definition `json:"definition"`
 
 	NetworkID string `json:"networkId"`
 	UserID    string `json:"userId"`
@@ -24,11 +21,11 @@ type pipelineDefinition struct {
 }
 
 type insertPipelineDefinitionRequest struct {
-	Name       string          `json:"name"`
-	Active     bool            `json:"active"`
-	Internal   bool            `json:"internal"`
-	Definition json.RawMessage `json:"definition"`
-	SchemaID   string          `json:"schemaId"`
-	NetworkID  string          `json:"networkId"`
-	UserID     string          `json:"userId"`
+	Name       string     `json:"name"`
+	Active     bool       `json:"active"`
+	Internal   bool       `json:"internal"`
+	Definition definition `json:"definition"`
+	SchemaID   string     `json:"schemaId"`
+	NetworkID  string     `json:"networkId"`
+	UserID     string     `json:"userId"`
 }

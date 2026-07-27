@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -41,12 +42,17 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 		)
 		RETURNING id`
 
-	err := store.db.QueryRow(ctx, sql,
+	defJSON, err := json.Marshal(workflow.Definition)
+	if err != nil {
+		return "", err
+	}
+
+	err = store.db.QueryRow(ctx, sql,
 		workflow.Name,
 		workflow.Slug,
 		workflow.Active,
 		workflow.Internal,
-		workflow.Definition,
+		defJSON,
 		workflow.SchemaID,
 		workflow.NetworkID,
 		workflow.UserID,
@@ -90,13 +96,14 @@ func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID s
 	var workflows []*WorkflowDefinition
 	for rows.Next() {
 		wf := &WorkflowDefinition{}
+		var defJSON []byte
 		if err := rows.Scan(
 			&wf.ID,
 			&wf.Name,
 			&wf.Slug,
 			&wf.Active,
 			&wf.Internal,
-			&wf.Definition,
+			&defJSON,
 			&wf.SchemaID,
 			&wf.NetworkID,
 			&wf.UserID,
@@ -104,6 +111,9 @@ func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID s
 			&wf.UpdatedAt,
 			&wf.DeletedAt,
 		); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(defJSON, &wf.Definition); err != nil {
 			return nil, err
 		}
 		workflows = append(workflows, wf)

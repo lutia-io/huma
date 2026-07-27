@@ -5,16 +5,10 @@ import (
 	"encoding/json"
 
 	"github.com/lutia-io/huma/pkg/action"
-	"github.com/lutia-io/huma/pkg/criteria"
 	"github.com/lutia-io/huma/pkg/evaluator"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/workflow"
 )
-
-type definition struct {
-	Criteria criteria.Criteria `json:"criteria"`
-	Actions  []action.Action   `json:"actions"`
-}
 
 type Store interface {
 	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflow.WorkflowDefinition, error)
@@ -60,19 +54,13 @@ func (s *Service) ExecuteForRecord(ctx context.Context, schemaID, recordID strin
 }
 
 func (s *Service) executeWorkflow(ctx context.Context, wf *workflow.WorkflowDefinition, recordID string, data map[string]any) error {
-	var def definition
-	if err := json.Unmarshal(wf.Definition, &def); err != nil {
-		s.logger.ErrorContext(ctx, "Failed to unmarshal workflow definition", logger.KeyID, wf.ID, logger.KeyError, err)
-		return err
-	}
-
-	if !evaluator.Match(def.Criteria, data) {
+	if !evaluator.Match(wf.Definition.Criteria, data) {
 		s.logger.InfoContext(ctx, "Workflow criteria not met", logger.KeyID, wf.ID, "record_id", recordID)
 		return nil
 	}
 
-	s.logger.InfoContext(ctx, "Workflow criteria met, executing actions", logger.KeyID, wf.ID, "record_id", recordID, logger.KeyCount, len(def.Actions))
-	for i, act := range def.Actions {
+	s.logger.InfoContext(ctx, "Workflow criteria met, executing actions", logger.KeyID, wf.ID, "record_id", recordID, logger.KeyCount, len(wf.Definition.Actions))
+	for i, act := range wf.Definition.Actions {
 		if err := s.executeAction(ctx, wf.ID, recordID, act); err != nil {
 			s.logger.ErrorContext(ctx, "Action execution failed", logger.KeyID, wf.ID, "record_id", recordID, "action_index", i, "action_type", act.Type, logger.KeyError, err)
 			return err

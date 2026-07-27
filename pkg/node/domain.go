@@ -14,7 +14,7 @@ type nodeDefinition struct {
 	Internal bool   `json:"internal"`
 	Type     Type   `json:"type"`
 
-	Definition json.RawMessage `json:"definition"`
+	Definition any `json:"definition"`
 
 	NetworkID string `json:"networkId"`
 	UserID    string `json:"userId"`

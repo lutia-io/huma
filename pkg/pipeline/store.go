@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -39,12 +40,17 @@ func (store *postgresStore) Insert(ctx context.Context, pipeline *pipelineDefini
 		)
 		RETURNING id`
 
-	err := store.db.QueryRow(ctx, sql,
+	defJSON, err := json.Marshal(pipeline.Definition)
+	if err != nil {
+		return "", err
+	}
+
+	err = store.db.QueryRow(ctx, sql,
 		pipeline.Name,
 		pipeline.Slug,
 		pipeline.Active,
 		pipeline.Internal,
-		pipeline.Definition,
+		defJSON,
 		pipeline.NetworkID,
 		pipeline.UserID,
 	).Scan(&pipeline.ID)
