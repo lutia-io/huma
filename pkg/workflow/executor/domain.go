@@ -11,16 +11,16 @@ type Status string
 
 const (
 	// StatusPending means the workflow is waiting to be claimed by a worker.
-	StatusPending Status = "PENDING"
+	StatusPending Status = "pending"
 	// StatusRunning means a worker currently holds the lease (or held it and
 	// crashed — expired leases are reclaimable while still "running").
-	StatusRunning Status = "RUNNING"
+	StatusRunning Status = "running"
 	// StatusCompleted means every action either succeeded or was skipped past
 	// after a journaled failure, and none remain incomplete.
-	StatusCompleted Status = "COMPLETED"
+	StatusCompleted Status = "completed"
 	// StatusFailed means at least one action never completed successfully, or
 	// the workflow exhausted its claim attempts.
-	StatusFailed Status = "FAILED"
+	StatusFailed Status = "failed"
 )
 
 // ActionStatus is the terminal state of a single action attempt in the
@@ -29,8 +29,8 @@ const (
 type ActionStatus string
 
 const (
-	ActionStatusCompleted ActionStatus = "COMPLETED"
-	ActionStatusFailed    ActionStatus = "FAILED"
+	ActionStatusCompleted ActionStatus = "completed"
+	ActionStatusFailed    ActionStatus = "failed"
 )
 
 // Workflow is one execution instance of a workflow definition, triggered by a
