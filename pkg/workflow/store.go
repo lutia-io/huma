@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -10,19 +11,19 @@ import (
 )
 
 type store interface {
-	Insert(ctx context.Context, workflow *workflowDefinition) (string, error)
-	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflowDefinition, error)
+	Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error)
+	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error)
 }
 
 type postgresStore struct {
 	db *pgxpool.Pool
 }
 
-func newPostgresStore(pool *pgxpool.Pool) store {
+func NewPostgresStore(pool *pgxpool.Pool) store {
 	return &postgresStore{db: pool}
 }
 
-func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefinition) (string, error) {
+func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error) {
 	const sql = `
 		INSERT INTO public.workflow_definitions (
 			name,
@@ -41,12 +42,17 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefini
 		)
 		RETURNING id`
 
-	err := store.db.QueryRow(ctx, sql,
+	defJSON, err := json.Marshal(workflow.Definition)
+	if err != nil {
+		return "", err
+	}
+
+	err = store.db.QueryRow(ctx, sql,
 		workflow.Name,
 		workflow.Slug,
 		workflow.Active,
 		workflow.Internal,
-		workflow.Definition,
+		defJSON,
 		workflow.SchemaID,
 		workflow.NetworkID,
 		workflow.UserID,
@@ -61,7 +67,9 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *workflowDefini
 	return workflow.ID, nil
 }
 
-func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*workflowDefinition, error) {
+// ListActiveBySchemaID returns the definitions the engine's intake considers
+// for a record event on the given schema.
+func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error) {
 	const sql = `
 		SELECT
 			id,
@@ -87,16 +95,17 @@ func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID s
 	}
 	defer rows.Close()
 
-	var workflows []*workflowDefinition
+	var workflows []*WorkflowDefinition
 	for rows.Next() {
-		wf := &workflowDefinition{}
+		wf := &WorkflowDefinition{}
+		var defJSON []byte
 		if err := rows.Scan(
 			&wf.ID,
 			&wf.Name,
 			&wf.Slug,
 			&wf.Active,
 			&wf.Internal,
-			&wf.Definition,
+			&defJSON,
 			&wf.SchemaID,
 			&wf.NetworkID,
 			&wf.UserID,
@@ -104,6 +113,9 @@ func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID s
 			&wf.UpdatedAt,
 			&wf.DeletedAt,
 		); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(defJSON, &wf.Definition); err != nil {
 			return nil, err
 		}
 		workflows = append(workflows, wf)

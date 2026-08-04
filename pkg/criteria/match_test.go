@@ -52,7 +52,7 @@ func TestMatchShipmentExample(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := c.Match(tt.data); got != tt.want {
+			if got := Match(c, tt.data); got != tt.want {
 				t.Fatalf("Match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -66,22 +66,22 @@ func TestMatchOperators(t *testing.T) {
 		"nested": map[string]any{"flag": true},
 	}
 
-	if !(Criteria{Field: "status", Operator: OpEq, Value: "open"}.Match(data)) {
+	if !Match(Criteria{Field: "status", Operator: OpEq, Value: "open"}, data) {
 		t.Fatal("eq failed")
 	}
-	if (Criteria{Field: "status", Operator: OpNeq, Value: "open"}.Match(data)) {
+	if Match(Criteria{Field: "status", Operator: OpNeq, Value: "open"}, data) {
 		t.Fatal("neq should fail")
 	}
-	if !(Criteria{Field: "count", Operator: OpGte, Value: 3}.Match(data)) {
+	if !Match(Criteria{Field: "count", Operator: OpGte, Value: 3}, data) {
 		t.Fatal("gte failed")
 	}
-	if !(Criteria{Field: "count", Operator: OpIn, Value: []any{1, 3, 5}}.Match(data)) {
+	if !Match(Criteria{Field: "count", Operator: OpIn, Value: []any{1, 3, 5}}, data) {
 		t.Fatal("in failed")
 	}
-	if !(Criteria{Field: "nested.flag", Operator: OpEq, Value: true}.Match(data)) {
+	if !Match(Criteria{Field: "nested.flag", Operator: OpEq, Value: true}, data) {
 		t.Fatal("nested eq failed")
 	}
-	if (Criteria{Logic: LogicNot, Conditions: []Criteria{{Field: "status", Operator: OpEq, Value: "open"}}}.Match(data)) {
+	if Match(Criteria{Logic: LogicNot, Conditions: []Criteria{{Field: "status", Operator: OpEq, Value: "open"}}}, data) {
 		t.Fatal("not should fail when child matches")
 	}
 }

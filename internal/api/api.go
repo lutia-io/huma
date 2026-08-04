@@ -19,17 +19,44 @@ import (
 	"github.com/lutia-io/huma/pkg/schema"
 	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/workflow"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 func New() {
 	log := logger.New()
 
-	pool, err := pgxpool.New(context.Background(), os.Getenv("API_SERVICE_POSTGRES_RW_URI"))
+	pool, err := pgxpool.New(context.Background(), os.Getenv("HUMA_SERVICE_POSTGRES_RW_URI"))
 	if err != nil {
 		log.Error("Unable to create db connection pool", logger.KeyError, err)
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	nc, err := nats.Connect(os.Getenv("HUMA_SERVICE_NATS_URI"))
+	if err != nil {
+		log.Error("Unable to create NATS connection", logger.KeyError, err)
+		os.Exit(1)
+	}
+	defer nc.Drain()
+
+	js, err := jetstream.New(nc)
+	if err != nil {
+		log.Error("Unable to create JetStream", logger.KeyError, err)
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = js.CreateStream(ctx, jetstream.StreamConfig{
+		Name:     "RECORDS",
+		Subjects: []string{"records.>"},
+		Storage:  jetstream.FileStorage,
+	})
+	if err != nil {
+		log.Error("Unable to create stream", logger.KeyError, err)
+		os.Exit(1)
+	}
 
 	mux := http.NewServeMux()
 	user.New(log, pool, mux)
@@ -39,8 +66,8 @@ func New() {
 	schemaService := schema.New(log, pool, mux)
 	node.New(log, pool, mux)
 	pipeline.New(log, pool, mux)
-	workflowService := workflow.New(log, pool, mux)
-	record.New(log, pool, mux, schemaService, workflowService)
+	workflow.New(log, pool, mux)
+	record.New(log, pool, mux, js, schemaService)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -58,7 +85,7 @@ func New() {
 	handler = middleware.NewRequestID(handler)
 	handler = middleware.NewRealIP(handler)
 
-	port := os.Getenv("API_SERVICE_PORT")
+	port := os.Getenv("HUMA_SERVICE_PORT")
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%s", port),
 		Handler:           handler,

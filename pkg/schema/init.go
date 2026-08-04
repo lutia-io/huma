@@ -13,3 +13,9 @@ func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux) *Service
 	newHTTPHandler(service, mux)
 	return service
 }
+
+// NewWithPool constructs a Service without registering HTTP handlers, for
+// consumers like the workflow engine that only need validation and resolution.
+func NewWithPool(logger *logger.Logger, pool *pgxpool.Pool) *Service {
+	return NewService(logger, newPostgresStore(pool))
+}

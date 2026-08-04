@@ -15,18 +15,19 @@ const (
 )
 
 type CreateRecordContext struct {
-	Schema string         `json:"schema"`
-	Data   map[string]any `json:"data"`
+	SchemaID string         `json:"schemaId"`
+	Data     map[string]any `json:"data"`
 }
 
 type UpdateRecordContext struct {
-	Schema string         `json:"schema"`
-	Data   map[string]any `json:"data"`
+	RecordID string         `json:"recordId"`
+	Data     map[string]any `json:"data"`
 }
 
 type UpsertRecordContext struct {
-	Schema string         `json:"schema"`
-	Data   map[string]any `json:"data"`
+	SchemaID string         `json:"schemaId"`
+	RecordID string         `json:"recordId,omitempty"`
+	Data     map[string]any `json:"data"`
 }
 
 type TriggerPipelineContext struct {
@@ -39,6 +40,9 @@ type Action struct {
 	Context any  `json:"context"`
 }
 
+// UnmarshalJSON decodes the context payload into the concrete struct for the
+// action's type, so downstream code can type-assert Action.Context instead of
+// re-parsing raw JSON.
 func (a *Action) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		Type    Type            `json:"type"`

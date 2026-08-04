@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -40,13 +41,18 @@ func (store *postgresStore) Insert(ctx context.Context, node *nodeDefinition) (s
 		)
 		RETURNING id`
 
-	err := store.db.QueryRow(ctx, sql,
+	defJSON, err := json.Marshal(node.Definition)
+	if err != nil {
+		return "", err
+	}
+
+	err = store.db.QueryRow(ctx, sql,
 		node.Name,
 		node.Slug,
 		node.Active,
 		node.Internal,
 		node.Type,
-		node.Definition,
+		defJSON,
 		node.NetworkID,
 		node.UserID,
 	).Scan(&node.ID)

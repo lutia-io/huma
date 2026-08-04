@@ -47,11 +47,6 @@ func (s *Service) Insert(ctx context.Context, req insertPipelineDefinitionReques
 		return "", apperror.NewBadRequestError("User ID is required", nil)
 	}
 
-	if len(req.Definition) == 0 {
-		s.logger.WarnContext(ctx, "Empty definition")
-		return "", apperror.NewBadRequestError("Definition is required", nil)
-	}
-
 	pipeline := &pipelineDefinition{
 		Name:       name,
 		Slug:       slug,

@@ -6,9 +6,8 @@ import (
 	"github.com/lutia-io/huma/internal/api"
 )
 
-var flags = flag.NewFlagSet("api", flag.ExitOnError)
-
 func NewApi(args []string) {
+	flags := flag.NewFlagSet("api", flag.ExitOnError)
 	flags.Parse(args)
 	api.New()
 }

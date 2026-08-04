@@ -4,7 +4,12 @@ CREATE TABLE public.records (
     schema_id UUID NOT NULL REFERENCES public.schemas(id),
     organization_id UUID NOT NULL REFERENCES public.organizations(id),
     organization_user_id UUID NOT NULL REFERENCES public.organization_users(id),
+    idempotency_key TEXT,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     deleted_at TIMESTAMPTZ
 );
+
+CREATE UNIQUE INDEX records_idempotency_key_idx
+    ON public.records (idempotency_key)
+    WHERE idempotency_key IS NOT NULL;

@@ -1,3 +1,5 @@
+// Package criteria defines the reusable condition tree, together with Match,
+// which evaluates a tree against data. It is pure computation with no I/O.
 package criteria
 
 type LogicalOp string

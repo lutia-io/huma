@@ -7,9 +7,9 @@ import (
 
 // Match evaluates the criteria tree against record data.
 // Missing fields fail leaf comparisons. Malformed nodes fail.
-func (c Criteria) Match(data map[string]any) bool {
+func Match(c Criteria, data map[string]any) bool {
 	if c.Logic != "" {
-		return c.matchGroup(data)
+		return matchGroup(c, data)
 	}
 	if c.Field == "" || c.Operator == "" {
 		return false
@@ -21,14 +21,14 @@ func (c Criteria) Match(data map[string]any) bool {
 	return compare(value, c.Operator, c.Value)
 }
 
-func (c Criteria) matchGroup(data map[string]any) bool {
+func matchGroup(c Criteria, data map[string]any) bool {
 	switch c.Logic {
 	case LogicAnd:
 		if len(c.Conditions) == 0 {
 			return false
 		}
 		for _, child := range c.Conditions {
-			if !child.Match(data) {
+			if !Match(child, data) {
 				return false
 			}
 		}
@@ -38,7 +38,7 @@ func (c Criteria) matchGroup(data map[string]any) bool {
 			return false
 		}
 		for _, child := range c.Conditions {
-			if child.Match(data) {
+			if Match(child, data) {
 				return true
 			}
 		}
@@ -47,7 +47,7 @@ func (c Criteria) matchGroup(data map[string]any) bool {
 		if len(c.Conditions) != 1 {
 			return false
 		}
-		return !c.Conditions[0].Match(data)
+		return !Match(c.Conditions[0], data)
 	default:
 		return false
 	}
@@ -62,7 +62,7 @@ func lookupField(data map[string]any, field string) (any, bool) {
 		return v, ok
 	}
 	var cur any = data
-	for _, part := range strings.Split(field, ".") {
+	for part := range strings.SplitSeq(field, ".") {
 		m, ok := cur.(map[string]any)
 		if !ok {
 			return nil, false

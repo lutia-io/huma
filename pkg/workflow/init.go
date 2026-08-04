@@ -8,7 +8,7 @@ import (
 )
 
 func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux) *Service {
-	store := newPostgresStore(pool)
+	store := NewPostgresStore(pool)
 	service := NewService(logger, store)
 	newHTTPHandler(service, mux)
 	return service
