@@ -15,10 +15,12 @@ type Definition struct {
 type WorkflowDefinition struct {
 	ID string `json:"id"`
 
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	Active   bool   `json:"active"`
-	Internal bool   `json:"internal"`
+	Name   string `json:"name"`
+	Slug   string `json:"slug"`
+	Active bool   `json:"active"`
+	// Internal marks system-defined definitions that are inserted
+	// automatically on network creation, as opposed to user-authored ones.
+	Internal bool `json:"internal"`
 
 	Definition Definition `json:"definition"`
 

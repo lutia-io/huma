@@ -6,8 +6,14 @@ import (
 	"github.com/lutia-io/huma/internal/workflow"
 )
 
-func NewWorkflow(args []string) {
-	flags := flag.NewFlagSet("workflow", flag.ExitOnError)
+func NewWorkflowEvaluator(args []string) {
+	flags := flag.NewFlagSet("workflow-evaluator", flag.ExitOnError)
 	flags.Parse(args)
-	workflow.New()
+	workflow.NewEvaluator()
+}
+
+func NewWorkflowExecutor(args []string) {
+	flags := flag.NewFlagSet("workflow-executor", flag.ExitOnError)
+	flags.Parse(args)
+	workflow.NewExecutor()
 }

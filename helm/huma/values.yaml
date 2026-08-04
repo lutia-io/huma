@@ -8,13 +8,12 @@ deployment:
   container:
     port: 8000
 
+workflow:
+  workerCount: 4
+
 service:
   type: LoadBalancer
   port: 8000
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/path: /metrics
-    prometheus.io/port: "8000"
 
 secret:
   store:

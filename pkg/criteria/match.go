@@ -1,15 +1,13 @@
-package evaluator
+package criteria
 
 import (
 	"reflect"
 	"strings"
-
-	"github.com/lutia-io/huma/pkg/criteria"
 )
 
 // Match evaluates the criteria tree against record data.
 // Missing fields fail leaf comparisons. Malformed nodes fail.
-func Match(c criteria.Criteria, data map[string]any) bool {
+func Match(c Criteria, data map[string]any) bool {
 	if c.Logic != "" {
 		return matchGroup(c, data)
 	}
@@ -23,9 +21,9 @@ func Match(c criteria.Criteria, data map[string]any) bool {
 	return compare(value, c.Operator, c.Value)
 }
 
-func matchGroup(c criteria.Criteria, data map[string]any) bool {
+func matchGroup(c Criteria, data map[string]any) bool {
 	switch c.Logic {
-	case criteria.LogicAnd:
+	case LogicAnd:
 		if len(c.Conditions) == 0 {
 			return false
 		}
@@ -35,7 +33,7 @@ func matchGroup(c criteria.Criteria, data map[string]any) bool {
 			}
 		}
 		return true
-	case criteria.LogicOr:
+	case LogicOr:
 		if len(c.Conditions) == 0 {
 			return false
 		}
@@ -45,7 +43,7 @@ func matchGroup(c criteria.Criteria, data map[string]any) bool {
 			}
 		}
 		return false
-	case criteria.LogicNot:
+	case LogicNot:
 		if len(c.Conditions) != 1 {
 			return false
 		}
@@ -77,27 +75,27 @@ func lookupField(data map[string]any, field string) (any, bool) {
 	return cur, true
 }
 
-func compare(left any, op criteria.CompareOp, right any) bool {
+func compare(left any, op CompareOp, right any) bool {
 	switch op {
-	case criteria.OpEq:
+	case OpEq:
 		return equalValues(left, right)
-	case criteria.OpNeq:
+	case OpNeq:
 		return !equalValues(left, right)
-	case criteria.OpIn:
+	case OpIn:
 		return containsValue(right, left)
-	case criteria.OpGt, criteria.OpGte, criteria.OpLt, criteria.OpLte:
+	case OpGt, OpGte, OpLt, OpLte:
 		cmp, ok := compareOrdered(left, right)
 		if !ok {
 			return false
 		}
 		switch op {
-		case criteria.OpGt:
+		case OpGt:
 			return cmp > 0
-		case criteria.OpGte:
+		case OpGte:
 			return cmp >= 0
-		case criteria.OpLt:
+		case OpLt:
 			return cmp < 0
-		case criteria.OpLte:
+		case OpLte:
 			return cmp <= 0
 		}
 	}

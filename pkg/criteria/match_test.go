@@ -1,22 +1,18 @@
-package evaluator
+package criteria
 
-import (
-	"testing"
-
-	"github.com/lutia-io/huma/pkg/criteria"
-)
+import "testing"
 
 func TestMatchShipmentExample(t *testing.T) {
 	// weight > 200 OR (numOfContainers > 500 AND numOfPeople < 5)
-	c := criteria.Criteria{
-		Logic: criteria.LogicOr,
-		Conditions: []criteria.Criteria{
-			{Field: "weight", Operator: criteria.OpGt, Value: 200},
+	c := Criteria{
+		Logic: LogicOr,
+		Conditions: []Criteria{
+			{Field: "weight", Operator: OpGt, Value: 200},
 			{
-				Logic: criteria.LogicAnd,
-				Conditions: []criteria.Criteria{
-					{Field: "numOfContainers", Operator: criteria.OpGt, Value: 500},
-					{Field: "numOfPeople", Operator: criteria.OpLt, Value: 5},
+				Logic: LogicAnd,
+				Conditions: []Criteria{
+					{Field: "numOfContainers", Operator: OpGt, Value: 500},
+					{Field: "numOfPeople", Operator: OpLt, Value: 5},
 				},
 			},
 		},
@@ -70,22 +66,22 @@ func TestMatchOperators(t *testing.T) {
 		"nested": map[string]any{"flag": true},
 	}
 
-	if !Match(criteria.Criteria{Field: "status", Operator: criteria.OpEq, Value: "open"}, data) {
+	if !Match(Criteria{Field: "status", Operator: OpEq, Value: "open"}, data) {
 		t.Fatal("eq failed")
 	}
-	if Match(criteria.Criteria{Field: "status", Operator: criteria.OpNeq, Value: "open"}, data) {
+	if Match(Criteria{Field: "status", Operator: OpNeq, Value: "open"}, data) {
 		t.Fatal("neq should fail")
 	}
-	if !Match(criteria.Criteria{Field: "count", Operator: criteria.OpGte, Value: 3}, data) {
+	if !Match(Criteria{Field: "count", Operator: OpGte, Value: 3}, data) {
 		t.Fatal("gte failed")
 	}
-	if !Match(criteria.Criteria{Field: "count", Operator: criteria.OpIn, Value: []any{1, 3, 5}}, data) {
+	if !Match(Criteria{Field: "count", Operator: OpIn, Value: []any{1, 3, 5}}, data) {
 		t.Fatal("in failed")
 	}
-	if !Match(criteria.Criteria{Field: "nested.flag", Operator: criteria.OpEq, Value: true}, data) {
+	if !Match(Criteria{Field: "nested.flag", Operator: OpEq, Value: true}, data) {
 		t.Fatal("nested eq failed")
 	}
-	if Match(criteria.Criteria{Logic: criteria.LogicNot, Conditions: []criteria.Criteria{{Field: "status", Operator: criteria.OpEq, Value: "open"}}}, data) {
+	if Match(Criteria{Logic: LogicNot, Conditions: []Criteria{{Field: "status", Operator: OpEq, Value: "open"}}}, data) {
 		t.Fatal("not should fail when child matches")
 	}
 }

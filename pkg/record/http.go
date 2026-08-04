@@ -9,10 +9,10 @@ import (
 )
 
 type httpHandler struct {
-	service *service
+	service *Service
 }
 
-func newHTTPHandler(service *service, mux *http.ServeMux) *httpHandler {
+func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 	handler := &httpHandler{
 		service: service,
 	}
@@ -30,7 +30,12 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	id, err := h.service.Insert(r.Context(), req)
+	id, err := h.service.Create(r.Context(), CreateParams{
+		SchemaID:           req.SchemaID,
+		OrganizationID:     req.OrganizationID,
+		OrganizationUserID: req.OrganizationUserID,
+		Data:               req.Data,
+	})
 	if err != nil {
 		render.WriteError(w, err)
 		return

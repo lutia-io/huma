@@ -9,8 +9,14 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, js jetstream.JetStream, schemaService *schema.Service) {
-	store := newPostgresStore(pool)
-	service := NewService(logger, store, js, schemaService)
+func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, js jetstream.JetStream, schemaService *schema.Service) *Service {
+	service := NewWithPool(logger, pool, js, schemaService)
 	newHTTPHandler(service, mux)
+	return service
+}
+
+// NewWithPool constructs a Service without registering HTTP handlers, for
+// consumers like the workflow engine.
+func NewWithPool(logger *logger.Logger, pool *pgxpool.Pool, js jetstream.JetStream, schemaService *schema.Service) *Service {
+	return NewService(logger, newPostgresStore(pool), js, schemaService)
 }

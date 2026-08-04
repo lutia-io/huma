@@ -67,6 +67,8 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 	return workflow.ID, nil
 }
 
+// ListActiveBySchemaID returns the definitions the engine's intake considers
+// for a record event on the given schema.
 func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error) {
 	const sql = `
 		SELECT

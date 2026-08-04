@@ -38,3 +38,5 @@ spec:
               value: {{ .Values.secret.store.postgresRUri | quote }}
             - name: HUMA_SERVICE_NATS_URI
               value: {{ .Values.secret.nats.uri | quote }}
+            - name: HUMA_WORKFLOW_WORKER_COUNT
+              value: {{ .Values.workflow.workerCount | quote }}
