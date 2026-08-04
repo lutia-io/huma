@@ -10,7 +10,9 @@ In Persian and Sufi traditions, the Huma never rests on the ground, perpetually 
 Usage: huma <command> [options]
 
 Commands:
-  api      The api service serves the main public api.
+  api                	The api service serves the main public api.
+  workflow-evaluator 	Consumes record events, evaluates workflow criteria, and inserts pending workflows.
+  workflow-executor  	Claims pending workflows and executes their actions.
 ```
 
 
