@@ -56,6 +56,12 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 		return "", apperror.NewBadRequestError("Organization user ID is required", nil)
 	}
 
+	networkID := strings.TrimSpace(params.NetworkID)
+	if networkID == "" {
+		s.logger.WarnContext(ctx, "Empty network ID")
+		return "", apperror.NewBadRequestError("Network ID is required", nil)
+	}
+
 	if err := s.schemaService.ValidateRecordData(ctx, schemaID, params.Data); err != nil {
 		return "", err
 	}
@@ -65,6 +71,7 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 		SchemaID:           schemaID,
 		OrganizationID:     organizationID,
 		OrganizationUserID: organizationUserID,
+		NetworkID:          networkID,
 		IdempotencyKey:     params.IdempotencyKey,
 	}
 
@@ -81,6 +88,7 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 		SchemaID:           rec.SchemaID,
 		OrganizationID:     rec.OrganizationID,
 		OrganizationUserID: rec.OrganizationUserID,
+		NetworkID:          rec.NetworkID,
 	})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to marshal record created event", logger.KeyError, err)

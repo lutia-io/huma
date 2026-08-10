@@ -34,6 +34,7 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		SchemaID:           req.SchemaID,
 		OrganizationID:     req.OrganizationID,
 		OrganizationUserID: req.OrganizationUserID,
+		NetworkID:          req.NetworkID,
 		Data:               req.Data,
 	})
 	if err != nil {

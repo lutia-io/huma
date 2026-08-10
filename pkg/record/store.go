@@ -32,11 +32,12 @@ func (store *postgresStore) Insert(ctx context.Context, rec *Record) (string, er
 			schema_id,
 			organization_id,
 			organization_user_id,
+			network_id,
 			idempotency_key,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, NULLIF($5, ''),
+			$1, $2, $3, $4, $5, NULLIF($6, ''),
 			now(), now()
 		)
 		ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING

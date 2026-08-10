@@ -44,6 +44,7 @@ func createRecord(ctx context.Context, records RecordService, execCtx executor.E
 		SchemaID:           schemaID,
 		OrganizationID:     execCtx.OrganizationID,
 		OrganizationUserID: execCtx.OrganizationUserID,
+		NetworkID:          execCtx.NetworkID,
 		Data:               raw,
 		IdempotencyKey:     execCtx.IdempotencyKey,
 	})

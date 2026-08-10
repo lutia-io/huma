@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/file"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/network"
@@ -57,6 +58,14 @@ func New() {
 		log.Error("Unable to create stream", logger.KeyError, err)
 		os.Exit(1)
 	}
+	objs, err := js.CreateOrUpdateObjectStore(ctx, jetstream.ObjectStoreConfig{
+		Bucket:  file.ObjectStoreBucket,
+		Storage: jetstream.FileStorage,
+	})
+	if err != nil {
+		log.Error("Unable to create files object store", logger.KeyError, err)
+		os.Exit(1)
+	}
 
 	mux := http.NewServeMux()
 	user.New(log, pool, mux)
@@ -67,6 +76,7 @@ func New() {
 	node.New(log, pool, mux)
 	pipeline.New(log, pool, mux)
 	workflow.New(log, pool, mux)
+	file.New(log, pool, mux, objs)
 	record.New(log, pool, mux, js, schemaService)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +88,8 @@ func New() {
 
 	handler := http.Handler(mux)
 	handler = middleware.NewTrailingSlashRedirect(handler)
-	handler = middleware.NewBodySizeLimit(5<<20, handler)
+	// 32 MiB to accommodate multipart file uploads (JSON endpoints stay small).
+	handler = middleware.NewBodySizeLimit(32<<20, handler)
 	handler = middleware.NewTimeout(30*time.Second, handler)
 	handler = middleware.NewRecover(log, handler)
 	handler = middleware.NewLogger(log, handler)
