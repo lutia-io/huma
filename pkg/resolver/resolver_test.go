@@ -15,10 +15,6 @@ func TestResolve(t *testing.T) {
 		"address": map[string]any{
 			"city": "Berlin",
 		},
-		"items": []any{
-			map[string]any{"price": float64(10)},
-			map[string]any{"price": float64(5.5)},
-		},
 	}
 
 	tests := []struct {
@@ -27,45 +23,45 @@ func TestResolve(t *testing.T) {
 		want map[string]any
 	}{
 		{
-			name: "passthrough without expressions",
+			name: "passthrough without templates",
 			data: map[string]any{"literal": "hello", "n": float64(7), "b": false, "nil": nil},
 			want: map[string]any{"literal": "hello", "n": float64(7), "b": false, "nil": nil},
 		},
 		{
-			name: "single expression keeps string type",
-			data: map[string]any{"email": "{{ context.record.email }}"},
+			name: "single field path keeps string type",
+			data: map[string]any{"email": "{{ .Record.email }}"},
 			want: map[string]any{"email": "jane@example.com"},
 		},
 		{
-			name: "single expression keeps number type",
-			data: map[string]any{"age": "{{ context.record.age }}"},
+			name: "single field path keeps number type",
+			data: map[string]any{"age": "{{ .Record.age }}"},
 			want: map[string]any{"age": float64(42)},
 		},
 		{
-			name: "single expression keeps bool type",
-			data: map[string]any{"vip": "{{ context.record.vip }}"},
+			name: "single field path keeps bool type",
+			data: map[string]any{"vip": "{{ .Record.vip }}"},
 			want: map[string]any{"vip": true},
 		},
 		{
-			name: "single expression keeps object and array types",
-			data: map[string]any{"addr": "{{ context.record.address }}", "tags": "{{ context.record.tags }}"},
+			name: "single field path keeps object and array types",
+			data: map[string]any{"addr": "{{ .Record.address }}", "tags": "{{ .Record.tags }}"},
 			want: map[string]any{"addr": map[string]any{"city": "Berlin"}, "tags": []any{"a", "b"}},
 		},
 		{
 			name: "nested path lookup",
-			data: map[string]any{"city": "{{ context.record.address.city }}"},
+			data: map[string]any{"city": "{{ .Record.address.city }}"},
 			want: map[string]any{"city": "Berlin"},
 		},
 		{
 			name: "mixed text interpolates to string",
-			data: map[string]any{"greeting": "Hello {{ context.record.email }}, age {{ context.record.age }}"},
+			data: map[string]any{"greeting": "Hello {{ .Record.email }}, age {{ .Record.age }}"},
 			want: map[string]any{"greeting": "Hello jane@example.com, age 42"},
 		},
 		{
 			name: "recurses into nested maps and slices",
 			data: map[string]any{
-				"outer": map[string]any{"email": "{{ context.record.email }}"},
-				"list":  []any{"{{ context.record.vip }}", "plain"},
+				"outer": map[string]any{"email": "{{ .Record.email }}"},
+				"list":  []any{"{{ .Record.vip }}", "plain"},
 			},
 			want: map[string]any{
 				"outer": map[string]any{"email": "jane@example.com"},
@@ -73,29 +69,9 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		{
-			name: "math formula with arguments",
-			data: map[string]any{"sum": "{{ math.add(context.record.age, 8) }}"},
-			want: map[string]any{"sum": float64(50)},
-		},
-		{
-			name: "default operator for missing field",
-			data: map[string]any{"name": "{{ context.record.nickname ?? \"friend\" }}"},
+			name: "default with or for missing field",
+			data: map[string]any{"name": `{{ or .Record.nickname "friend" }}`},
 			want: map[string]any{"name": "friend"},
-		},
-		{
-			name: "jsonata path lookup",
-			data: map[string]any{"city": `{{ jsonata.eval("address.city") }}`},
-			want: map[string]any{"city": "Berlin"},
-		},
-		{
-			name: "jsonata aggregate",
-			data: map[string]any{"total": `{{ jsonata.eval("$sum(items.price)") }}`},
-			want: map[string]any{"total": float64(15.5)},
-		},
-		{
-			name: "jsonata object construction",
-			data: map[string]any{"payload": `{{ jsonata.eval("{ \"email\": email, \"city\": address.city }") }}`},
-			want: map[string]any{"payload": map[string]any{"email": "jane@example.com", "city": "Berlin"}},
 		},
 	}
 
@@ -119,8 +95,8 @@ func TestResolveDateNow(t *testing.T) {
 	defer func() { nowFunc = orig }()
 
 	got, err := Resolve(map[string]any{
-		"at":   "{{ date.now() }}",
-		"note": "created at {{ date.now() }}",
+		"at":   "{{ now }}",
+		"note": "created at {{ now }}",
 	}, nil)
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
@@ -141,28 +117,24 @@ func TestResolveErrors(t *testing.T) {
 		data map[string]any
 	}{
 		{
-			name: "unknown top-level identifier",
-			data: map[string]any{"x": "{{ contxt.record.email }}"},
+			name: "unknown top-level field",
+			data: map[string]any{"x": "{{ .Contxt.Record.email }}"},
 		},
 		{
-			name: "unknown formula",
-			data: map[string]any{"x": "{{ date.frobnicate() }}"},
+			name: "unknown function",
+			data: map[string]any{"x": "{{ frobnicate }}"},
 		},
 		{
-			name: "malformed expression",
-			data: map[string]any{"x": "{{ context.record. }}"},
+			name: "malformed template",
+			data: map[string]any{"x": "{{ .Record. }}"},
 		},
 		{
-			name: "unclosed expression",
-			data: map[string]any{"x": "{{ context.record.email"},
+			name: "unclosed template",
+			data: map[string]any{"x": "{{ .Record.email"},
 		},
 		{
 			name: "error inside nested value",
-			data: map[string]any{"outer": map[string]any{"x": "{{ nope }}"}},
-		},
-		{
-			name: "invalid jsonata expression",
-			data: map[string]any{"x": `{{ jsonata.eval("$sum(") }}`},
+			data: map[string]any{"outer": map[string]any{"x": "{{ frobnicate }}"}},
 		},
 	}
 
@@ -177,9 +149,9 @@ func TestResolveErrors(t *testing.T) {
 
 // Missing record fields resolve to nil (JSON null) rather than erroring;
 // schema validation downstream rejects them where they are not allowed, and
-// the ?? operator provides defaults.
+// the or function provides defaults.
 func TestResolveMissingRecordField(t *testing.T) {
-	got, err := Resolve(map[string]any{"x": "{{ context.record.missing }}"}, map[string]any{})
+	got, err := Resolve(map[string]any{"x": "{{ .Record.missing }}"}, map[string]any{})
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}

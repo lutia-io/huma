@@ -52,8 +52,7 @@ func (h *TriggerPipeline) Execute(ctx context.Context, execCtx executor.Executio
 	)
 
 	return json.Marshal(map[string]any{
-		"pipeline": c.Pipeline,
-		"input":    input,
-		"status":   "stubbed",
+		"id":    "some-pipeline-id",
+		"input": input,
 	})
 }

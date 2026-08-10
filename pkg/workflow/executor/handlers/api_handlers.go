@@ -50,7 +50,7 @@ func createRecord(ctx context.Context, records RecordService, execCtx executor.E
 	if err != nil {
 		return nil, fmt.Errorf("creating record: %w", err)
 	}
-	return json.Marshal(map[string]string{"recordId": id})
+	return json.Marshal(map[string]string{"id": id})
 }
 
 // updateRecord is the shared merge-update path for UPDATE_RECORD and the
@@ -86,5 +86,5 @@ func updateRecord(ctx context.Context, records RecordService, schemas SchemaServ
 	if !found {
 		return nil, fmt.Errorf("record %q disappeared during update", existing.ID)
 	}
-	return json.Marshal(map[string]string{"recordId": existing.ID})
+	return json.Marshal(map[string]string{"id": existing.ID})
 }
