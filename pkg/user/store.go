@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
@@ -11,6 +12,7 @@ import (
 
 type store interface {
 	Insert(ctx context.Context, user *user) (string, error)
+	GetByEmail(ctx context.Context, email string) (*user, error)
 }
 
 type postgresStore struct {
@@ -50,4 +52,30 @@ func (store *postgresStore) Insert(ctx context.Context, user *user) (string, err
 		return "", err
 	}
 	return user.ID, nil
+}
+
+func (store *postgresStore) GetByEmail(ctx context.Context, email string) (*user, error) {
+	const sql = `
+		SELECT id, first_name, last_name, email, password, created_at, updated_at, deleted_at
+		FROM public.users
+		WHERE email = $1 AND deleted_at IS NULL`
+
+	u := &user{}
+	err := store.db.QueryRow(ctx, sql, email).Scan(
+		&u.ID,
+		&u.FirstName,
+		&u.LastName,
+		&u.Email,
+		&u.Password,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+		&u.DeletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.NewNotFoundError("User not found", err)
+		}
+		return nil, err
+	}
+	return u, nil
 }

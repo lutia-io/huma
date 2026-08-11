@@ -3,10 +3,11 @@ package apperror
 type ErrorVariant string
 
 const (
-	ErrorVariantBadRequest ErrorVariant = "bad_request"
-	ErrorVariantConflict   ErrorVariant = "conflict"
-	ErrorVariantNotFound   ErrorVariant = "not_found"
-	ErrorVariantInternal   ErrorVariant = "internal"
+	ErrorVariantBadRequest   ErrorVariant = "bad_request"
+	ErrorVariantUnauthorized ErrorVariant = "unauthorized"
+	ErrorVariantConflict     ErrorVariant = "conflict"
+	ErrorVariantNotFound     ErrorVariant = "not_found"
+	ErrorVariantInternal     ErrorVariant = "internal"
 )
 
 type Error struct {
@@ -34,6 +35,10 @@ func (e *Error) Unwrap() error {
 
 func NewBadRequestError(msg string, err error) error {
 	return &Error{Variant: ErrorVariantBadRequest, Msg: msg, Err: err}
+}
+
+func NewUnauthorizedError(msg string, err error) error {
+	return &Error{Variant: ErrorVariantUnauthorized, Msg: msg, Err: err}
 }
 
 func NewConflictError(msg string, err error) error {

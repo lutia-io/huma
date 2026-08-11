@@ -9,6 +9,9 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/network"
+	"github.com/lutia-io/huma/pkg/organization"
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
 )
 
@@ -34,17 +37,28 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
 	if err := r.ParseMultipartForm(maxMultipartMemory); err != nil {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid multipart form", err))
 		return
 	}
 
-	fmt.Println(r.FormValue("networkId"))
-	fmt.Println(r.FormValue("organizationId"))
-	fmt.Println(r.FormValue("organizationUserId"))
-	fmt.Println(r.FormValue("idempotencyKey"))
-	fmt.Println(r.FormValue("filename"))
-	fmt.Println(r.FormValue("contentType"))
+	networkID := r.FormValue("networkId")
+	organizationID := r.FormValue("organizationId")
+	if nc, ok := network.Resolve(r, networkID); ok {
+		networkID = nc.NetworkID
+	}
+	if oc, ok := organization.Resolve(r, organizationID); ok {
+		organizationID = oc.OrganizationID
+	}
+	if err := principal.RequireOrganizationUser(p, networkID, organizationID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -71,9 +85,9 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 	id, err := h.service.Create(r.Context(), CreateParams{
 		Filename:           filename,
 		ContentType:        contentType,
-		OrganizationID:     r.FormValue("organizationId"),
-		OrganizationUserID: r.FormValue("organizationUserId"),
-		NetworkID:          r.FormValue("networkId"),
+		OrganizationID:     organizationID,
+		OrganizationUserID: p.ID,
+		NetworkID:          networkID,
 		IdempotencyKey:     r.FormValue("idempotencyKey"),
 		Content:            file,
 	})
@@ -85,6 +99,10 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpHandler) Metadata(w http.ResponseWriter, r *http.Request) {
+	if _, ok := principal.FromContext(r.Context()); !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
 	id := r.PathValue("id")
 	meta, found, err := h.service.GetMeta(r.Context(), id)
 	if err != nil {
@@ -99,6 +117,10 @@ func (h *httpHandler) Metadata(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpHandler) Download(w http.ResponseWriter, r *http.Request) {
+	if _, ok := principal.FromContext(r.Context()); !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
 	id := r.PathValue("id")
 	content, found, err := h.service.OpenContent(r.Context(), id)
 	if err != nil {
@@ -124,6 +146,10 @@ func (h *httpHandler) Download(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if _, ok := principal.FromContext(r.Context()); !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
 	id := r.PathValue("id")
 	found, err := h.service.SoftDelete(r.Context(), id)
 	if err != nil {

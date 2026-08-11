@@ -84,6 +84,7 @@ deploy:
           secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
           secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
           secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"
+          secret.jwtSecret: "{{.HUMA_JWT_SECRET}}"
       
       - name: workflow-evaluator
         chartPath: ./helm/huma
@@ -103,6 +104,7 @@ deploy:
           secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
           secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
           secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"
+          secret.jwtSecret: "{{.HUMA_JWT_SECRET}}"
 
       - name: workflow-executor
         chartPath: ./helm/huma
@@ -122,4 +124,4 @@ deploy:
           secret.store.postgresRwUri: "{{.HUMA_DB_RW_DATABASE_URL}}"
           secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
           secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
-          secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"
+          secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"          secret.jwtSecret: "{{.HUMA_JWT_SECRET}}"
