@@ -85,3 +85,35 @@ func TestValidateData(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDataFileFormat(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"attachment": { "type": "string", "format": "file" }
+		},
+		"required": ["attachment"]
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{name: "valid file id", data: `{"attachment":"550e8400-e29b-41d4-a716-446655440000"}`},
+		{name: "not a uuid", data: `{"attachment":"not-a-file-id"}`, wantErr: true},
+		{name: "empty string", data: `{"attachment":""}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}

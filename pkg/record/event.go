@@ -15,4 +15,5 @@ type CreatedEvent struct {
 	SchemaID           string          `json:"schema_id"`
 	OrganizationID     string          `json:"organization_id"`
 	OrganizationUserID string          `json:"organization_user_id"`
+	NetworkID          string          `json:"network_id"`
 }

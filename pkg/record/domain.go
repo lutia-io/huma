@@ -13,6 +13,7 @@ type Record struct {
 	SchemaID           string `json:"schemaId"`
 	OrganizationID     string `json:"organizationId"`
 	OrganizationUserID string `json:"organizationUserId"`
+	NetworkID          string `json:"networkId"`
 	IdempotencyKey     string `json:"-"`
 
 	CreatedAt time.Time  `json:"createdAt"`
@@ -27,6 +28,7 @@ type CreateParams struct {
 	SchemaID           string
 	OrganizationID     string
 	OrganizationUserID string
+	NetworkID          string
 	Data               json.RawMessage
 	IdempotencyKey     string
 }
@@ -36,4 +38,5 @@ type insertRecordRequest struct {
 	SchemaID           string          `json:"schemaId"`
 	OrganizationID     string          `json:"organizationId"`
 	OrganizationUserID string          `json:"organizationUserId"`
+	NetworkID          string          `json:"networkId"`
 }

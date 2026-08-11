@@ -5,15 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/lutia-io/huma/pkg/uuid"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 const schemaURL = "schema.json"
 
+// FileFormat is the JSON Schema format name for a file ID reference.
+// Schema authors use: {"type":"string","format":"file"}
+const FileFormat = "file"
+
 type deniedLoader struct{}
 
 func (deniedLoader) Load(url string) (any, error) {
 	return nil, fmt.Errorf("external schema references are not allowed")
+}
+
+// validateFileFormat asserts the value is a UUID string (a file ID).
+func validateFileFormat(v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	if !uuid.Valid(s) {
+		return fmt.Errorf("must be a file id (uuid)")
+	}
+	return nil
 }
 
 func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
@@ -29,6 +46,10 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 	c := jsonschema.NewCompiler()
 	c.DefaultDraft(jsonschema.Draft2020)
 	c.AssertFormat()
+	c.RegisterFormat(&jsonschema.Format{
+		Name:     FileFormat,
+		Validate: validateFileFormat,
+	})
 	c.UseLoader(deniedLoader{})
 
 	if err := c.AddResource(schemaURL, doc); err != nil {
