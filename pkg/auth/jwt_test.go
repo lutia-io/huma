@@ -5,6 +5,31 @@ import (
 	"time"
 )
 
+func TestSignAndParseAccessToken_userWithoutNetwork(t *testing.T) {
+	secret := []byte("test-secret")
+	now := time.Now().UTC()
+	claims := accessClaims{
+		Issuer:        defaultIssuer,
+		Audience:      defaultAudience,
+		Subject:       "11111111-1111-4111-8111-111111111111",
+		PrincipalType: "user",
+		JWTID:         "33333333-3333-4333-8333-333333333333",
+		IssuedAt:      now.Unix(),
+		ExpiresAt:     now.Add(time.Minute).Unix(),
+	}
+	token, err := signAccessToken(secret, claims)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	got, err := parseAccessToken(secret, token, now, defaultIssuer, defaultAudience)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Subject != claims.Subject || got.NetworkID != "" {
+		t.Fatalf("claims mismatch: %+v", got)
+	}
+}
+
 func TestSignAndParseAccessToken(t *testing.T) {
 	secret := []byte("test-secret")
 	now := time.Now().UTC()

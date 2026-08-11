@@ -4,7 +4,7 @@ CREATE TABLE public.tokens (
     family_id UUID NOT NULL,
     principal_type TEXT NOT NULL,
     principal_id UUID NOT NULL,
-    network_id UUID NOT NULL REFERENCES public.networks(id),
+    network_id UUID REFERENCES public.networks(id),
     organization_id UUID REFERENCES public.organizations(id),
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,

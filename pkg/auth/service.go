@@ -29,9 +29,8 @@ type tokenPair struct {
 }
 
 type loginUserRequest struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	NetworkID string `json:"networkId"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type loginOrganizationUserRequest struct {
@@ -52,7 +51,7 @@ type logoutRequest struct {
 type meResponse struct {
 	PrincipalType  string `json:"principalType"`
 	ID             string `json:"id"`
-	NetworkID      string `json:"networkId"`
+	NetworkID      string `json:"networkId,omitempty"`
 	OrganizationID string `json:"organizationId,omitempty"`
 }
 
@@ -83,22 +82,9 @@ func (s *service) LoginUser(ctx context.Context, req loginUserRequest, clientIP 
 	if err != nil {
 		return nil, err
 	}
-	networkID := strings.TrimSpace(req.NetworkID)
-	if networkID == "" || !uuid.Valid(networkID) {
-		return nil, apperror.NewBadRequestError("Network ID is required", nil)
-	}
 	if !s.rateLimiter.Allow(clientIP + "|" + email) {
 		s.logger.WarnContext(ctx, "Login rate limited", logger.KeyEmail, email)
 		return nil, apperror.NewBadRequestError("Too many login attempts", nil)
-	}
-
-	exists, err := s.store.NetworkExists(ctx, networkID)
-	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to check network", logger.KeyError, err)
-		return nil, apperror.NewInternalError("Failed to login", err)
-	}
-	if !exists {
-		return nil, apperror.NewBadRequestError("Network not found", nil)
 	}
 
 	user, err := s.store.GetUserByEmail(ctx, email)
@@ -119,7 +105,7 @@ func (s *service) LoginUser(ctx context.Context, req loginUserRequest, clientIP 
 		return nil, apperror.NewUnauthorizedError("Invalid email or password", nil)
 	}
 
-	return s.issueTokens(ctx, principal.TypeUser, user.ID, networkID, "")
+	return s.issueTokens(ctx, principal.TypeUser, user.ID, "", "")
 }
 
 func (s *service) LoginOrganizationUser(ctx context.Context, req loginOrganizationUserRequest, clientIP string) (*tokenPair, error) {
@@ -217,7 +203,7 @@ func (s *service) ParseAccessToken(token string) (principal.Principal, error) {
 	if p.Type != principal.TypeUser && p.Type != principal.TypeOrganizationUser {
 		return principal.Principal{}, apperror.NewUnauthorizedError("Invalid access token", nil)
 	}
-	if p.Type == principal.TypeOrganizationUser && p.OrganizationID == "" {
+	if p.Type == principal.TypeOrganizationUser && (p.OrganizationID == "" || p.NetworkID == "") {
 		return principal.Principal{}, apperror.NewUnauthorizedError("Invalid access token", nil)
 	}
 	return p, nil
@@ -277,6 +263,10 @@ func (s *service) issueTokensInFamily(ctx context.Context, pty principal.Type, p
 	if err != nil {
 		return nil, apperror.NewInternalError("Failed to create token", err)
 	}
+	var networkPtr *string
+	if networkID != "" {
+		networkPtr = &networkID
+	}
 	var orgPtr *string
 	if organizationID != "" {
 		orgPtr = &organizationID
@@ -287,7 +277,7 @@ func (s *service) issueTokensInFamily(ctx context.Context, pty principal.Type, p
 		FamilyID:       familyID,
 		PrincipalType:  string(pty),
 		PrincipalID:    principalID,
-		NetworkID:      networkID,
+		NetworkID:      networkPtr,
 		OrganizationID: orgPtr,
 		ExpiresAt:      now.Add(refreshTokenTTL),
 		CreatedAt:      now,
@@ -331,6 +321,10 @@ func (s *service) refreshAndRotate(ctx context.Context, refreshToken string) (*t
 	if row.OrganizationID != nil {
 		orgID = *row.OrganizationID
 	}
+	networkID := ""
+	if row.NetworkID != nil {
+		networkID = *row.NetworkID
+	}
 
 	// Issue new token first, then mark old replaced with new id.
 	rawRefresh, err := newRefreshToken()
@@ -340,6 +334,10 @@ func (s *service) refreshAndRotate(ctx context.Context, refreshToken string) (*t
 	newID, err := newTokenID()
 	if err != nil {
 		return nil, apperror.NewInternalError("Failed to create token", err)
+	}
+	var networkPtr *string
+	if networkID != "" {
+		networkPtr = &networkID
 	}
 	var orgPtr *string
 	if orgID != "" {
@@ -351,7 +349,7 @@ func (s *service) refreshAndRotate(ctx context.Context, refreshToken string) (*t
 		FamilyID:       row.FamilyID,
 		PrincipalType:  row.PrincipalType,
 		PrincipalID:    row.PrincipalID,
-		NetworkID:      row.NetworkID,
+		NetworkID:      networkPtr,
 		OrganizationID: orgPtr,
 		ExpiresAt:      now.Add(refreshTokenTTL),
 		CreatedAt:      now,
@@ -374,7 +372,7 @@ func (s *service) refreshAndRotate(ctx context.Context, refreshToken string) (*t
 		Audience:       s.audience,
 		Subject:        row.PrincipalID,
 		PrincipalType:  row.PrincipalType,
-		NetworkID:      row.NetworkID,
+		NetworkID:      networkID,
 		OrganizationID: orgID,
 		JWTID:          jti,
 		IssuedAt:       now.Unix(),

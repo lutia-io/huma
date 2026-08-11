@@ -37,9 +37,6 @@ func (h *httpHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	if nc, ok := network.Resolve(r, req.NetworkID); ok {
-		req.NetworkID = nc.NetworkID
-	}
 	pair, err := h.service.LoginUser(r.Context(), req, clientIP(r))
 	if err != nil {
 		render.WriteError(w, err)

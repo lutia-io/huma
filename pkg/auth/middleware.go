@@ -17,7 +17,6 @@ var publicExact = map[string]struct{}{
 	"POST /auth/refresh":                 {},
 	"POST /auth/logout":                  {},
 	"POST /user":                         {}, // bootstrap registration
-	"POST /network":                      {}, // bootstrap: create network before first login
 }
 
 // Middleware requires a valid access token except for public routes.

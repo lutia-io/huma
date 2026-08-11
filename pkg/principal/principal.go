@@ -37,13 +37,15 @@ func FromContext(ctx context.Context) (Principal, bool) {
 	return p, true
 }
 
-// RequireUser ensures the caller is a platform user. Optional networkID, when
-// non-empty, must match the token network claim.
+// RequireUser ensures the caller is a platform user. When the access token is
+// network-scoped (NetworkID set) and networkID is provided, they must match.
+// Unscoped user tokens (no nid) may act with a request NetworkContext; ownership
+// of that network is enforced separately where needed.
 func RequireUser(p Principal, networkID string) error {
 	if p.Type != TypeUser {
 		return apperror.NewUnauthorizedError("Platform user authentication required", nil)
 	}
-	if networkID != "" && p.NetworkID != networkID {
+	if p.NetworkID != "" && networkID != "" && p.NetworkID != networkID {
 		return apperror.NewUnauthorizedError("Network mismatch", nil)
 	}
 	return nil

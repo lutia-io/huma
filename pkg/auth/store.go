@@ -21,7 +21,7 @@ type tokenRow struct {
 	FamilyID       string
 	PrincipalType  string
 	PrincipalID    string
-	NetworkID      string
+	NetworkID      *string
 	OrganizationID *string
 	ExpiresAt      time.Time
 	RevokedAt      *time.Time

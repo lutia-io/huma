@@ -16,7 +16,7 @@ type accessClaims struct {
 	Audience       string `json:"aud"`
 	Subject        string `json:"sub"`
 	PrincipalType  string `json:"pty"`
-	NetworkID      string `json:"nid"`
+	NetworkID      string `json:"nid,omitempty"`
 	OrganizationID string `json:"oid,omitempty"`
 	JWTID          string `json:"jti"`
 	IssuedAt       int64  `json:"iat"`
@@ -71,8 +71,11 @@ func parseAccessToken(secret []byte, token string, now time.Time, issuer, audien
 	if claims.ExpiresAt <= now.Unix() {
 		return accessClaims{}, errors.New("token expired")
 	}
-	if claims.Subject == "" || claims.PrincipalType == "" || claims.NetworkID == "" {
+	if claims.Subject == "" || claims.PrincipalType == "" {
 		return accessClaims{}, errors.New("incomplete token claims")
+	}
+	if claims.PrincipalType == "organization_user" && (claims.NetworkID == "" || claims.OrganizationID == "") {
+		return accessClaims{}, errors.New("incomplete organization user token claims")
 	}
 	return claims, nil
 }
