@@ -29,5 +29,5 @@ type insertSchemaRequest struct {
 	Internal   bool            `json:"internal"`
 	Definition json.RawMessage `json:"definition"`
 	NetworkID  string          `json:"networkId"`
-	UserID     string          `json:"userId"`
+	UserID     string          `json:"-"`
 }

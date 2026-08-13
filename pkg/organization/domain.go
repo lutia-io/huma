@@ -21,5 +21,5 @@ type organization struct {
 type insertOrganizationRequest struct {
 	Name      string `json:"name"`
 	NetworkID string `json:"networkId"`
-	UserID    string `json:"userId"`
+	UserID    string `json:"-"`
 }

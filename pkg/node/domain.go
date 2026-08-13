@@ -31,5 +31,5 @@ type insertNodeDefinitionRequest struct {
 	Type       Type            `json:"type"`
 	Definition json.RawMessage `json:"definition"`
 	NetworkID  string          `json:"networkId"`
-	UserID     string          `json:"userId"`
+	UserID     string          `json:"-"`
 }

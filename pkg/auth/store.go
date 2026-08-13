@@ -15,7 +15,7 @@ import (
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
-type tokenRow struct {
+type token struct {
 	ID             string
 	TokenHash      string
 	FamilyID       string
@@ -53,8 +53,8 @@ type store interface {
 	GetOrganizationUserByEmail(ctx context.Context, email, networkID, organizationID string) (*identityOrganizationUser, error)
 	GetOrganizationByID(ctx context.Context, id string) (*identityOrganization, error)
 	NetworkExists(ctx context.Context, id string) (bool, error)
-	InsertToken(ctx context.Context, row *tokenRow) error
-	GetTokenByHash(ctx context.Context, hash string) (*tokenRow, error)
+	InsertToken(ctx context.Context, row *token) error
+	GetTokenByHash(ctx context.Context, hash string) (*token, error)
 	RevokeFamily(ctx context.Context, familyID string, at time.Time) error
 	MarkReplaced(ctx context.Context, id, replacedBy string, at time.Time) error
 }
@@ -133,7 +133,7 @@ func (s *postgresStore) NetworkExists(ctx context.Context, id string) (bool, err
 	return true, nil
 }
 
-func (s *postgresStore) InsertToken(ctx context.Context, row *tokenRow) error {
+func (s *postgresStore) InsertToken(ctx context.Context, row *token) error {
 	const sql = `
 		INSERT INTO public.tokens (
 			id, token_hash, family_id, principal_type, principal_id,
@@ -153,13 +153,13 @@ func (s *postgresStore) InsertToken(ctx context.Context, row *tokenRow) error {
 	return err
 }
 
-func (s *postgresStore) GetTokenByHash(ctx context.Context, hash string) (*tokenRow, error) {
+func (s *postgresStore) GetTokenByHash(ctx context.Context, hash string) (*token, error) {
 	const sql = `
 		SELECT id, token_hash, family_id, principal_type, principal_id,
 			network_id, organization_id, expires_at, revoked_at, replaced_by, created_at
 		FROM public.tokens
 		WHERE token_hash = $1`
-	row := &tokenRow{}
+	row := &token{}
 	err := s.db.QueryRow(ctx, sql, hash).Scan(
 		&row.ID,
 		&row.TokenHash,

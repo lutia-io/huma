@@ -56,24 +56,22 @@ type meResponse struct {
 }
 
 type service struct {
-	logger      *logger.Logger
-	store       store
-	hasher      hasher.Hasher
-	jwtSecret   []byte
-	issuer      string
-	audience    string
-	rateLimiter *loginRateLimiter
+	logger    *logger.Logger
+	store     store
+	hasher    hasher.Hasher
+	jwtSecret []byte
+	issuer    string
+	audience  string
 }
 
 func newService(log *logger.Logger, store store, h hasher.Hasher, jwtSecret []byte) *service {
 	return &service{
-		logger:      log,
-		store:       store,
-		hasher:      h,
-		jwtSecret:   jwtSecret,
-		issuer:      defaultIssuer,
-		audience:    defaultAudience,
-		rateLimiter: newLoginRateLimiter(10, time.Minute),
+		logger:    log,
+		store:     store,
+		hasher:    h,
+		jwtSecret: jwtSecret,
+		issuer:    defaultIssuer,
+		audience:  defaultAudience,
 	}
 }
 
@@ -82,11 +80,6 @@ func (s *service) LoginUser(ctx context.Context, req loginUserRequest, clientIP 
 	if err != nil {
 		return nil, err
 	}
-	if !s.rateLimiter.Allow(clientIP + "|" + email) {
-		s.logger.WarnContext(ctx, "Login rate limited", logger.KeyEmail, email)
-		return nil, apperror.NewBadRequestError("Too many login attempts", nil)
-	}
-
 	user, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		var appErr *apperror.Error
@@ -121,11 +114,6 @@ func (s *service) LoginOrganizationUser(ctx context.Context, req loginOrganizati
 	if organizationID == "" || !uuid.Valid(organizationID) {
 		return nil, apperror.NewBadRequestError("Organization ID is required", nil)
 	}
-	if !s.rateLimiter.Allow(clientIP + "|" + email) {
-		s.logger.WarnContext(ctx, "Login rate limited", logger.KeyEmail, email)
-		return nil, apperror.NewBadRequestError("Too many login attempts", nil)
-	}
-
 	org, err := s.store.GetOrganizationByID(ctx, organizationID)
 	if err != nil {
 		var appErr *apperror.Error
@@ -271,7 +259,7 @@ func (s *service) issueTokensInFamily(ctx context.Context, pty principal.Type, p
 	if organizationID != "" {
 		orgPtr = &organizationID
 	}
-	row := &tokenRow{
+	row := &token{
 		ID:             tokenID,
 		TokenHash:      hashRefreshToken(rawRefresh),
 		FamilyID:       familyID,
@@ -343,7 +331,7 @@ func (s *service) refreshAndRotate(ctx context.Context, refreshToken string) (*t
 	if orgID != "" {
 		orgPtr = &orgID
 	}
-	newRow := &tokenRow{
+	newRow := &token{
 		ID:             newID,
 		TokenHash:      hashRefreshToken(rawRefresh),
 		FamilyID:       row.FamilyID,

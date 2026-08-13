@@ -18,8 +18,8 @@ type contextKey struct{}
 // Principal is the authenticated caller.
 type Principal struct {
 	Type           Type
-	ID             string
-	NetworkID      string
+	ID             string // user ID or organization user ID
+	NetworkID      string // empty for platform users
 	OrganizationID string // empty for platform users
 }
 

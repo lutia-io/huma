@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -43,6 +44,22 @@ func Resolve(r *http.Request, bodyOrganizationID string) (Context, bool) {
 		return Context{}, false
 	}
 	return Context{OrganizationID: id}, true
+}
+
+// ResolveID prefers principal.OrganizationID, then request OrganizationContext,
+// then body/header via Resolve.
+func ResolveID(r *http.Request, p principal.Principal, bodyOrganizationID string) (string, bool) {
+	if p.OrganizationID != "" {
+		return p.OrganizationID, true
+	}
+	if oc, ok := FromContext(r.Context()); ok {
+		return oc.OrganizationID, true
+	}
+	oc, ok := Resolve(r, bodyOrganizationID)
+	if !ok {
+		return "", false
+	}
+	return oc.OrganizationID, true
 }
 
 // Middleware attaches OrganizationContext from X-Organization-Id when present.

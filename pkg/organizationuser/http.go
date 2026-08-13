@@ -38,12 +38,18 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	if nc, ok := network.Resolve(r, req.NetworkID); ok {
-		req.NetworkID = nc.NetworkID
+	networkID, ok := network.ResolveID(r, p, req.NetworkID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Network ID is required", nil))
+		return
 	}
-	if oc, ok := organization.Resolve(r, req.OrganizationID); ok {
-		req.OrganizationID = oc.OrganizationID
+	organizationID, ok := organization.ResolveID(r, p, req.OrganizationID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Organization ID is required", nil))
+		return
 	}
+	req.NetworkID = networkID
+	req.OrganizationID = organizationID
 	// Platform users invite org users into a network they administer.
 	if err := principal.RequireUser(p, req.NetworkID); err != nil {
 		render.WriteError(w, err)

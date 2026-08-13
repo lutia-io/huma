@@ -37,14 +37,17 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	if nc, ok := network.Resolve(r, req.NetworkID); ok {
-		req.NetworkID = nc.NetworkID
+	networkID, ok := network.ResolveID(r, p, req.NetworkID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Network ID is required", nil))
+		return
 	}
+	req.NetworkID = networkID
+	req.UserID = p.ID
 	if err := principal.RequireUser(p, req.NetworkID); err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	req.UserID = p.ID
 	// Internal node definitions are not allowed to be created via the API
 	req.Internal = false
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -43,6 +44,23 @@ func Resolve(r *http.Request, bodyNetworkID string) (Context, bool) {
 		return Context{}, false
 	}
 	return Context{NetworkID: id}, true
+}
+
+// ResolveID prefers principal.NetworkID, then request NetworkContext, then
+// body/header via Resolve. Use for platform routes where the access token may
+// be unscoped.
+func ResolveID(r *http.Request, p principal.Principal, bodyNetworkID string) (string, bool) {
+	if p.NetworkID != "" {
+		return p.NetworkID, true
+	}
+	if nc, ok := FromContext(r.Context()); ok {
+		return nc.NetworkID, true
+	}
+	nc, ok := Resolve(r, bodyNetworkID)
+	if !ok {
+		return "", false
+	}
+	return nc.NetworkID, true
 }
 
 // Middleware attaches NetworkContext from X-Network-Id when present.

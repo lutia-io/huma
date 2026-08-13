@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/lutia-io/huma/pkg/principal"
 )
 
 func TestResolve_bodyPreferredOverHeader(t *testing.T) {
@@ -49,5 +51,29 @@ func TestContextRoundTrip(t *testing.T) {
 	got, ok := FromContext(ctx)
 	if !ok || got.NetworkID != nc.NetworkID {
 		t.Fatalf("round trip failed: ok=%v got=%+v", ok, got)
+	}
+}
+
+func TestResolveID_prefersPrincipal(t *testing.T) {
+	principalID := "11111111-1111-4111-8111-111111111111"
+	bodyID := "22222222-2222-4222-8222-222222222222"
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	p := principal.Principal{NetworkID: principalID}
+
+	got, ok := ResolveID(r, p, bodyID)
+	if !ok || got != principalID {
+		t.Fatalf("got %q ok=%v want %q", got, ok, principalID)
+	}
+}
+
+func TestResolveID_fallsBackToHeader(t *testing.T) {
+	headerID := "22222222-2222-4222-8222-222222222222"
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r.Header.Set(HeaderNetworkID, headerID)
+	p := principal.Principal{}
+
+	got, ok := ResolveID(r, p, "")
+	if !ok || got != headerID {
+		t.Fatalf("got %q ok=%v want %q", got, ok, headerID)
 	}
 }

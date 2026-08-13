@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
-	"github.com/lutia-io/huma/pkg/network"
-	"github.com/lutia-io/huma/pkg/organization"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
 )
@@ -42,21 +40,16 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	if err := r.ParseMultipartForm(maxMultipartMemory); err != nil {
-		render.WriteError(w, apperror.NewBadRequestError("Invalid multipart form", err))
+	if err := principal.RequireOrganizationUser(p, p.NetworkID, p.OrganizationID); err != nil {
+		render.WriteError(w, err)
 		return
 	}
-
-	networkID := r.FormValue("networkId")
-	organizationID := r.FormValue("organizationId")
-	if nc, ok := network.Resolve(r, networkID); ok {
-		networkID = nc.NetworkID
+	if p.NetworkID == "" || p.OrganizationID == "" {
+		render.WriteError(w, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil))
+		return
 	}
-	if oc, ok := organization.Resolve(r, organizationID); ok {
-		organizationID = oc.OrganizationID
-	}
-	if err := principal.RequireOrganizationUser(p, networkID, organizationID); err != nil {
-		render.WriteError(w, err)
+	if err := r.ParseMultipartForm(maxMultipartMemory); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid multipart form", err))
 		return
 	}
 
@@ -85,9 +78,9 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 	id, err := h.service.Create(r.Context(), CreateParams{
 		Filename:           filename,
 		ContentType:        contentType,
-		OrganizationID:     organizationID,
+		OrganizationID:     p.OrganizationID,
 		OrganizationUserID: p.ID,
-		NetworkID:          networkID,
+		NetworkID:          p.NetworkID,
 		IdempotencyKey:     r.FormValue("idempotencyKey"),
 		Content:            file,
 	})

@@ -27,5 +27,5 @@ type insertPipelineDefinitionRequest struct {
 	Definition definition `json:"definition"`
 	SchemaID   string     `json:"schemaId"`
 	NetworkID  string     `json:"networkId"`
-	UserID     string     `json:"userId"`
+	UserID     string     `json:"-"`
 }

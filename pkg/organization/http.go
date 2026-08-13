@@ -37,17 +37,15 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	if nc, ok := network.Resolve(r, req.NetworkID); ok {
-		req.NetworkID = nc.NetworkID
-	}
-	if err := principal.RequireUser(p, req.NetworkID); err != nil {
-		render.WriteError(w, err)
+	networkID, ok := network.ResolveID(r, p, req.NetworkID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Network ID is required", nil))
 		return
 	}
-	if req.UserID == "" {
-		req.UserID = p.ID
-	} else if req.UserID != p.ID {
-		render.WriteError(w, apperror.NewUnauthorizedError("User mismatch", nil))
+	req.NetworkID = networkID
+	req.UserID = p.ID
+	if err := principal.RequireUser(p, req.NetworkID); err != nil {
+		render.WriteError(w, err)
 		return
 	}
 	id, err := h.service.Insert(r.Context(), req)

@@ -16,5 +16,5 @@ type network struct {
 
 type insertNetworkRequest struct {
 	Name   string `json:"name"`
-	UserID string `json:"userId"`
+	UserID string `json:"-"`
 }
