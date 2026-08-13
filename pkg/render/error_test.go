@@ -34,6 +34,14 @@ func TestWriteError_badRequest(t *testing.T) {
 	assertErrorResponse(t, rec, http.StatusBadRequest, "invalid input")
 }
 
+func TestWriteError_unauthorized(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	WriteError(rec, apperror.NewUnauthorizedError("nope", nil))
+
+	assertErrorResponse(t, rec, http.StatusUnauthorized, "nope")
+}
+
 func TestWriteError_conflict(t *testing.T) {
 	rec := httptest.NewRecorder()
 

@@ -78,4 +78,34 @@ func TestArgon2IDHasher_Hash_success_formatAndB64(t *testing.T) {
 	}
 }
 
+func TestArgon2IDHasher_Compare_success(t *testing.T) {
+	h := NewArgon2IDHasher()
+	encoded, err := h.Hash("secret")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	ok, err := h.Compare("secret", encoded)
+	if err != nil {
+		t.Fatalf("compare: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected match")
+	}
+	ok, err = h.Compare("wrong", encoded)
+	if err != nil {
+		t.Fatalf("compare wrong: %v", err)
+	}
+	if ok {
+		t.Fatal("expected mismatch")
+	}
+}
+
+func TestArgon2IDHasher_Compare_invalidFormat(t *testing.T) {
+	h := NewArgon2IDHasher()
+	_, err := h.Compare("pw", "not-a-hash")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 var _ io.Reader = errReader{}

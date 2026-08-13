@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
 )
 
@@ -25,11 +26,21 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	if err := principal.RequireUser(p, ""); err != nil {
+		render.WriteError(w, err)
+		return
+	}
 	var req insertNetworkRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
+	req.UserID = p.ID
 	id, err := h.service.Insert(r.Context(), req)
 	if err != nil {
 		render.WriteError(w, err)

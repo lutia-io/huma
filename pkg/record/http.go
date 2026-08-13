@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
 )
 
@@ -25,6 +26,19 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	if err := principal.RequireOrganizationUser(p, p.NetworkID, p.OrganizationID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if p.NetworkID == "" || p.OrganizationID == "" {
+		render.WriteError(w, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil))
+		return
+	}
 	var req insertRecordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
@@ -32,9 +46,9 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := h.service.Create(r.Context(), CreateParams{
 		SchemaID:           req.SchemaID,
-		OrganizationID:     req.OrganizationID,
-		OrganizationUserID: req.OrganizationUserID,
-		NetworkID:          req.NetworkID,
+		OrganizationID:     p.OrganizationID,
+		OrganizationUserID: p.ID,
+		NetworkID:          p.NetworkID,
 		Data:               req.Data,
 	})
 	if err != nil {

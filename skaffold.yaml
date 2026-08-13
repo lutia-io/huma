@@ -21,15 +21,21 @@ deploy:
       - name: cnpg-operator
         remoteChart: cloudnative-pg
         repo: https://cloudnative-pg.github.io/charts
+        version: "0.29.0"
         namespace: cnpg-system
         createNamespace: true
         wait: true
+        setValues:
+          image.tag: "1.30.0"
 
       - name: atlas-operator
         remoteChart: oci://ghcr.io/ariga/charts/atlas-operator
+        version: "0.7.40"
         namespace: atlas-operator
         createNamespace: true
         wait: true
+        setValues:
+          image.tag: "0.7.40"
         setValueTemplates:
           prewarmDevDB: false
 
@@ -58,9 +64,15 @@ deploy:
       - name: nats
         remoteChart: nats
         repo: https://nats-io.github.io/k8s/helm/charts/
+        version: "2.14.4"
         namespace: "{{.NAMESPACE}}"
         createNamespace: true
         wait: true
+        setValues:
+          container.image.tag: "2.14.4-alpine"
+          reloader.image.tag: "0.23.0"
+          natsBox.enabled: false
+          config.resolver.enabled: false
         setValueTemplates:
           config.jetstream.enabled: "{{.HUMA_NATS_JETSTREAM_ENABLED}}"
           config.jetstream.fileStore.enabled: "{{.HUMA_NATS_JETSTREAM_FILESTORE_ENABLED}}"
@@ -84,6 +96,7 @@ deploy:
           secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
           secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
           secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"
+          secret.jwtSecret: "{{.HUMA_JWT_SECRET}}"
       
       - name: workflow-evaluator
         chartPath: ./helm/huma
@@ -103,6 +116,7 @@ deploy:
           secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
           secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
           secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"
+          secret.jwtSecret: "{{.HUMA_JWT_SECRET}}"
 
       - name: workflow-executor
         chartPath: ./helm/huma
@@ -123,3 +137,4 @@ deploy:
           secret.store.postgresRoUri: "{{.HUMA_DB_RO_DATABASE_URL}}"
           secret.store.postgresRUri: "{{.HUMA_DB_R_DATABASE_URL}}"
           secret.nats.uri: "{{.HUMA_NATS_CONNECT_URL}}"
+          secret.jwtSecret: "{{.HUMA_JWT_SECRET}}"

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/auth"
 	"github.com/lutia-io/huma/pkg/file"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/middleware"
@@ -68,6 +69,7 @@ func New() {
 	}
 
 	mux := http.NewServeMux()
+	authService := auth.New(log, pool, mux)
 	user.New(log, pool, mux)
 	network.New(log, pool, mux)
 	organization.New(log, pool, mux)
@@ -87,6 +89,9 @@ func New() {
 	})
 
 	handler := http.Handler(mux)
+	handler = auth.Middleware(authService)(handler)
+	handler = organization.Middleware(handler)
+	handler = network.Middleware(handler)
 	handler = middleware.NewTrailingSlashRedirect(handler)
 	// 32 MiB to accommodate multipart file uploads (JSON endpoints stay small).
 	handler = middleware.NewBodySizeLimit(32<<20, handler)

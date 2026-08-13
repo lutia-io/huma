@@ -22,6 +22,9 @@ func WriteError(w http.ResponseWriter, err error) {
 		case apperror.ErrorVariantBadRequest:
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"message": e.Msg})
 			return
+		case apperror.ErrorVariantUnauthorized:
+			WriteJSON(w, http.StatusUnauthorized, map[string]string{"message": e.Msg})
+			return
 		case apperror.ErrorVariantConflict:
 			WriteJSON(w, http.StatusConflict, map[string]string{"message": e.Msg})
 			return
