@@ -7,5 +7,6 @@ CREATE TABLE public.organizations (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     deleted_at TIMESTAMPTZ,
-    UNIQUE (network_id, slug)
+    UNIQUE (network_id, slug),
+    UNIQUE (id, network_id)
 );
