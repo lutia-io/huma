@@ -3,11 +3,16 @@ package workflow
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/lutia-io/huma/pkg/action"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/criteria"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/uuid"
 )
 
 type Service struct {
@@ -52,6 +57,15 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 		s.logger.WarnContext(ctx, "Empty schema ID")
 		return "", apperror.NewBadRequestError("Schema ID is required", nil)
 	}
+	if !uuid.Valid(schemaID) {
+		s.logger.WarnContext(ctx, "Invalid schema ID")
+		return "", apperror.NewBadRequestError("Invalid schema ID", nil)
+	}
+
+	if err := validateDefinition(req.Definition); err != nil {
+		s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
+		return "", err
+	}
 
 	wfd := &WorkflowDefinition{
 		Name:       name,
@@ -67,8 +81,8 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 	id, err := s.store.Insert(ctx, wfd)
 	if err != nil {
 		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
-			s.logger.WarnContext(ctx, "Rejected duplicate workflow definition", logger.KeySlug, slug)
+		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantBadRequest) {
+			s.logger.WarnContext(ctx, "Rejected workflow definition insert", logger.KeySlug, slug, logger.KeyError, err)
 			return "", err
 		}
 		s.logger.ErrorContext(ctx, "Failed to insert workflow definition", logger.KeySlug, slug, logger.KeyError, err)
@@ -76,4 +90,137 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 	}
 	s.logger.InfoContext(ctx, "Successfully created workflow definition", logger.KeyID, id)
 	return id, nil
+}
+
+func (s *Service) List(ctx context.Context, p principal.Principal) ([]*WorkflowDefinition, error) {
+	switch p.Type {
+	case principal.TypeUser:
+		workflows, err := s.store.ListByUserID(ctx, p.ID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list workflow definitions", logger.KeyUserID, p.ID, logger.KeyError, err)
+			return nil, err
+		}
+		return workflows, nil
+	case principal.TypeOrganizationUser:
+		if p.NetworkID == "" || p.OrganizationID == "" {
+			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+		}
+		workflows, err := s.store.ListVisibleToOrganization(ctx, p.NetworkID, p.OrganizationID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list workflow definitions", logger.KeyError, err)
+			return nil, err
+		}
+		return workflows, nil
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+}
+
+func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*WorkflowDefinition, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid workflow definition ID", nil)
+	}
+
+	wf, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get workflow definition", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+
+	switch p.Type {
+	case principal.TypeUser:
+		if wf.UserID != p.ID {
+			return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
+		}
+	case principal.TypeOrganizationUser:
+		if wf.NetworkID != p.NetworkID {
+			return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
+		}
+		visible, err := s.store.SchemaVisibleToOrganization(ctx, wf.SchemaID, p.NetworkID, p.OrganizationID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to authorize workflow definition", logger.KeyID, id, logger.KeyError, err)
+			return nil, err
+		}
+		if !visible {
+			return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
+		}
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+
+	return wf, nil
+}
+
+func validateDefinition(def Definition) error {
+	if err := validateCriteria(def.Criteria); err != nil {
+		return err
+	}
+	return validateActions(def.Actions)
+}
+
+func validateCriteria(c criteria.Criteria) error {
+	if c.Logic != "" {
+		switch c.Logic {
+		case criteria.LogicAnd, criteria.LogicOr:
+			if len(c.Conditions) == 0 {
+				return apperror.NewBadRequestError("A condition group needs at least one condition", nil)
+			}
+		case criteria.LogicNot:
+			if len(c.Conditions) != 1 {
+				return apperror.NewBadRequestError("A none-of group needs exactly one nested condition", nil)
+			}
+		default:
+			return apperror.NewBadRequestError("Unknown condition logic", nil)
+		}
+		for _, child := range c.Conditions {
+			if err := validateCriteria(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if strings.TrimSpace(c.Field) == "" || c.Operator == "" {
+		return apperror.NewBadRequestError("Each condition needs a field and an operator", nil)
+	}
+	switch c.Operator {
+	case criteria.OpEq, criteria.OpNeq, criteria.OpGt, criteria.OpGte, criteria.OpLt, criteria.OpLte, criteria.OpIn:
+		return nil
+	default:
+		return apperror.NewBadRequestError("Unknown condition operator", nil)
+	}
+}
+
+func validateActions(actions []action.Action) error {
+	if len(actions) == 0 {
+		return apperror.NewBadRequestError("At least one action is required", nil)
+	}
+	for i, act := range actions {
+		n := i + 1
+		switch ctx := act.Context.(type) {
+		case action.CreateRecordContext:
+			if strings.TrimSpace(ctx.SchemaID) == "" {
+				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a schema to create a record", n), nil)
+			}
+		case action.UpdateRecordContext:
+			if strings.TrimSpace(ctx.RecordID) == "" {
+				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a record to update", n), nil)
+			}
+		case action.UpsertRecordContext:
+			if strings.TrimSpace(ctx.SchemaID) == "" {
+				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a schema to create or update a record", n), nil)
+			}
+		case action.TriggerPipelineContext:
+			if strings.TrimSpace(ctx.Pipeline) == "" {
+				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a pipeline to run", n), nil)
+			}
+		default:
+			return apperror.NewBadRequestError(fmt.Sprintf("Action %d has an invalid type", n), nil)
+		}
+	}
+	return nil
 }
