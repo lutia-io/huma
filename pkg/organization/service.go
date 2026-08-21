@@ -8,7 +8,9 @@ import (
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/hasher"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/uuid"
 )
 
 type service struct {
@@ -69,4 +71,61 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) (st
 	}
 	s.logger.InfoContext(ctx, "Successfully created organization", logger.KeySlug, slug)
 	return id, nil
+}
+
+func (s *service) List(ctx context.Context, p principal.Principal) ([]*organization, error) {
+	switch p.Type {
+	case principal.TypeUser:
+		organizations, err := s.store.ListByUserID(ctx, p.ID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list organizations", logger.KeyUserID, p.ID, logger.KeyError, err)
+			return nil, err
+		}
+		return organizations, nil
+	case principal.TypeOrganizationUser:
+		if p.OrganizationID == "" {
+			return nil, apperror.NewUnauthorizedError("Organization user token missing organization", nil)
+		}
+		o, err := s.Get(ctx, p, p.OrganizationID)
+		if err != nil {
+			return nil, err
+		}
+		return []*organization{o}, nil
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+}
+
+func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*organization, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid organization ID", nil)
+	}
+
+	o, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get organization", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+
+	switch p.Type {
+	case principal.TypeUser:
+		if o.UserID != p.ID {
+			return nil, apperror.NewNotFoundError("Organization not found", nil)
+		}
+	case principal.TypeOrganizationUser:
+		if p.OrganizationID != o.ID {
+			return nil, apperror.NewNotFoundError("Organization not found", nil)
+		}
+		if p.NetworkID != "" && p.NetworkID != o.NetworkID {
+			return nil, apperror.NewNotFoundError("Organization not found", nil)
+		}
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+
+	return o, nil
 }

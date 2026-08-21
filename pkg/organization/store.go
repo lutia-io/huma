@@ -10,9 +10,13 @@ import (
 	"github.com/lutia-io/huma/pkg/apperror"
 )
 
+const organizationSelectColumns = `
+	id, name, slug, network_id, user_id, created_at, updated_at, deleted_at`
+
 type store interface {
 	Insert(ctx context.Context, organization *organization) (string, error)
 	GetByID(ctx context.Context, id string) (*organization, error)
+	ListByUserID(ctx context.Context, userID string) ([]*organization, error)
 }
 
 type postgresStore struct {
@@ -54,14 +58,8 @@ func (store *postgresStore) Insert(ctx context.Context, organization *organizati
 	return organization.ID, nil
 }
 
-func (store *postgresStore) GetByID(ctx context.Context, id string) (*organization, error) {
-	const sql = `
-		SELECT id, name, slug, network_id, user_id, created_at, updated_at, deleted_at
-		FROM public.organizations
-		WHERE id = $1 AND deleted_at IS NULL`
-
-	o := &organization{}
-	err := store.db.QueryRow(ctx, sql, id).Scan(
+func scanOrganization(row pgx.Row, o *organization) error {
+	return row.Scan(
 		&o.ID,
 		&o.Name,
 		&o.Slug,
@@ -71,6 +69,16 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*organizati
 		&o.UpdatedAt,
 		&o.DeletedAt,
 	)
+}
+
+func (store *postgresStore) GetByID(ctx context.Context, id string) (*organization, error) {
+	const sql = `
+		SELECT` + organizationSelectColumns + `
+		FROM public.organizations
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	o := &organization{}
+	err := scanOrganization(store.db.QueryRow(ctx, sql, id), o)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperror.NewNotFoundError("Organization not found", err)
@@ -78,4 +86,31 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*organizati
 		return nil, err
 	}
 	return o, nil
+}
+
+func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*organization, error) {
+	const sql = `
+		SELECT` + organizationSelectColumns + `
+		FROM public.organizations
+		WHERE user_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at DESC`
+
+	rows, err := store.db.Query(ctx, sql, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	organizations := make([]*organization, 0)
+	for rows.Next() {
+		o := &organization{}
+		if err := scanOrganization(rows, o); err != nil {
+			return nil, err
+		}
+		organizations = append(organizations, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return organizations, nil
 }

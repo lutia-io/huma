@@ -23,7 +23,37 @@ func newHTTPHandler(service *service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /organization", h.List)
+	mux.HandleFunc("GET /organization/{id}", h.Get)
 	mux.HandleFunc("POST /organization", h.Insert)
+}
+
+func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	organizations, err := h.service.List(r.Context(), p)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, organizations)
+}
+
+func (h *httpHandler) Get(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	o, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, o)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
