@@ -26,6 +26,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflow-definition", h.List)
 	mux.HandleFunc("GET /workflow-definition/{id}", h.Get)
 	mux.HandleFunc("POST /workflow-definition", h.Insert)
+	mux.HandleFunc("PATCH /workflow-definition/{id}", h.Patch)
 
 	mux.HandleFunc("GET /workflow", h.ListWorkflows)
 	mux.HandleFunc("GET /workflow/{id}", h.GetWorkflow)
@@ -92,6 +93,33 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	existing, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	var req patchWorkflowDefinitionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
+		return
+	}
+	if err := h.service.Patch(r.Context(), existing, req); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, map[string]string{"id": existing.ID})
 }
 
 func (h *httpHandler) ListWorkflows(w http.ResponseWriter, r *http.Request) {

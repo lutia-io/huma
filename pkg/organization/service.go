@@ -73,6 +73,39 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) (st
 	return id, nil
 }
 
+func (s *service) Patch(ctx context.Context, existing *organization, req patchOrganizationRequest) error {
+	if req.Name == nil {
+		return apperror.NewBadRequestError("No fields to update", nil)
+	}
+
+	name := strings.TrimSpace(*req.Name)
+	if name == "" {
+		s.logger.WarnContext(ctx, "Empty name")
+		return apperror.NewBadRequestError("Name is required", nil)
+	}
+
+	slug := slug.Slugify(name)
+	if slug == "" {
+		s.logger.WarnContext(ctx, "Empty slug")
+		return apperror.NewBadRequestError("Slug is required", nil)
+	}
+
+	existing.Name = name
+	existing.Slug = slug
+
+	if err := s.store.Update(ctx, existing); err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+			s.logger.WarnContext(ctx, "Rejected duplicate organization", logger.KeySlug, slug)
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to update organization", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully updated organization", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *service) List(ctx context.Context, p principal.Principal) ([]*organization, error) {
 	switch p.Type {
 	case principal.TypeUser:

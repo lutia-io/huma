@@ -27,6 +27,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /organization-user", h.List)
 	mux.HandleFunc("GET /organization-user/{id}", h.Get)
 	mux.HandleFunc("POST /organization-user", h.Insert)
+	mux.HandleFunc("PATCH /organization-user/{id}", h.Patch)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -91,4 +92,31 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	existing, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	var req patchOrganizationUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
+		return
+	}
+	if err := h.service.Patch(r.Context(), existing, req); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, map[string]string{"id": existing.ID})
 }

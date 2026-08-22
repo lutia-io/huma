@@ -90,6 +90,69 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationUserRequest)
 	return id, nil
 }
 
+func (s *service) Patch(ctx context.Context, existing *organizationUser, req patchOrganizationUserRequest) error {
+	if req.FirstName == nil && req.LastName == nil && req.Email == nil && req.Password == nil {
+		return apperror.NewBadRequestError("No fields to update", nil)
+	}
+
+	if req.FirstName != nil {
+		firstName := strings.TrimSpace(*req.FirstName)
+		if firstName == "" {
+			s.logger.WarnContext(ctx, "Empty first name")
+			return apperror.NewBadRequestError("First name is required", nil)
+		}
+		existing.FirstName = firstName
+	}
+
+	if req.LastName != nil {
+		lastName := strings.TrimSpace(*req.LastName)
+		if lastName == "" {
+			s.logger.WarnContext(ctx, "Empty last name")
+			return apperror.NewBadRequestError("Last name is required", nil)
+		}
+		existing.LastName = lastName
+	}
+
+	if req.Email != nil {
+		email := strings.TrimSpace(*req.Email)
+		if email == "" {
+			s.logger.WarnContext(ctx, "Empty email")
+			return apperror.NewBadRequestError("Email is required", nil)
+		}
+		if _, err := mail.ParseAddress(email); err != nil {
+			s.logger.WarnContext(ctx, "Invalid email", logger.KeyEmail, email, logger.KeyError, err)
+			return apperror.NewBadRequestError("Email is invalid", err)
+		}
+		existing.Email = email
+	}
+
+	var hashedPassword *string
+	if req.Password != nil {
+		if *req.Password == "" {
+			s.logger.WarnContext(ctx, "Empty password")
+			return apperror.NewBadRequestError("Password is required", nil)
+		}
+		hashed, err := s.hasher.Hash(*req.Password)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to hash password", logger.KeyError, err)
+			return apperror.NewInternalError("Failed to hash password", err)
+		}
+		hashedPassword = &hashed
+	}
+
+	if err := s.store.Update(ctx, existing, hashedPassword); err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+			s.logger.WarnContext(ctx, "Rejected duplicate organization user", logger.KeyID, existing.ID, logger.KeyEmail, existing.Email)
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to update organization user", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully updated organization user", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *service) List(ctx context.Context, p principal.Principal) ([]*organizationUser, error) {
 	switch p.Type {
 	case principal.TypeUser:

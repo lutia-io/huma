@@ -63,6 +63,39 @@ func (s *service) Insert(ctx context.Context, req insertNetworkRequest) (string,
 	return id, nil
 }
 
+func (s *service) Patch(ctx context.Context, existing *network, req patchNetworkRequest) error {
+	if req.Name == nil {
+		return apperror.NewBadRequestError("No fields to update", nil)
+	}
+
+	name := strings.TrimSpace(*req.Name)
+	if name == "" {
+		s.logger.WarnContext(ctx, "Empty name")
+		return apperror.NewBadRequestError("Name is required", nil)
+	}
+
+	slug := slug.Slugify(name)
+	if slug == "" {
+		s.logger.WarnContext(ctx, "Empty slug")
+		return apperror.NewBadRequestError("Slug is required", nil)
+	}
+
+	existing.Name = name
+	existing.Slug = slug
+
+	if err := s.store.Update(ctx, existing); err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+			s.logger.WarnContext(ctx, "Rejected duplicate network", logger.KeySlug, slug)
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to update network", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully updated network", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *service) List(ctx context.Context, p principal.Principal) ([]*network, error) {
 	switch p.Type {
 	case principal.TypeUser:

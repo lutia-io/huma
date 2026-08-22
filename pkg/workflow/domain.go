@@ -44,6 +44,13 @@ type insertWorkflowDefinitionRequest struct {
 	UserID     string     `json:"-"`
 }
 
+type patchWorkflowDefinitionRequest struct {
+	Name       *string     `json:"name"`
+	Active     *bool       `json:"active"`
+	Definition *Definition `json:"definition"`
+	SchemaID   *string     `json:"schemaId"`
+}
+
 // Workflow is one execution instance of a workflow definition.
 type Workflow struct {
 	ID                   string `json:"id"`

@@ -16,6 +16,7 @@ const schemaSelectColumns = `
 
 type store interface {
 	Insert(ctx context.Context, schema *schema) (string, error)
+	Update(ctx context.Context, schema *schema) error
 	GetByID(ctx context.Context, id string) (*schema, error)
 	ListByUserID(ctx context.Context, userID string) ([]*schema, error)
 	ListVisibleToOrganization(ctx context.Context, networkID, organizationID string) ([]*schema, error)
@@ -71,6 +72,32 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 		return "", err
 	}
 	return schema.ID, nil
+}
+
+func (store *postgresStore) Update(ctx context.Context, schema *schema) error {
+	const sql = `
+		UPDATE public.schemas
+		SET name = $2, slug = $3, active = $4, definition = $5, updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	tag, err := store.db.Exec(ctx, sql,
+		schema.ID,
+		schema.Name,
+		schema.Slug,
+		schema.Active,
+		schema.Definition,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return apperror.NewConflictError("Schema already exists", err)
+		}
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewNotFoundError("Schema not found", nil)
+	}
+	return nil
 }
 
 func scanSchema(row pgx.Row, sch *schema) error {

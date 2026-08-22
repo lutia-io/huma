@@ -23,3 +23,7 @@ type insertOrganizationRequest struct {
 	NetworkID string `json:"networkId"`
 	UserID    string `json:"-"`
 }
+
+type patchOrganizationRequest struct {
+	Name *string `json:"name"`
+}

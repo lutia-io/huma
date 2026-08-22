@@ -126,6 +126,59 @@ func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 	return id, nil
 }
 
+func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRequest) error {
+	if existing.Internal {
+		return apperror.NewBadRequestError("Internal schemas cannot be updated", nil)
+	}
+
+	if req.Name == nil && req.Active == nil && len(req.Definition) == 0 {
+		return apperror.NewBadRequestError("No fields to update", nil)
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			s.logger.WarnContext(ctx, "Empty name")
+			return apperror.NewBadRequestError("Name is required", nil)
+		}
+		slug := slug.Slugify(name)
+		if slug == "" {
+			s.logger.WarnContext(ctx, "Empty slug")
+			return apperror.NewBadRequestError("Slug is required", nil)
+		}
+		existing.Name = name
+		existing.Slug = slug
+	}
+
+	if req.Active != nil {
+		existing.Active = *req.Active
+	}
+
+	if len(req.Definition) > 0 {
+		if string(req.Definition) == "null" {
+			s.logger.WarnContext(ctx, "Empty definition")
+			return apperror.NewBadRequestError("Definition is required", nil)
+		}
+		if err := validator.ValidateDefinition(req.Definition); err != nil {
+			s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
+			return apperror.NewBadRequestError(err.Error(), err)
+		}
+		existing.Definition = req.Definition
+	}
+
+	if err := s.store.Update(ctx, existing); err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantBadRequest) {
+			s.logger.WarnContext(ctx, "Rejected schema update", logger.KeyID, existing.ID, logger.KeyError, err)
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to update schema", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully updated schema", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *Service) List(ctx context.Context, p principal.Principal) ([]*schema, error) {
 	switch p.Type {
 	case principal.TypeUser:

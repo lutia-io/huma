@@ -33,3 +33,9 @@ type insertSchemaRequest struct {
 	OrganizationID string          `json:"organizationId"`
 	UserID         string          `json:"-"`
 }
+
+type patchSchemaRequest struct {
+	Name       *string         `json:"name"`
+	Active     *bool           `json:"active"`
+	Definition json.RawMessage `json:"definition"`
+}

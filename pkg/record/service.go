@@ -169,6 +169,27 @@ func (s *Service) GetVisible(ctx context.Context, p principal.Principal, id stri
 	return rec, nil
 }
 
+// PatchData validates data against the record's schema and replaces it.
+func (s *Service) PatchData(ctx context.Context, rec *Record, data json.RawMessage) error {
+	if len(data) == 0 || string(data) == "null" {
+		s.logger.WarnContext(ctx, "Empty data")
+		return apperror.NewBadRequestError("Data is required", nil)
+	}
+	if err := s.schemaService.ValidateRecordData(ctx, rec.SchemaID, data); err != nil {
+		return err
+	}
+	found, err := s.store.UpdateData(ctx, rec.ID, data)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to update record", logger.KeyID, rec.ID, logger.KeyError, err)
+		return err
+	}
+	if !found {
+		return apperror.NewNotFoundError("Record not found", nil)
+	}
+	s.logger.InfoContext(ctx, "Successfully updated record", logger.KeyID, rec.ID)
+	return nil
+}
+
 // UpdateData replaces the record's data. Callers pass the full merged
 // document, so the write is set-to-value and naturally idempotent.
 func (s *Service) UpdateData(ctx context.Context, recordID string, data json.RawMessage) (bool, error) {

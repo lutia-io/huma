@@ -17,6 +17,7 @@ const workflowDefinitionSelectColumns = `
 
 type store interface {
 	Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error)
+	Update(ctx context.Context, workflow *WorkflowDefinition) error
 	GetByID(ctx context.Context, id string) (*WorkflowDefinition, error)
 	ListByUserID(ctx context.Context, userID string) ([]*WorkflowDefinition, error)
 	ListVisibleToOrganization(ctx context.Context, networkID, organizationID string) ([]*WorkflowDefinition, error)
@@ -90,6 +91,60 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 		return "", err
 	}
 	return workflow.ID, nil
+}
+
+func (store *postgresStore) Update(ctx context.Context, workflow *WorkflowDefinition) error {
+	defJSON, err := json.Marshal(workflow.Definition)
+	if err != nil {
+		return err
+	}
+
+	const sql = `
+		UPDATE public.workflow_definitions
+		SET name = $2,
+			slug = $3,
+			active = $4,
+			definition = $5,
+			schema_id = $6,
+			updated_at = now()
+		WHERE id = $1
+			AND deleted_at IS NULL
+			AND EXISTS (
+				SELECT 1
+				FROM public.schemas
+				WHERE id = $6
+					AND network_id = $7
+					AND deleted_at IS NULL
+			)`
+
+	tag, err := store.db.Exec(ctx, sql,
+		workflow.ID,
+		workflow.Name,
+		workflow.Slug,
+		workflow.Active,
+		defJSON,
+		workflow.SchemaID,
+		workflow.NetworkID,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "23505":
+				return apperror.NewConflictError("Workflow definition already exists", err)
+			case "23503":
+				return apperror.NewBadRequestError("Invalid network, schema, or user", err)
+			}
+		}
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := store.GetByID(ctx, workflow.ID); err != nil {
+			return err
+		}
+		return apperror.NewBadRequestError("Schema not found in this network", nil)
+	}
+	return nil
 }
 
 func scanWorkflowDefinition(row pgx.Row, wf *WorkflowDefinition) error {

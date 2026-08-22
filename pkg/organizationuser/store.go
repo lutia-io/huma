@@ -24,6 +24,7 @@ const organizationUserSelectColumns = `
 
 type store interface {
 	Insert(ctx context.Context, organizationUser *organizationUser) (string, error)
+	Update(ctx context.Context, organizationUser *organizationUser, hashedPassword *string) error
 	GetByID(ctx context.Context, id string) (*organizationUser, error)
 	GetByEmail(ctx context.Context, email, networkID, organizationID string) (*organizationUser, error)
 	ListByUserID(ctx context.Context, userID string) ([]*organizationUser, error)
@@ -76,6 +77,36 @@ func (store *postgresStore) Insert(ctx context.Context, organizationUser *organi
 		return "", err
 	}
 	return organizationUser.ID, nil
+}
+
+func (store *postgresStore) Update(ctx context.Context, organizationUser *organizationUser, hashedPassword *string) error {
+	const sql = `
+		UPDATE public.organization_users
+		SET first_name = $2,
+			last_name = $3,
+			email = $4,
+			password = COALESCE($5, password),
+			updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	tag, err := store.db.Exec(ctx, sql,
+		organizationUser.ID,
+		organizationUser.FirstName,
+		organizationUser.LastName,
+		organizationUser.Email,
+		hashedPassword,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return apperror.NewConflictError("Organization user already exists", err)
+		}
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewNotFoundError("Organization user not found", nil)
+	}
+	return nil
 }
 
 func scanOrganizationUser(row pgx.Row, u *organizationUser) error {

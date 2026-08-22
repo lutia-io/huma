@@ -18,3 +18,7 @@ type insertNetworkRequest struct {
 	Name   string `json:"name"`
 	UserID string `json:"-"`
 }
+
+type patchNetworkRequest struct {
+	Name *string `json:"name"`
+}

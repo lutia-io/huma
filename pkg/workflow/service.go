@@ -92,6 +92,68 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 	return id, nil
 }
 
+func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req patchWorkflowDefinitionRequest) error {
+	if existing.Internal {
+		return apperror.NewBadRequestError("Internal workflow definitions cannot be updated", nil)
+	}
+
+	if req.Name == nil && req.Active == nil && req.Definition == nil && req.SchemaID == nil {
+		return apperror.NewBadRequestError("No fields to update", nil)
+	}
+
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			s.logger.WarnContext(ctx, "Empty name")
+			return apperror.NewBadRequestError("Name is required", nil)
+		}
+		slug := slug.Slugify(name)
+		if slug == "" {
+			s.logger.WarnContext(ctx, "Empty slug")
+			return apperror.NewBadRequestError("Slug is required", nil)
+		}
+		existing.Name = name
+		existing.Slug = slug
+	}
+
+	if req.Active != nil {
+		existing.Active = *req.Active
+	}
+
+	if req.Definition != nil {
+		if err := validateDefinition(*req.Definition); err != nil {
+			s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
+			return err
+		}
+		existing.Definition = *req.Definition
+	}
+
+	if req.SchemaID != nil {
+		schemaID := strings.TrimSpace(*req.SchemaID)
+		if schemaID == "" {
+			s.logger.WarnContext(ctx, "Empty schema ID")
+			return apperror.NewBadRequestError("Schema ID is required", nil)
+		}
+		if !uuid.Valid(schemaID) {
+			s.logger.WarnContext(ctx, "Invalid schema ID")
+			return apperror.NewBadRequestError("Invalid schema ID", nil)
+		}
+		existing.SchemaID = schemaID
+	}
+
+	if err := s.store.Update(ctx, existing); err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantBadRequest) {
+			s.logger.WarnContext(ctx, "Rejected workflow definition update", logger.KeyID, existing.ID, logger.KeyError, err)
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to update workflow definition", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully updated workflow definition", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *Service) List(ctx context.Context, p principal.Principal) ([]*WorkflowDefinition, error) {
 	switch p.Type {
 	case principal.TypeUser:

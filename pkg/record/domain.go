@@ -43,3 +43,7 @@ type insertRecordRequest struct {
 	OrganizationUserID string          `json:"-"`
 	NetworkID          string          `json:"-"`
 }
+
+type patchRecordRequest struct {
+	Data json.RawMessage `json:"data"`
+}
