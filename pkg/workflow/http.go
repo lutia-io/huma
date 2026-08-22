@@ -26,6 +26,11 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflow-definition", h.List)
 	mux.HandleFunc("GET /workflow-definition/{id}", h.Get)
 	mux.HandleFunc("POST /workflow-definition", h.Insert)
+
+	mux.HandleFunc("GET /workflow", h.ListWorkflows)
+	mux.HandleFunc("GET /workflow/{id}", h.GetWorkflow)
+	mux.HandleFunc("GET /workflow/{id}/action", h.ListWorkflowActions)
+	mux.HandleFunc("GET /workflow-action/{id}", h.GetWorkflowAction)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -87,4 +92,60 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *httpHandler) ListWorkflows(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	workflows, err := h.service.ListWorkflows(r.Context(), p)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, workflows)
+}
+
+func (h *httpHandler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	wf, err := h.service.GetWorkflow(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, wf)
+}
+
+func (h *httpHandler) ListWorkflowActions(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	actions, err := h.service.ListWorkflowActions(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, actions)
+}
+
+func (h *httpHandler) GetWorkflowAction(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	action, err := h.service.GetWorkflowAction(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, action)
 }

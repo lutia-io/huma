@@ -22,6 +22,12 @@ type store interface {
 	ListVisibleToOrganization(ctx context.Context, networkID, organizationID string) ([]*WorkflowDefinition, error)
 	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error)
 	SchemaVisibleToOrganization(ctx context.Context, schemaID, networkID, organizationID string) (bool, error)
+
+	GetWorkflowByID(ctx context.Context, id string) (*Workflow, error)
+	ListWorkflowsByUserID(ctx context.Context, userID string) ([]*Workflow, error)
+	ListWorkflowsByOrganization(ctx context.Context, networkID, organizationID string) ([]*Workflow, error)
+	GetWorkflowActionByID(ctx context.Context, id string) (*WorkflowAction, error)
+	ListWorkflowActionsByWorkflowID(ctx context.Context, workflowID string) ([]*WorkflowAction, error)
 }
 
 type postgresStore struct {

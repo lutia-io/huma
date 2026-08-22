@@ -3,11 +3,14 @@ package record
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/schema"
+	"github.com/lutia-io/huma/pkg/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -109,6 +112,61 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 // Get returns the record, or found=false if it does not exist or is deleted.
 func (s *Service) Get(ctx context.Context, recordID string) (*Record, bool, error) {
 	return s.store.Get(ctx, recordID)
+}
+
+func (s *Service) List(ctx context.Context, p principal.Principal) ([]*Record, error) {
+	switch p.Type {
+	case principal.TypeUser:
+		records, err := s.store.ListByUserID(ctx, p.ID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list records", logger.KeyUserID, p.ID, logger.KeyError, err)
+			return nil, err
+		}
+		return records, nil
+	case principal.TypeOrganizationUser:
+		if p.NetworkID == "" || p.OrganizationID == "" {
+			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+		}
+		records, err := s.store.ListByOrganization(ctx, p.NetworkID, p.OrganizationID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list records", logger.KeyError, err)
+			return nil, err
+		}
+		return records, nil
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+}
+
+func (s *Service) GetVisible(ctx context.Context, p principal.Principal, id string) (*Record, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid record ID", nil)
+	}
+
+	rec, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get record", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+
+	switch p.Type {
+	case principal.TypeUser:
+		if rec.UserID != p.ID {
+			return nil, apperror.NewNotFoundError("Record not found", nil)
+		}
+	case principal.TypeOrganizationUser:
+		if rec.NetworkID != p.NetworkID || rec.OrganizationID != p.OrganizationID {
+			return nil, apperror.NewNotFoundError("Record not found", nil)
+		}
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+
+	return rec, nil
 }
 
 // UpdateData replaces the record's data. Callers pass the full merged

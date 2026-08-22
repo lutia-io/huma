@@ -155,6 +155,101 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*W
 	return wf, nil
 }
 
+func (s *Service) ListWorkflows(ctx context.Context, p principal.Principal) ([]*Workflow, error) {
+	switch p.Type {
+	case principal.TypeUser:
+		workflows, err := s.store.ListWorkflowsByUserID(ctx, p.ID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list workflows", logger.KeyUserID, p.ID, logger.KeyError, err)
+			return nil, err
+		}
+		return workflows, nil
+	case principal.TypeOrganizationUser:
+		if p.NetworkID == "" || p.OrganizationID == "" {
+			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+		}
+		workflows, err := s.store.ListWorkflowsByOrganization(ctx, p.NetworkID, p.OrganizationID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list workflows", logger.KeyError, err)
+			return nil, err
+		}
+		return workflows, nil
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+}
+
+func (s *Service) GetWorkflow(ctx context.Context, p principal.Principal, id string) (*Workflow, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid workflow ID", nil)
+	}
+
+	wf, err := s.store.GetWorkflowByID(ctx, id)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get workflow", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+
+	if err := s.authorizeWorkflow(p, wf); err != nil {
+		return nil, err
+	}
+	return wf, nil
+}
+
+func (s *Service) ListWorkflowActions(ctx context.Context, p principal.Principal, workflowID string) ([]*WorkflowAction, error) {
+	if _, err := s.GetWorkflow(ctx, p, workflowID); err != nil {
+		return nil, err
+	}
+
+	actions, err := s.store.ListWorkflowActionsByWorkflowID(ctx, workflowID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list workflow actions", logger.KeyID, workflowID, logger.KeyError, err)
+		return nil, err
+	}
+	return actions, nil
+}
+
+func (s *Service) GetWorkflowAction(ctx context.Context, p principal.Principal, id string) (*WorkflowAction, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid workflow action ID", nil)
+	}
+
+	wfAction, err := s.store.GetWorkflowActionByID(ctx, id)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get workflow action", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+
+	if _, err := s.GetWorkflow(ctx, p, wfAction.WorkflowID); err != nil {
+		return nil, err
+	}
+	return wfAction, nil
+}
+
+func (s *Service) authorizeWorkflow(p principal.Principal, wf *Workflow) error {
+	switch p.Type {
+	case principal.TypeUser:
+		if wf.UserID != p.ID {
+			return apperror.NewNotFoundError("Workflow not found", nil)
+		}
+	case principal.TypeOrganizationUser:
+		if wf.NetworkID != p.NetworkID || wf.OrganizationID != p.OrganizationID {
+			return apperror.NewNotFoundError("Workflow not found", nil)
+		}
+	default:
+		return apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+	return nil
+}
+
 func validateDefinition(def Definition) error {
 	if err := validateCriteria(def.Criteria); err != nil {
 		return err

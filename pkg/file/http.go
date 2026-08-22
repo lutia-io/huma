@@ -28,10 +28,25 @@ func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /file", h.List)
 	mux.HandleFunc("POST /file", h.Insert)
 	mux.HandleFunc("GET /file/{id}", h.Download)
 	mux.HandleFunc("GET /file/{id}/metadata", h.Metadata)
 	mux.HandleFunc("DELETE /file/{id}", h.Delete)
+}
+
+func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	files, err := h.service.List(r.Context(), p)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, files)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
@@ -92,29 +107,30 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpHandler) Metadata(w http.ResponseWriter, r *http.Request) {
-	if _, ok := principal.FromContext(r.Context()); !ok {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	id := r.PathValue("id")
-	meta, found, err := h.service.GetMeta(r.Context(), id)
+	meta, err := h.service.Get(r.Context(), p, r.PathValue("id"))
 	if err != nil {
 		render.WriteError(w, err)
-		return
-	}
-	if !found {
-		render.WriteError(w, apperror.NewNotFoundError("File not found", nil))
 		return
 	}
 	render.WriteJSON(w, http.StatusOK, meta)
 }
 
 func (h *httpHandler) Download(w http.ResponseWriter, r *http.Request) {
-	if _, ok := principal.FromContext(r.Context()); !ok {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
 	id := r.PathValue("id")
+	if _, err := h.service.Get(r.Context(), p, id); err != nil {
+		render.WriteError(w, err)
+		return
+	}
 	content, found, err := h.service.OpenContent(r.Context(), id)
 	if err != nil {
 		render.WriteError(w, err)
@@ -139,11 +155,16 @@ func (h *httpHandler) Download(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if _, ok := principal.FromContext(r.Context()); !ok {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
 	id := r.PathValue("id")
+	if _, err := h.service.Get(r.Context(), p, id); err != nil {
+		render.WriteError(w, err)
+		return
+	}
 	found, err := h.service.SoftDelete(r.Context(), id)
 	if err != nil {
 		render.WriteError(w, err)

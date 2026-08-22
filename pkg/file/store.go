@@ -6,7 +6,21 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/apperror"
 )
+
+const fileSelectColumns = `
+	f.id,
+	f.filename,
+	f.content_type,
+	f.size_bytes,
+	f.organization_id,
+	f.organization_user_id,
+	f.network_id,
+	f.created_at,
+	f.updated_at,
+	f.deleted_at,
+	n.user_id`
 
 type store interface {
 	// Insert creates file metadata. created is false when an existing row
@@ -14,6 +28,9 @@ type store interface {
 	Insert(ctx context.Context, f *File) (id string, created bool, err error)
 	UpdateSize(ctx context.Context, fileID string, sizeBytes int64) error
 	Get(ctx context.Context, fileID string) (*File, bool, error)
+	GetByID(ctx context.Context, id string) (*File, error)
+	ListByUserID(ctx context.Context, userID string) ([]*File, error)
+	ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*File, error)
 	Delete(ctx context.Context, fileID string) error
 	SoftDelete(ctx context.Context, fileID string) (bool, error)
 }
@@ -87,6 +104,39 @@ func (store *postgresStore) UpdateSize(ctx context.Context, fileID string, sizeB
 	return err
 }
 
+func scanFile(row pgx.Row, f *File) error {
+	return row.Scan(
+		&f.ID,
+		&f.Filename,
+		&f.ContentType,
+		&f.SizeBytes,
+		&f.OrganizationID,
+		&f.OrganizationUserID,
+		&f.NetworkID,
+		&f.CreatedAt,
+		&f.UpdatedAt,
+		&f.DeletedAt,
+		&f.UserID,
+	)
+}
+
+func collectFiles(rows pgx.Rows) ([]*File, error) {
+	defer rows.Close()
+
+	files := make([]*File, 0)
+	for rows.Next() {
+		f := &File{}
+		if err := scanFile(rows, f); err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
 func (store *postgresStore) Get(ctx context.Context, fileID string) (*File, bool, error) {
 	const sql = `
 		SELECT id, filename, content_type, size_bytes,
@@ -115,6 +165,61 @@ func (store *postgresStore) Get(ctx context.Context, fileID string) (*File, bool
 		return nil, false, err
 	}
 	return f, true, nil
+}
+
+func (store *postgresStore) GetByID(ctx context.Context, id string) (*File, error) {
+	const sql = `
+		SELECT` + fileSelectColumns + `
+		FROM public.files f
+		JOIN public.networks n ON n.id = f.network_id
+		WHERE f.id = $1
+			AND f.deleted_at IS NULL
+			AND n.deleted_at IS NULL`
+
+	f := &File{}
+	err := scanFile(store.db.QueryRow(ctx, sql, id), f)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.NewNotFoundError("File not found", err)
+		}
+		return nil, err
+	}
+	return f, nil
+}
+
+func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*File, error) {
+	const sql = `
+		SELECT` + fileSelectColumns + `
+		FROM public.files f
+		JOIN public.networks n ON n.id = f.network_id
+		WHERE n.user_id = $1
+			AND f.deleted_at IS NULL
+			AND n.deleted_at IS NULL
+		ORDER BY f.created_at DESC`
+
+	rows, err := store.db.Query(ctx, sql, userID)
+	if err != nil {
+		return nil, err
+	}
+	return collectFiles(rows)
+}
+
+func (store *postgresStore) ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*File, error) {
+	const sql = `
+		SELECT` + fileSelectColumns + `
+		FROM public.files f
+		JOIN public.networks n ON n.id = f.network_id
+		WHERE f.network_id = $1
+			AND f.organization_id = $2
+			AND f.deleted_at IS NULL
+			AND n.deleted_at IS NULL
+		ORDER BY f.created_at DESC`
+
+	rows, err := store.db.Query(ctx, sql, networkID, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	return collectFiles(rows)
 }
 
 func (store *postgresStore) Delete(ctx context.Context, fileID string) error {

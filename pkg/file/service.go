@@ -7,6 +7,8 @@ import (
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/principal"
+	"github.com/lutia-io/huma/pkg/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -114,6 +116,61 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 
 	s.logger.InfoContext(ctx, "Successfully created file", logger.KeyID, id, "size_bytes", info.Size)
 	return id, nil
+}
+
+func (s *Service) List(ctx context.Context, p principal.Principal) ([]*File, error) {
+	switch p.Type {
+	case principal.TypeUser:
+		files, err := s.store.ListByUserID(ctx, p.ID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list files", logger.KeyUserID, p.ID, logger.KeyError, err)
+			return nil, err
+		}
+		return files, nil
+	case principal.TypeOrganizationUser:
+		if p.NetworkID == "" || p.OrganizationID == "" {
+			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+		}
+		files, err := s.store.ListByOrganization(ctx, p.NetworkID, p.OrganizationID)
+		if err != nil {
+			s.logger.ErrorContext(ctx, "Failed to list files", logger.KeyError, err)
+			return nil, err
+		}
+		return files, nil
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+}
+
+func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*File, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid file ID", nil)
+	}
+
+	f, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get file", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+
+	switch p.Type {
+	case principal.TypeUser:
+		if f.UserID != p.ID {
+			return nil, apperror.NewNotFoundError("File not found", nil)
+		}
+	case principal.TypeOrganizationUser:
+		if f.NetworkID != p.NetworkID || f.OrganizationID != p.OrganizationID {
+			return nil, apperror.NewNotFoundError("File not found", nil)
+		}
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+
+	return f, nil
 }
 
 // GetMeta returns file metadata, or found=false if missing/deleted.
