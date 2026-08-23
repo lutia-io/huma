@@ -14,12 +14,15 @@ const schemaSelectColumns = `
 	id, name, slug, active, internal, definition, network_id, organization_id,
 	user_id, created_at, updated_at, deleted_at`
 
+const schemaListSelectColumns = `
+	s.id, s.name, s.slug, s.active, s.internal, s.definition, s.network_id, s.organization_id,
+	s.user_id, s.created_at, s.updated_at, s.deleted_at`
+
 type store interface {
 	Insert(ctx context.Context, schema *schema) (string, error)
 	Update(ctx context.Context, schema *schema) error
 	GetByID(ctx context.Context, id string) (*schema, error)
-	ListByUserID(ctx context.Context, userID string) ([]*schema, error)
-	ListVisibleToOrganization(ctx context.Context, networkID, organizationID string) ([]*schema, error)
+	List(ctx context.Context, params listParams) (*listResult, error)
 }
 
 type postgresStore struct {
@@ -151,32 +154,32 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*schema, er
 	return sch, nil
 }
 
-func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*schema, error) {
-	const sql = `
-		SELECT` + schemaSelectColumns + `
-		FROM public.schemas
-		WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC`
+func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
 
-	rows, err := store.db.Query(ctx, sql, userID)
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	return collectSchemas(rows)
-}
-
-func (store *postgresStore) ListVisibleToOrganization(ctx context.Context, networkID, organizationID string) ([]*schema, error) {
-	const sql = `
-		SELECT` + schemaSelectColumns + `
-		FROM public.schemas
-		WHERE network_id = $1
-		  AND deleted_at IS NULL
-		  AND (organization_id IS NULL OR organization_id = $2)
-		ORDER BY created_at DESC`
-
-	rows, err := store.db.Query(ctx, sql, networkID, organizationID)
+	items, err := collectSchemas(rows)
 	if err != nil {
 		return nil, err
 	}
-	return collectSchemas(rows)
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &listResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }

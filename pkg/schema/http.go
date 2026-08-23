@@ -37,12 +37,17 @@ func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	schemas, err := h.service.List(r.Context(), p)
+	params, err := parseListParams(r)
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, schemas)
+	result, err := h.service.List(r.Context(), p, params)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, result)
 }
 
 func (h *httpHandler) Get(w http.ResponseWriter, r *http.Request) {
