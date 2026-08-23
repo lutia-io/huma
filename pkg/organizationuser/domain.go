@@ -57,3 +57,27 @@ type patchOrganizationUserRequest struct {
 	Email     *string `json:"email"`
 	Password  *string `json:"password"`
 }
+
+type listParams struct {
+	UserID         string
+	Query          string
+	NetworkID      string
+	OrganizationID string
+	Name           string
+	NameOp         string
+	Email          string
+	EmailOp        string
+	Organization   string
+	OrganizationOp string
+	Sort           string
+	Order          string
+	Page           int
+	PageSize       int
+}
+
+type listResult struct {
+	Items    []*organizationUser `json:"items"`
+	Total    int                 `json:"total"`
+	Page     int                 `json:"page"`
+	PageSize int                 `json:"pageSize"`
+}

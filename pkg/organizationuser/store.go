@@ -27,8 +27,7 @@ type store interface {
 	Update(ctx context.Context, organizationUser *organizationUser, hashedPassword *string) error
 	GetByID(ctx context.Context, id string) (*organizationUser, error)
 	GetByEmail(ctx context.Context, email, networkID, organizationID string) (*organizationUser, error)
-	ListByUserID(ctx context.Context, userID string) ([]*organizationUser, error)
-	ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*organizationUser, error)
+	List(ctx context.Context, params listParams) (*listResult, error)
 }
 
 type postgresStore struct {
@@ -193,37 +192,32 @@ func (store *postgresStore) GetByEmail(ctx context.Context, email, networkID, or
 	return u, nil
 }
 
-func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*organizationUser, error) {
-	const sql = `
-		SELECT` + organizationUserSelectColumns + `
-		FROM public.organization_users ou
-		JOIN public.networks n ON n.id = ou.network_id
-		WHERE n.user_id = $1
-			AND ou.deleted_at IS NULL
-			AND n.deleted_at IS NULL
-		ORDER BY ou.created_at DESC`
+func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
 
-	rows, err := store.db.Query(ctx, sql, userID)
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	return collectOrganizationUsers(rows)
-}
-
-func (store *postgresStore) ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*organizationUser, error) {
-	const sql = `
-		SELECT` + organizationUserSelectColumns + `
-		FROM public.organization_users ou
-		JOIN public.networks n ON n.id = ou.network_id
-		WHERE ou.network_id = $1
-			AND ou.organization_id = $2
-			AND ou.deleted_at IS NULL
-			AND n.deleted_at IS NULL
-		ORDER BY ou.created_at DESC`
-
-	rows, err := store.db.Query(ctx, sql, networkID, organizationID)
+	items, err := collectOrganizationUsers(rows)
 	if err != nil {
 		return nil, err
 	}
-	return collectOrganizationUsers(rows)
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &listResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }

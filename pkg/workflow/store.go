@@ -15,12 +15,15 @@ const workflowDefinitionSelectColumns = `
 	id, name, slug, active, internal, definition, schema_id, network_id,
 	user_id, created_at, updated_at, deleted_at`
 
+const workflowDefinitionListSelectColumns = `
+	wd.id, wd.name, wd.slug, wd.active, wd.internal, wd.definition, wd.schema_id, wd.network_id,
+	wd.user_id, wd.created_at, wd.updated_at, wd.deleted_at`
+
 type store interface {
 	Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error)
 	Update(ctx context.Context, workflow *WorkflowDefinition) error
 	GetByID(ctx context.Context, id string) (*WorkflowDefinition, error)
-	ListByUserID(ctx context.Context, userID string) ([]*WorkflowDefinition, error)
-	ListVisibleToOrganization(ctx context.Context, networkID, organizationID string) ([]*WorkflowDefinition, error)
+	List(ctx context.Context, params listParams) (*listResult, error)
 	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error)
 	SchemaVisibleToOrganization(ctx context.Context, schemaID, networkID, organizationID string) (bool, error)
 
@@ -202,48 +205,34 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*WorkflowDe
 	return wf, nil
 }
 
-func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*WorkflowDefinition, error) {
-	const sql = `
-		SELECT` + workflowDefinitionSelectColumns + `
-		FROM public.workflow_definitions
-		WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC`
+func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
 
-	rows, err := store.db.Query(ctx, sql, userID)
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	return collectWorkflowDefinitions(rows)
-}
-
-func (store *postgresStore) ListVisibleToOrganization(ctx context.Context, networkID, organizationID string) ([]*WorkflowDefinition, error) {
-	const sql = `
-		SELECT
-			wd.id,
-			wd.name,
-			wd.slug,
-			wd.active,
-			wd.internal,
-			wd.definition,
-			wd.schema_id,
-			wd.network_id,
-			wd.user_id,
-			wd.created_at,
-			wd.updated_at,
-			wd.deleted_at
-		FROM public.workflow_definitions wd
-		JOIN public.schemas s ON s.id = wd.schema_id
-		WHERE wd.network_id = $1
-			AND wd.deleted_at IS NULL
-			AND s.deleted_at IS NULL
-			AND (s.organization_id IS NULL OR s.organization_id = $2)
-		ORDER BY wd.created_at DESC`
-
-	rows, err := store.db.Query(ctx, sql, networkID, organizationID)
+	items, err := collectWorkflowDefinitions(rows)
 	if err != nil {
 		return nil, err
 	}
-	return collectWorkflowDefinitions(rows)
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &listResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }
 
 // ListActiveBySchemaID returns the definitions the engine's intake considers

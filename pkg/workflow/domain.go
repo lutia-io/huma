@@ -51,6 +51,35 @@ type patchWorkflowDefinitionRequest struct {
 	SchemaID   *string     `json:"schemaId"`
 }
 
+type listParams struct {
+	UserID         string
+	Query          string
+	NetworkID      string
+	OrganizationID string
+	Active         *bool
+	Name           string
+	NameOp         string
+	Slug           string
+	SlugOp         string
+	Schema         string
+	SchemaOp       string
+	Network        string
+	NetworkOp      string
+	Actions        *int
+	ActionsOp      string
+	Sort           string
+	Order          string
+	Page           int
+	PageSize       int
+}
+
+type listResult struct {
+	Items    []*WorkflowDefinition `json:"items"`
+	Total    int                   `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"pageSize"`
+}
+
 // Workflow is one execution instance of a workflow definition.
 type Workflow struct {
 	ID                   string `json:"id"`

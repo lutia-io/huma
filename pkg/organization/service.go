@@ -106,27 +106,27 @@ func (s *service) Patch(ctx context.Context, existing *organization, req patchOr
 	return nil
 }
 
-func (s *service) List(ctx context.Context, p principal.Principal) ([]*organization, error) {
+func (s *service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:
-		organizations, err := s.store.ListByUserID(ctx, p.ID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list organizations", logger.KeyUserID, p.ID, logger.KeyError, err)
-			return nil, err
-		}
-		return organizations, nil
+		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
-		if p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing organization", nil)
+		if p.NetworkID == "" || p.OrganizationID == "" {
+			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
 		}
-		o, err := s.Get(ctx, p, p.OrganizationID)
-		if err != nil {
-			return nil, err
-		}
-		return []*organization{o}, nil
+		params.UserID = ""
+		params.NetworkID = p.NetworkID
+		params.OrganizationID = p.OrganizationID
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
 	}
+
+	result, err := s.store.List(ctx, params)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list organizations", logger.KeyUserID, p.ID, logger.KeyError, err)
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*organization, error) {

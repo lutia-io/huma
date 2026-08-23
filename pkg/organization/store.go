@@ -13,11 +13,14 @@ import (
 const organizationSelectColumns = `
 	id, name, slug, network_id, user_id, created_at, updated_at, deleted_at`
 
+const organizationListSelectColumns = `
+	o.id, o.name, o.slug, o.network_id, o.user_id, o.created_at, o.updated_at, o.deleted_at`
+
 type store interface {
 	Insert(ctx context.Context, organization *organization) (string, error)
 	Update(ctx context.Context, organization *organization) error
 	GetByID(ctx context.Context, id string) (*organization, error)
-	ListByUserID(ctx context.Context, userID string) ([]*organization, error)
+	List(ctx context.Context, params listParams) (*listResult, error)
 }
 
 type postgresStore struct {
@@ -92,6 +95,23 @@ func scanOrganization(row pgx.Row, o *organization) error {
 	)
 }
 
+func collectOrganizations(rows pgx.Rows) ([]*organization, error) {
+	defer rows.Close()
+
+	organizations := make([]*organization, 0)
+	for rows.Next() {
+		o := &organization{}
+		if err := scanOrganization(rows, o); err != nil {
+			return nil, err
+		}
+		organizations = append(organizations, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return organizations, nil
+}
+
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*organization, error) {
 	const sql = `
 		SELECT` + organizationSelectColumns + `
@@ -109,29 +129,32 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*organizati
 	return o, nil
 }
 
-func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*organization, error) {
-	const sql = `
-		SELECT` + organizationSelectColumns + `
-		FROM public.organizations
-		WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC`
+func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
 
-	rows, err := store.db.Query(ctx, sql, userID)
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	organizations := make([]*organization, 0)
-	for rows.Next() {
-		o := &organization{}
-		if err := scanOrganization(rows, o); err != nil {
-			return nil, err
-		}
-		organizations = append(organizations, o)
-	}
-	if err := rows.Err(); err != nil {
+	items, err := collectOrganizations(rows)
+	if err != nil {
 		return nil, err
 	}
-	return organizations, nil
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &listResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }
