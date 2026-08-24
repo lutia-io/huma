@@ -118,28 +118,27 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 	return id, nil
 }
 
-func (s *Service) List(ctx context.Context, p principal.Principal) ([]*File, error) {
+func (s *Service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:
-		files, err := s.store.ListByUserID(ctx, p.ID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list files", logger.KeyUserID, p.ID, logger.KeyError, err)
-			return nil, err
-		}
-		return files, nil
+		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
 			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
 		}
-		files, err := s.store.ListByOrganization(ctx, p.NetworkID, p.OrganizationID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list files", logger.KeyError, err)
-			return nil, err
-		}
-		return files, nil
+		params.UserID = ""
+		params.NetworkID = p.NetworkID
+		params.OrganizationID = p.OrganizationID
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
 	}
+
+	result, err := s.store.List(ctx, params)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list files", logger.KeyUserID, p.ID, logger.KeyError, err)
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*File, error) {

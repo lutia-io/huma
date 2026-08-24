@@ -28,8 +28,7 @@ type store interface {
 	SchemaVisibleToOrganization(ctx context.Context, schemaID, networkID, organizationID string) (bool, error)
 
 	GetWorkflowByID(ctx context.Context, id string) (*Workflow, error)
-	ListWorkflowsByUserID(ctx context.Context, userID string) ([]*Workflow, error)
-	ListWorkflowsByOrganization(ctx context.Context, networkID, organizationID string) ([]*Workflow, error)
+	ListWorkflows(ctx context.Context, params runListParams) (*runListResult, error)
 	GetWorkflowActionByID(ctx context.Context, id string) (*WorkflowAction, error)
 	ListWorkflowActionsByWorkflowID(ctx context.Context, workflowID string) ([]*WorkflowAction, error)
 }

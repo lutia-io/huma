@@ -98,36 +98,34 @@ func (store *postgresStore) GetWorkflowByID(ctx context.Context, id string) (*Wo
 	return wf, nil
 }
 
-func (store *postgresStore) ListWorkflowsByUserID(ctx context.Context, userID string) ([]*Workflow, error) {
-	const sql = `
-		SELECT` + workflowSelectColumns + `
-		FROM public.workflows w
-		JOIN public.networks n ON n.id = w.network_id
-		WHERE n.user_id = $1 AND n.deleted_at IS NULL
-		ORDER BY w.created_at DESC`
+func (store *postgresStore) ListWorkflows(ctx context.Context, params runListParams) (*runListResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildRunListQuery(params)
 
-	rows, err := store.db.Query(ctx, sql, userID)
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	return collectWorkflows(rows)
-}
-
-func (store *postgresStore) ListWorkflowsByOrganization(ctx context.Context, networkID, organizationID string) ([]*Workflow, error) {
-	const sql = `
-		SELECT` + workflowSelectColumns + `
-		FROM public.workflows w
-		JOIN public.networks n ON n.id = w.network_id
-		WHERE w.network_id = $1
-			AND w.organization_id = $2
-			AND n.deleted_at IS NULL
-		ORDER BY w.created_at DESC`
-
-	rows, err := store.db.Query(ctx, sql, networkID, organizationID)
+	items, err := collectWorkflows(rows)
 	if err != nil {
 		return nil, err
 	}
-	return collectWorkflows(rows)
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &runListResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }
 
 func optionalJSON(raw []byte) json.RawMessage {

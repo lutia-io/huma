@@ -216,28 +216,27 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*W
 	return wf, nil
 }
 
-func (s *Service) ListWorkflows(ctx context.Context, p principal.Principal) ([]*Workflow, error) {
+func (s *Service) ListWorkflows(ctx context.Context, p principal.Principal, params runListParams) (*runListResult, error) {
 	switch p.Type {
 	case principal.TypeUser:
-		workflows, err := s.store.ListWorkflowsByUserID(ctx, p.ID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list workflows", logger.KeyUserID, p.ID, logger.KeyError, err)
-			return nil, err
-		}
-		return workflows, nil
+		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
 			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
 		}
-		workflows, err := s.store.ListWorkflowsByOrganization(ctx, p.NetworkID, p.OrganizationID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list workflows", logger.KeyError, err)
-			return nil, err
-		}
-		return workflows, nil
+		params.UserID = ""
+		params.NetworkID = p.NetworkID
+		params.OrganizationID = p.OrganizationID
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
 	}
+
+	result, err := s.store.ListWorkflows(ctx, params)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list workflows", logger.KeyUserID, p.ID, logger.KeyError, err)
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *Service) GetWorkflow(ctx context.Context, p principal.Principal, id string) (*Workflow, error) {

@@ -133,12 +133,17 @@ func (h *httpHandler) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	workflows, err := h.service.ListWorkflows(r.Context(), p)
+	params, err := parseRunListParams(r)
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, workflows)
+	result, err := h.service.ListWorkflows(r.Context(), p, params)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, result)
 }
 
 func (h *httpHandler) GetWorkflow(w http.ResponseWriter, r *http.Request) {

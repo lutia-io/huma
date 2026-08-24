@@ -29,3 +29,31 @@ type insertPipelineDefinitionRequest struct {
 	NetworkID  string     `json:"networkId"`
 	UserID     string     `json:"-"`
 }
+
+type listParams struct {
+	UserID    string
+	Query     string
+	NetworkID string
+	Active    *bool
+	Name      string
+	NameOp    string
+	Slug      string
+	SlugOp    string
+	Network   string
+	NetworkOp string
+	Source    string
+	SourceOp  string
+	Stages    *int
+	StagesOp  string
+	Sort      string
+	Order     string
+	Page      int
+	PageSize  int
+}
+
+type listResult struct {
+	Items    []*pipelineDefinition `json:"items"`
+	Total    int                   `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"pageSize"`
+}

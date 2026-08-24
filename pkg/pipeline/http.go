@@ -23,7 +23,42 @@ func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /pipeline-definition", h.List)
+	mux.HandleFunc("GET /pipeline-definition/{id}", h.Get)
 	mux.HandleFunc("POST /pipeline-definition", h.Insert)
+}
+
+func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	params, err := parseListParams(r)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	result, err := h.service.List(r.Context(), p, params)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *httpHandler) Get(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	pipeline, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, pipeline)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {

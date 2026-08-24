@@ -7,7 +7,9 @@ import (
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/uuid"
 )
 
 type Service struct {
@@ -69,4 +71,57 @@ func (s *Service) Insert(ctx context.Context, req insertPipelineDefinitionReques
 	}
 	s.logger.InfoContext(ctx, "Successfully created pipeline definition", logger.KeyID, id)
 	return id, nil
+}
+
+func (s *Service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
+	switch p.Type {
+	case principal.TypeUser:
+		params.UserID = p.ID
+	case principal.TypeOrganizationUser:
+		if p.NetworkID == "" {
+			return nil, apperror.NewUnauthorizedError("Organization user token missing network", nil)
+		}
+		params.UserID = ""
+		params.NetworkID = p.NetworkID
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+
+	result, err := s.store.List(ctx, params)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list pipeline definitions", logger.KeyUserID, p.ID, logger.KeyError, err)
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*pipelineDefinition, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid pipeline definition ID", nil)
+	}
+
+	pipeline, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get pipeline definition", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+
+	switch p.Type {
+	case principal.TypeUser:
+		if pipeline.UserID != p.ID {
+			return nil, apperror.NewNotFoundError("Pipeline definition not found", nil)
+		}
+	case principal.TypeOrganizationUser:
+		if pipeline.NetworkID != p.NetworkID {
+			return nil, apperror.NewNotFoundError("Pipeline definition not found", nil)
+		}
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
+
+	return pipeline, nil
 }

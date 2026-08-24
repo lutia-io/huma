@@ -29,8 +29,7 @@ type store interface {
 	UpdateSize(ctx context.Context, fileID string, sizeBytes int64) error
 	Get(ctx context.Context, fileID string) (*File, bool, error)
 	GetByID(ctx context.Context, id string) (*File, error)
-	ListByUserID(ctx context.Context, userID string) ([]*File, error)
-	ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*File, error)
+	List(ctx context.Context, params listParams) (*listResult, error)
 	Delete(ctx context.Context, fileID string) error
 	SoftDelete(ctx context.Context, fileID string) (bool, error)
 }
@@ -187,39 +186,34 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*File, erro
 	return f, nil
 }
 
-func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*File, error) {
-	const sql = `
-		SELECT` + fileSelectColumns + `
-		FROM public.files f
-		JOIN public.networks n ON n.id = f.network_id
-		WHERE n.user_id = $1
-			AND f.deleted_at IS NULL
-			AND n.deleted_at IS NULL
-		ORDER BY f.created_at DESC`
+func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
 
-	rows, err := store.db.Query(ctx, sql, userID)
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	return collectFiles(rows)
-}
-
-func (store *postgresStore) ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*File, error) {
-	const sql = `
-		SELECT` + fileSelectColumns + `
-		FROM public.files f
-		JOIN public.networks n ON n.id = f.network_id
-		WHERE f.network_id = $1
-			AND f.organization_id = $2
-			AND f.deleted_at IS NULL
-			AND n.deleted_at IS NULL
-		ORDER BY f.created_at DESC`
-
-	rows, err := store.db.Query(ctx, sql, networkID, organizationID)
+	items, err := collectFiles(rows)
 	if err != nil {
 		return nil, err
 	}
-	return collectFiles(rows)
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &listResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }
 
 func (store *postgresStore) Delete(ctx context.Context, fileID string) error {

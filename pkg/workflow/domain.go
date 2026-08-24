@@ -80,6 +80,31 @@ type listResult struct {
 	PageSize int                   `json:"pageSize"`
 }
 
+type runListParams struct {
+	UserID         string
+	Query          string
+	NetworkID      string
+	OrganizationID string
+	Name           string
+	NameOp         string
+	Status         string
+	Network        string
+	NetworkOp      string
+	Organization   string
+	OrganizationOp string
+	Sort           string
+	Order          string
+	Page           int
+	PageSize       int
+}
+
+type runListResult struct {
+	Items    []*Workflow `json:"items"`
+	Total    int         `json:"total"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"pageSize"`
+}
+
 // Workflow is one execution instance of a workflow definition.
 type Workflow struct {
 	ID                   string `json:"id"`
