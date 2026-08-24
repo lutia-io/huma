@@ -117,3 +117,27 @@ func TestBuildListQuery_networkName(t *testing.T) {
 		t.Fatalf("missing network sort: %s", listSQL)
 	}
 }
+
+func TestParseListParams_emptyFilter(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/organization?nameOp=empty&slugOp=empty", nil)
+	params, err := parseListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.NameOp != opEmpty || params.SlugOp != opEmpty {
+		t.Fatalf("got nameOp=%s slugOp=%s", params.NameOp, params.SlugOp)
+	}
+}
+
+func TestBuildListQuery_emptyName(t *testing.T) {
+	params := listParams{
+		UserID: "user-1",
+		NameOp: opEmpty,
+		Sort:   "name",
+		Order:  "asc",
+	}
+	countSQL, _, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "(o.name IS NULL OR BTRIM((o.name)::text) = '')") {
+		t.Fatalf("missing empty name filter: %s", countSQL)
+	}
+}

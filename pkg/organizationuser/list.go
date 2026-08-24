@@ -19,6 +19,7 @@ const (
 	opContains   = "contains"
 	opEq         = "eq"
 	opStartsWith = "startsWith"
+	opEmpty      = "empty"
 
 	organizationUserNameExpr = `(ou.first_name || ' ' || ou.last_name)`
 )
@@ -121,7 +122,7 @@ func normalizeStringOp(op string) (string, error) {
 		return opContains, nil
 	}
 	switch op {
-	case opContains, opEq, opStartsWith:
+	case opContains, opEq, opStartsWith, opEmpty:
 		return op, nil
 	default:
 		return "", apperror.NewBadRequestError("Invalid string filter operator", nil)
@@ -142,6 +143,10 @@ func escapeLike(value string) string {
 }
 
 func applyStringFilter(b *queryBuilder, where *[]string, column, value, op string) {
+	if op == opEmpty {
+		*where = append(*where, fmt.Sprintf("(%s IS NULL OR BTRIM((%s)::text) = '')", column, column))
+		return
+	}
 	pattern := escapeLike(value)
 	switch op {
 	case opEq:
@@ -151,6 +156,10 @@ func applyStringFilter(b *queryBuilder, where *[]string, column, value, op strin
 		pattern = "%" + pattern + "%"
 	}
 	*where = append(*where, fmt.Sprintf("%s ILIKE %s ESCAPE '%s'", column, b.add(pattern), likeEscapeChar))
+}
+
+func hasStringFilter(value, op string) bool {
+	return op == opEmpty || value != ""
 }
 
 func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, listArgs []any) {
@@ -178,13 +187,13 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 			organizationPlaceholder, likeEscapeChar,
 		))
 	}
-	if params.Name != "" {
+	if hasStringFilter(params.Name, params.NameOp) {
 		applyStringFilter(b, &where, organizationUserNameExpr, params.Name, params.NameOp)
 	}
-	if params.Email != "" {
+	if hasStringFilter(params.Email, params.EmailOp) {
 		applyStringFilter(b, &where, "ou.email", params.Email, params.EmailOp)
 	}
-	if params.Organization != "" {
+	if hasStringFilter(params.Organization, params.OrganizationOp) {
 		applyStringFilter(b, &where, "o.name", params.Organization, params.OrganizationOp)
 	}
 

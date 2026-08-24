@@ -27,8 +27,7 @@ type store interface {
 	Insert(ctx context.Context, rec *Record) (string, error)
 	Get(ctx context.Context, recordID string) (*Record, bool, error)
 	GetByID(ctx context.Context, id string) (*Record, error)
-	ListByUserID(ctx context.Context, userID string) ([]*Record, error)
-	ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*Record, error)
+	List(ctx context.Context, params listParams) (*listResult, error)
 	UpdateData(ctx context.Context, recordID string, data json.RawMessage) (bool, error)
 }
 
@@ -167,39 +166,34 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*Record, er
 	return rec, nil
 }
 
-func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*Record, error) {
-	const sql = `
-		SELECT` + recordSelectColumns + `
-		FROM public.records r
-		JOIN public.networks n ON n.id = r.network_id
-		WHERE n.user_id = $1
-			AND r.deleted_at IS NULL
-			AND n.deleted_at IS NULL
-		ORDER BY r.created_at DESC`
+func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
 
-	rows, err := store.db.Query(ctx, sql, userID)
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	return collectRecords(rows)
-}
-
-func (store *postgresStore) ListByOrganization(ctx context.Context, networkID, organizationID string) ([]*Record, error) {
-	const sql = `
-		SELECT` + recordSelectColumns + `
-		FROM public.records r
-		JOIN public.networks n ON n.id = r.network_id
-		WHERE r.network_id = $1
-			AND r.organization_id = $2
-			AND r.deleted_at IS NULL
-			AND n.deleted_at IS NULL
-		ORDER BY r.created_at DESC`
-
-	rows, err := store.db.Query(ctx, sql, networkID, organizationID)
+	items, err := collectRecords(rows)
 	if err != nil {
 		return nil, err
 	}
-	return collectRecords(rows)
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &listResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }
 
 func (store *postgresStore) UpdateData(ctx context.Context, recordID string, data json.RawMessage) (bool, error) {

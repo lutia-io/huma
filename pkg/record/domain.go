@@ -47,3 +47,40 @@ type insertRecordRequest struct {
 type patchRecordRequest struct {
 	Data json.RawMessage `json:"data"`
 }
+
+type fieldFilter struct {
+	Name         string
+	Value        string
+	Op           string
+	Kind         string
+	NumberValue  *float64
+	BooleanValue *bool
+}
+
+type schemaField struct {
+	Name string
+	Kind string
+}
+
+type listParams struct {
+	UserID         string
+	Query          string
+	SchemaID       string
+	NetworkID      string
+	OrganizationID string
+	Organization   string
+	OrganizationOp string
+	Fields         []fieldFilter
+	SchemaFields   map[string]schemaField
+	Sort           string
+	Order          string
+	Page           int
+	PageSize       int
+}
+
+type listResult struct {
+	Items    []*Record `json:"items"`
+	Total    int       `json:"total"`
+	Page     int       `json:"page"`
+	PageSize int       `json:"pageSize"`
+}

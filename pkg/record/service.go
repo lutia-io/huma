@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
@@ -114,28 +115,93 @@ func (s *Service) Get(ctx context.Context, recordID string) (*Record, bool, erro
 	return s.store.Get(ctx, recordID)
 }
 
-func (s *Service) List(ctx context.Context, p principal.Principal) ([]*Record, error) {
+func (s *Service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:
-		records, err := s.store.ListByUserID(ctx, p.ID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list records", logger.KeyUserID, p.ID, logger.KeyError, err)
-			return nil, err
-		}
-		return records, nil
+		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
 			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
 		}
-		records, err := s.store.ListByOrganization(ctx, p.NetworkID, p.OrganizationID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list records", logger.KeyError, err)
-			return nil, err
-		}
-		return records, nil
+		params.UserID = ""
+		params.NetworkID = p.NetworkID
+		params.OrganizationID = p.OrganizationID
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
 	}
+
+	if err := s.resolveListParams(ctx, &params); err != nil {
+		return nil, err
+	}
+
+	result, err := s.store.List(ctx, params)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list records", logger.KeyUserID, p.ID, logger.KeyError, err)
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *Service) resolveListParams(ctx context.Context, params *listParams) error {
+	if params.SchemaID != "" {
+		definition, err := s.schemaService.Definition(ctx, params.SchemaID)
+		if err != nil {
+			return err
+		}
+		fields, err := parseSchemaFields(definition)
+		if err != nil {
+			return apperror.NewBadRequestError("Invalid schema definition", err)
+		}
+		params.SchemaFields = fields
+	}
+
+	if _, reserved := reservedSortColumns[params.Sort]; !reserved && params.SchemaFields != nil {
+		if _, ok := params.SchemaFields[params.Sort]; !ok {
+			return apperror.NewBadRequestError("Invalid sort field", nil)
+		}
+	}
+
+	for i := range params.Fields {
+		field := &params.Fields[i]
+		if params.SchemaFields != nil {
+			meta, ok := params.SchemaFields[field.Name]
+			if !ok {
+				return apperror.NewBadRequestError("Invalid filter field", nil)
+			}
+			field.Kind = meta.Kind
+		} else if field.Op == opGte || field.Op == opLte {
+			field.Kind = fieldKindNumber
+		} else {
+			field.Kind = fieldKindString
+		}
+
+		op, err := normalizeFieldOp(field.Kind, field.Op)
+		if err != nil {
+			return err
+		}
+		field.Op = op
+
+		if field.Op == opEmpty {
+			continue
+		}
+
+		switch field.Kind {
+		case fieldKindNumber:
+			n, convErr := strconv.ParseFloat(field.Value, 64)
+			if convErr != nil {
+				return apperror.NewBadRequestError("Invalid number filter", convErr)
+			}
+			field.NumberValue = &n
+		case fieldKindBoolean:
+			v, boolErr := parseBooleanFilter(field.Value)
+			if boolErr != nil {
+				return boolErr
+			}
+			field.BooleanValue = &v
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) GetVisible(ctx context.Context, p principal.Principal, id string) (*Record, error) {

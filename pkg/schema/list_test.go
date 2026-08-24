@@ -128,3 +128,34 @@ func TestBuildListQuery_scopeAndProperties(t *testing.T) {
 		t.Fatalf("missing properties sort: %s", listSQL)
 	}
 }
+
+func TestParseListParams_emptyFilter(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/schema?nameOp=empty&propertiesOp=empty", nil)
+	params, err := parseListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.NameOp != opEmpty {
+		t.Fatalf("got nameOp=%s", params.NameOp)
+	}
+	if params.PropertiesOp != opEmpty {
+		t.Fatalf("got propertiesOp=%s", params.PropertiesOp)
+	}
+}
+
+func TestBuildListQuery_emptyFilters(t *testing.T) {
+	params := listParams{
+		UserID:       "user-1",
+		NameOp:       opEmpty,
+		PropertiesOp: opEmpty,
+		Sort:         "name",
+		Order:        "asc",
+	}
+	countSQL, _, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "(s.name IS NULL OR BTRIM((s.name)::text) = '')") {
+		t.Fatalf("missing empty name filter: %s", countSQL)
+	}
+	if !strings.Contains(countSQL, "("+propertyCountExpr+") = 0") {
+		t.Fatalf("missing empty properties filter: %s", countSQL)
+	}
+}

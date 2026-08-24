@@ -149,16 +149,16 @@ func buildRunListQuery(params runListParams) (countSQL, listSQL string, countArg
 			networkPlaceholder, likeEscapeChar,
 		))
 	}
-	if params.Name != "" {
+	if hasStringFilter(params.Name, params.NameOp) {
 		applyStringFilter(b, &where, "wd.name", params.Name, params.NameOp)
 	}
 	if params.Status != "" {
 		where = append(where, "w.status = "+b.add(params.Status))
 	}
-	if params.Network != "" {
+	if hasStringFilter(params.Network, params.NetworkOp) {
 		applyStringFilter(b, &where, "n.name", params.Network, params.NetworkOp)
 	}
-	if params.Organization != "" {
+	if hasStringFilter(params.Organization, params.OrganizationOp) {
 		applyStringFilter(b, &where, "o.name", params.Organization, params.OrganizationOp)
 	}
 

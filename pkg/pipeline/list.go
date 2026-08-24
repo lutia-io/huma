@@ -19,6 +19,7 @@ const (
 	opContains   = "contains"
 	opEq         = "eq"
 	opStartsWith = "startsWith"
+	opEmpty      = "empty"
 	opGte        = "gte"
 	opLte        = "lte"
 
@@ -109,7 +110,9 @@ func parseListParams(r *http.Request) (listParams, error) {
 		}
 	}
 
-	if value := strings.TrimSpace(query.Get("stages")); value != "" {
+	if params.StagesOp == opEmpty {
+		// value is optional for empty
+	} else if value := strings.TrimSpace(query.Get("stages")); value != "" {
 		count, convErr := strconv.Atoi(value)
 		if convErr != nil || count < 0 {
 			return listParams{}, apperror.NewBadRequestError("Invalid stages filter", nil)
@@ -162,7 +165,7 @@ func normalizeStringOp(op string) (string, error) {
 		return opContains, nil
 	}
 	switch op {
-	case opContains, opEq, opStartsWith:
+	case opContains, opEq, opStartsWith, opEmpty:
 		return op, nil
 	default:
 		return "", apperror.NewBadRequestError("Invalid string filter operator", nil)
@@ -183,6 +186,10 @@ func escapeLike(value string) string {
 }
 
 func applyStringFilter(b *queryBuilder, where *[]string, column, value, op string) {
+	if op == opEmpty {
+		*where = append(*where, fmt.Sprintf("(%s IS NULL OR BTRIM((%s)::text) = '')", column, column))
+		return
+	}
 	pattern := escapeLike(value)
 	switch op {
 	case opEq:
@@ -192,6 +199,10 @@ func applyStringFilter(b *queryBuilder, where *[]string, column, value, op strin
 		pattern = "%" + pattern + "%"
 	}
 	*where = append(*where, fmt.Sprintf("%s ILIKE %s ESCAPE '%s'", column, b.add(pattern), likeEscapeChar))
+}
+
+func hasStringFilter(value, op string) bool {
+	return op == opEmpty || value != ""
 }
 
 func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, listArgs []any) {
@@ -221,19 +232,21 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 			networkPlaceholder, likeEscapeChar,
 		))
 	}
-	if params.Name != "" {
+	if hasStringFilter(params.Name, params.NameOp) {
 		applyStringFilter(b, &where, "pd.name", params.Name, params.NameOp)
 	}
-	if params.Slug != "" {
+	if hasStringFilter(params.Slug, params.SlugOp) {
 		applyStringFilter(b, &where, "pd.slug", params.Slug, params.SlugOp)
 	}
-	if params.Network != "" {
+	if hasStringFilter(params.Network, params.NetworkOp) {
 		applyStringFilter(b, &where, "n.name", params.Network, params.NetworkOp)
 	}
-	if params.Source != "" {
+	if hasStringFilter(params.Source, params.SourceOp) {
 		applyStringFilter(b, &where, "("+sourceExpr+")", params.Source, params.SourceOp)
 	}
-	if params.Stages != nil {
+	if params.StagesOp == opEmpty {
+		where = append(where, "("+stageCountExpr+") = 0")
+	} else if params.Stages != nil {
 		operator := "="
 		switch params.StagesOp {
 		case opGte:

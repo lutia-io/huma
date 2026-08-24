@@ -19,6 +19,7 @@ const (
 	opContains   = "contains"
 	opEq         = "eq"
 	opStartsWith = "startsWith"
+	opEmpty      = "empty"
 	opGte        = "gte"
 	opLte        = "lte"
 
@@ -92,7 +93,9 @@ func parseListParams(r *http.Request) (listParams, error) {
 		}
 	}
 
-	if value := strings.TrimSpace(query.Get("sizeBytes")); value != "" {
+	if params.SizeBytesOp == opEmpty {
+		// value is optional for empty
+	} else if value := strings.TrimSpace(query.Get("sizeBytes")); value != "" {
 		size, convErr := strconv.ParseInt(value, 10, 64)
 		if convErr != nil || size < 0 {
 			return listParams{}, apperror.NewBadRequestError("Invalid size filter", nil)
@@ -148,7 +151,7 @@ func normalizeStringOp(op string) (string, error) {
 		return opContains, nil
 	}
 	switch op {
-	case opContains, opEq, opStartsWith:
+	case opContains, opEq, opStartsWith, opEmpty:
 		return op, nil
 	default:
 		return "", apperror.NewBadRequestError("Invalid string filter operator", nil)
@@ -169,6 +172,10 @@ func escapeLike(value string) string {
 }
 
 func applyStringFilter(b *queryBuilder, where *[]string, column, value, op string) {
+	if op == opEmpty {
+		*where = append(*where, fmt.Sprintf("(%s IS NULL OR BTRIM((%s)::text) = '')", column, column))
+		return
+	}
 	pattern := escapeLike(value)
 	switch op {
 	case opEq:
@@ -178,6 +185,10 @@ func applyStringFilter(b *queryBuilder, where *[]string, column, value, op strin
 		pattern = "%" + pattern + "%"
 	}
 	*where = append(*where, fmt.Sprintf("%s ILIKE %s ESCAPE '%s'", column, b.add(pattern), likeEscapeChar))
+}
+
+func hasStringFilter(value, op string) bool {
+	return op == opEmpty || value != ""
 }
 
 func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, listArgs []any) {
@@ -207,13 +218,15 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 			organizationPlaceholder, likeEscapeChar,
 		))
 	}
-	if params.Filename != "" {
+	if hasStringFilter(params.Filename, params.FilenameOp) {
 		applyStringFilter(b, &where, "f.filename", params.Filename, params.FilenameOp)
 	}
 	if params.ContentType != "" {
 		where = append(where, "("+fileKindExpr+") = "+b.add(params.ContentType))
 	}
-	if params.SizeBytes != nil {
+	if params.SizeBytesOp == opEmpty {
+		where = append(where, "(f.size_bytes IS NULL OR f.size_bytes = 0)")
+	} else if params.SizeBytes != nil {
 		operator := "="
 		switch params.SizeBytesOp {
 		case opGte:
@@ -223,7 +236,7 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		}
 		where = append(where, fmt.Sprintf("f.size_bytes %s %s", operator, b.add(*params.SizeBytes)))
 	}
-	if params.Organization != "" {
+	if hasStringFilter(params.Organization, params.OrganizationOp) {
 		applyStringFilter(b, &where, "o.name", params.Organization, params.OrganizationOp)
 	}
 

@@ -26,6 +26,23 @@ func NewService(logger *logger.Logger, store store) *Service {
 	}
 }
 
+// Definition returns the JSON Schema document for a schema ID.
+func (s *Service) Definition(ctx context.Context, schemaID string) (json.RawMessage, error) {
+	if !uuid.Valid(schemaID) {
+		return nil, apperror.NewBadRequestError("Invalid schema ID", nil)
+	}
+	sch, err := s.store.GetByID(ctx, schemaID)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to load schema", "schema_id", schemaID, logger.KeyError, err)
+		return nil, err
+	}
+	return sch.Definition, nil
+}
+
 func (s *Service) ValidateRecordData(ctx context.Context, schemaID string, data json.RawMessage) error {
 	sch, err := s.store.GetByID(ctx, schemaID)
 	if err != nil {

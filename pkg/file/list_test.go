@@ -140,3 +140,34 @@ func TestBuildListQuery_typeSizeAndOrganization(t *testing.T) {
 		t.Fatalf("missing type sort: %s", listSQL)
 	}
 }
+
+func TestParseListParams_emptyFilter(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/file?filenameOp=empty&sizeBytesOp=empty", nil)
+	params, err := parseListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.FilenameOp != opEmpty {
+		t.Fatalf("got filenameOp=%s", params.FilenameOp)
+	}
+	if params.SizeBytesOp != opEmpty {
+		t.Fatalf("got sizeBytesOp=%s", params.SizeBytesOp)
+	}
+}
+
+func TestBuildListQuery_emptyFilters(t *testing.T) {
+	params := listParams{
+		UserID:      "user-1",
+		FilenameOp:  opEmpty,
+		SizeBytesOp: opEmpty,
+		Sort:        "filename",
+		Order:       "asc",
+	}
+	countSQL, _, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "(f.filename IS NULL OR BTRIM((f.filename)::text) = '')") {
+		t.Fatalf("missing empty filename filter: %s", countSQL)
+	}
+	if !strings.Contains(countSQL, "(f.size_bytes IS NULL OR f.size_bytes = 0)") {
+		t.Fatalf("missing empty size filter: %s", countSQL)
+	}
+}
