@@ -42,3 +42,5 @@ spec:
               value: {{ .Values.secret.jwtSecret | quote }}
             - name: HUMA_WORKFLOW_WORKER_COUNT
               value: {{ .Values.workflow.workerCount | quote }}
+            - name: HUMA_PIPELINE_WORKER_COUNT
+              value: {{ .Values.pipeline.workerCount | quote }}

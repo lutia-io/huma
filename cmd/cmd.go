@@ -21,6 +21,8 @@ func Execute() {
 		NewWorkflowEvaluator(args)
 	case "workflow-executor":
 		NewWorkflowExecutor(args)
+	case "pipeline-executor":
+		NewPipelineExecutor(args)
 	case "-h", "--help", "help":
 		printUsage()
 	default:
@@ -37,4 +39,5 @@ func printUsage() {
 	fmt.Fprintln(os.Stdout, "  api                	The api service serves the main public api.")
 	fmt.Fprintln(os.Stdout, "  workflow-evaluator 	Consumes record events, evaluates workflow criteria, and inserts pending workflows.")
 	fmt.Fprintln(os.Stdout, "  workflow-executor  	Claims pending workflows and executes their actions.")
+	fmt.Fprintln(os.Stdout, "  pipeline-executor  	Claims pending pipelines and executes their nodes.")
 }

@@ -7,29 +7,28 @@ import (
 
 	"github.com/lutia-io/huma/pkg/action"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/pipeline"
 	"github.com/lutia-io/huma/pkg/resolver"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
 )
 
-// TriggerPipeline handles action.TypeTriggerPipeline. Today it is a stub that
-// logs and returns; the durable handoff to the pipeline engine will be a
-// published message keyed by the action idempotency key.
-type TriggerPipeline struct {
-	logger *logger.Logger
+type PipelineEnqueuer interface {
+	Enqueue(ctx context.Context, req pipeline.EnqueueRequest) (string, error)
 }
 
-func NewTriggerPipeline(logger *logger.Logger) *TriggerPipeline {
-	return &TriggerPipeline{logger: logger}
+type TriggerPipeline struct {
+	logger   *logger.Logger
+	enqueuer PipelineEnqueuer
+}
+
+func NewTriggerPipeline(logger *logger.Logger, enqueuer PipelineEnqueuer) *TriggerPipeline {
+	return &TriggerPipeline{logger: logger, enqueuer: enqueuer}
 }
 
 func (h *TriggerPipeline) Type() action.Type {
 	return action.TypeTriggerPipeline
 }
 
-// Execute is a stub: it logs the trigger and completes. It will eventually
-// publish to a pipelines subject using execCtx.IdempotencyKey as the message
-// ID so the broker dedupes replayed attempts; the pipeline engine consumes
-// from there. The workflow's responsibility ends at the publish.
 func (h *TriggerPipeline) Execute(ctx context.Context, execCtx executor.ExecutionContext, act action.Action) (json.RawMessage, error) {
 	c, ok := act.Context.(action.TriggerPipelineContext)
 	if !ok {
@@ -44,15 +43,27 @@ func (h *TriggerPipeline) Execute(ctx context.Context, execCtx executor.Executio
 		return nil, fmt.Errorf("resolving pipeline input: %w", err)
 	}
 
-	h.logger.InfoContext(ctx, "TRIGGER_PIPELINE stub: pipeline trigger not yet implemented",
+	id, err := h.enqueuer.Enqueue(ctx, pipeline.EnqueueRequest{
+		PipelineSlug:       c.Pipeline,
+		NetworkID:          execCtx.NetworkID,
+		OrganizationID:     execCtx.OrganizationID,
+		OrganizationUserID: execCtx.OrganizationUserID,
+		Input:              input,
+		DedupeKey:          execCtx.IdempotencyKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	h.logger.InfoContext(ctx, "Enqueued pipeline from workflow",
 		logger.KeyID, execCtx.WorkflowID,
 		"pipeline", c.Pipeline,
+		"pipeline_id", id,
 		"record_id", execCtx.TriggerRecordID,
-		"idempotency_key", execCtx.IdempotencyKey,
 	)
 
 	return json.Marshal(map[string]any{
-		"id":    "some-pipeline-id",
+		"id":    id,
 		"input": input,
 	})
 }

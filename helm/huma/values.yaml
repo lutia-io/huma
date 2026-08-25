@@ -11,6 +11,9 @@ deployment:
 workflow:
   workerCount: 4
 
+pipeline:
+  workerCount: 4
+
 service:
   type: LoadBalancer
   port: 8000

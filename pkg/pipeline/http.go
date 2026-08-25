@@ -26,6 +26,13 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /pipeline-definition", h.List)
 	mux.HandleFunc("GET /pipeline-definition/{id}", h.Get)
 	mux.HandleFunc("POST /pipeline-definition", h.Insert)
+	mux.HandleFunc("PATCH /pipeline-definition/{id}", h.Patch)
+
+	mux.HandleFunc("POST /pipeline", h.InsertPipeline)
+	mux.HandleFunc("GET /pipeline", h.ListPipelines)
+	mux.HandleFunc("GET /pipeline/{id}", h.GetPipeline)
+	mux.HandleFunc("GET /pipeline/{id}/node", h.ListPipelineNodes)
+	mux.HandleFunc("GET /pipeline-node/{id}", h.GetPipelineNode)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +90,6 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	// Internal pipeline definitions are not allowed to be created via the API
 	req.Internal = false
 
 	id, err := h.service.Insert(r.Context(), req)
@@ -92,4 +98,122 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	existing, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	var req patchPipelineDefinitionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
+		return
+	}
+	if err := h.service.Patch(r.Context(), existing, req); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, map[string]string{"id": existing.ID})
+}
+
+func (h *httpHandler) InsertPipeline(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	if err := principal.RequireOrganizationUser(p, p.NetworkID, p.OrganizationID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	var req insertPipelineRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
+		return
+	}
+	id, err := h.service.Enqueue(r.Context(), EnqueueRequest{
+		PipelineDefinitionID: req.PipelineDefinitionID,
+		NetworkID:            p.NetworkID,
+		OrganizationID:       p.OrganizationID,
+		OrganizationUserID:   p.ID,
+		Input:                req.Input,
+		DedupeKey:            req.DedupeKey,
+	})
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *httpHandler) ListPipelines(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	params, err := parseRunListParams(r)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	result, err := h.service.ListPipelines(r.Context(), p, params)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *httpHandler) GetPipeline(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	run, err := h.service.GetPipeline(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, run)
+}
+
+func (h *httpHandler) ListPipelineNodes(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	nodes, err := h.service.ListPipelineNodes(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, nodes)
+}
+
+func (h *httpHandler) GetPipelineNode(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	n, err := h.service.GetPipelineNode(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, n)
 }

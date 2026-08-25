@@ -23,7 +23,43 @@ func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 }
 
 func (h *httpHandler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /node-definition", h.List)
+	mux.HandleFunc("GET /node-definition/{id}", h.Get)
 	mux.HandleFunc("POST /node-definition", h.Insert)
+	mux.HandleFunc("PATCH /node-definition/{id}", h.Patch)
+}
+
+func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	params, err := parseListParams(r)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	result, err := h.service.List(r.Context(), p, params)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *httpHandler) Get(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	n, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, n)
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +84,6 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	// Internal node definitions are not allowed to be created via the API
 	req.Internal = false
 
 	id, err := h.service.Insert(r.Context(), req)
@@ -57,4 +92,31 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	existing, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	var req patchNodeDefinitionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
+		return
+	}
+	if err := h.service.Patch(r.Context(), existing, req); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, map[string]string{"id": existing.ID})
 }

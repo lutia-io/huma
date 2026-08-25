@@ -169,3 +169,49 @@ func TestResolveNilRecord(t *testing.T) {
 		t.Errorf("literal = %v, want hello", got["literal"])
 	}
 }
+
+func TestResolveInputIndex(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]any
+		want map[string]any
+	}{
+		{
+			name: "dotted numeric index",
+			data: map[string]any{"org": "{{ .Input.1.body.name }}"},
+			want: map[string]any{"org": "Beta"},
+		},
+		{
+			name: "mixed text interpolates numeric index",
+			data: map[string]any{"url": "https://example.com/{{ .Input.1.body.name }}"},
+			want: map[string]any{"url": "https://example.com/Beta"},
+		},
+		{
+			name: "level 0 named field still works",
+			data: map[string]any{"orgId": "{{ .Input.orgId }}"},
+			want: map[string]any{"orgId": "acme"},
+		},
+	}
+
+	named := map[string]any{"orgId": "acme"}
+	indexed := map[string]any{
+		"0": map[string]any{"status": float64(200), "body": map[string]any{"users": []any{map[string]any{"id": "u1"}}}},
+		"1": map[string]any{"status": float64(200), "body": map[string]any{"name": "Beta"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := indexed
+			if tt.name == "level 0 named field still works" {
+				in = named
+			}
+			got, err := ResolveInput(tt.data, in)
+			if err != nil {
+				t.Fatalf("ResolveInput() error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ResolveInput() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}

@@ -13,6 +13,7 @@ Commands:
   api                	The api service serves the main public api.
   workflow-evaluator 	Consumes record events, evaluates workflow criteria, and inserts pending workflows.
   workflow-executor  	Claims pending workflows and executes their actions.
+  pipeline-executor  	Claims pending pipelines and executes their nodes.
 ```
 
 
