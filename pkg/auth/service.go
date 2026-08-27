@@ -51,6 +51,9 @@ type logoutRequest struct {
 type meResponse struct {
 	PrincipalType  string `json:"principalType"`
 	ID             string `json:"id"`
+	FirstName      string `json:"firstName"`
+	LastName       string `json:"lastName"`
+	Email          string `json:"email"`
 	NetworkID      string `json:"networkId,omitempty"`
 	OrganizationID string `json:"organizationId,omitempty"`
 }
@@ -168,13 +171,37 @@ func (s *service) Logout(ctx context.Context, refreshToken string) error {
 	return s.store.RevokeFamily(ctx, row.FamilyID, time.Now().UTC())
 }
 
-func (s *service) Me(p principal.Principal) meResponse {
-	return meResponse{
+func (s *service) Me(ctx context.Context, p principal.Principal) (*meResponse, error) {
+	var (
+		profile *identityProfile
+		err     error
+	)
+	switch p.Type {
+	case principal.TypeUser:
+		profile, err = s.store.GetUserByID(ctx, p.ID)
+	case principal.TypeOrganizationUser:
+		profile, err = s.store.GetOrganizationUserByID(ctx, p.ID)
+	default:
+		return nil, apperror.NewUnauthorizedError("Invalid access token", nil)
+	}
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, apperror.NewUnauthorizedError("Authentication required", err)
+		}
+		s.logger.ErrorContext(ctx, "Failed to load current user", logger.KeyError, err)
+		return nil, apperror.NewInternalError("Failed to load current user", err)
+	}
+
+	return &meResponse{
 		PrincipalType:  string(p.Type),
 		ID:             p.ID,
+		FirstName:      profile.FirstName,
+		LastName:       profile.LastName,
+		Email:          profile.Email,
 		NetworkID:      p.NetworkID,
 		OrganizationID: p.OrganizationID,
-	}
+	}, nil
 }
 
 func (s *service) ParseAccessToken(token string) (principal.Principal, error) {

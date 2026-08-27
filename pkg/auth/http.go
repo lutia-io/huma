@@ -98,7 +98,12 @@ func (h *httpHandler) Me(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, h.service.Me(p))
+	me, err := h.service.Me(r.Context(), p)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, me)
 }
 
 func clientIP(r *http.Request) string {

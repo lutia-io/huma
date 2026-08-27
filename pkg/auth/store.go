@@ -48,9 +48,18 @@ type identityOrganization struct {
 	NetworkID string
 }
 
+type identityProfile struct {
+	ID        string
+	FirstName string
+	LastName  string
+	Email     string
+}
+
 type store interface {
 	GetUserByEmail(ctx context.Context, email string) (*identityUser, error)
+	GetUserByID(ctx context.Context, id string) (*identityProfile, error)
 	GetOrganizationUserByEmail(ctx context.Context, email, networkID, organizationID string) (*identityOrganizationUser, error)
+	GetOrganizationUserByID(ctx context.Context, id string) (*identityProfile, error)
 	GetOrganizationByID(ctx context.Context, id string) (*identityOrganization, error)
 	NetworkExists(ctx context.Context, id string) (bool, error)
 	InsertToken(ctx context.Context, row *token) error
@@ -83,6 +92,22 @@ func (s *postgresStore) GetUserByEmail(ctx context.Context, email string) (*iden
 	return u, nil
 }
 
+func (s *postgresStore) GetUserByID(ctx context.Context, id string) (*identityProfile, error) {
+	const sql = `
+		SELECT id, first_name, last_name, email
+		FROM public.users
+		WHERE id = $1 AND deleted_at IS NULL`
+	p := &identityProfile{}
+	err := s.db.QueryRow(ctx, sql, id).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.NewNotFoundError("User not found", err)
+		}
+		return nil, err
+	}
+	return p, nil
+}
+
 func (s *postgresStore) GetOrganizationUserByEmail(ctx context.Context, email, networkID, organizationID string) (*identityOrganizationUser, error) {
 	const sql = `
 		SELECT id, email, password, organization_id, network_id
@@ -102,6 +127,22 @@ func (s *postgresStore) GetOrganizationUserByEmail(ctx context.Context, email, n
 		return nil, err
 	}
 	return u, nil
+}
+
+func (s *postgresStore) GetOrganizationUserByID(ctx context.Context, id string) (*identityProfile, error) {
+	const sql = `
+		SELECT id, first_name, last_name, email
+		FROM public.organization_users
+		WHERE id = $1 AND deleted_at IS NULL`
+	p := &identityProfile{}
+	err := s.db.QueryRow(ctx, sql, id).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.NewNotFoundError("Organization user not found", err)
+		}
+		return nil, err
+	}
+	return p, nil
 }
 
 func (s *postgresStore) GetOrganizationByID(ctx context.Context, id string) (*identityOrganization, error) {
