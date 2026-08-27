@@ -153,6 +153,50 @@ func (s *service) Patch(ctx context.Context, existing *organizationUser, req pat
 	return nil
 }
 
+func (s *service) UpdatePassword(ctx context.Context, existing *organizationUser, req updatePasswordRequest) error {
+	if req.CurrentPassword == "" {
+		return apperror.NewBadRequestError("Current password is required", nil)
+	}
+	if req.NewPassword == "" {
+		return apperror.NewBadRequestError("New password is required", nil)
+	}
+	if req.NewPassword == req.CurrentPassword {
+		return apperror.NewBadRequestError("New password must be different", nil)
+	}
+
+	hashedCurrent, err := s.store.GetPasswordByID(ctx, existing.ID)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to load current password", logger.KeyID, existing.ID, logger.KeyError, err)
+		return apperror.NewInternalError("Failed to update password", err)
+	}
+
+	ok, err := s.hasher.Compare(req.CurrentPassword, hashedCurrent)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to compare password", logger.KeyError, err)
+		return apperror.NewInternalError("Failed to update password", err)
+	}
+	if !ok {
+		return apperror.NewBadRequestError("Current password is incorrect", nil)
+	}
+
+	hashedPassword, err := s.hasher.Hash(req.NewPassword)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to hash password", logger.KeyError, err)
+		return apperror.NewInternalError("Failed to hash password", err)
+	}
+
+	if err := s.store.UpdatePassword(ctx, existing.ID, hashedPassword); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to update password", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully updated password", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:

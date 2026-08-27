@@ -12,7 +12,10 @@ import (
 
 type store interface {
 	Insert(ctx context.Context, user *user) (string, error)
+	GetByID(ctx context.Context, id string) (*user, error)
 	GetByEmail(ctx context.Context, email string) (*user, error)
+	Update(ctx context.Context, user *user) error
+	UpdatePassword(ctx context.Context, id, hashedPassword string) error
 }
 
 type postgresStore struct {
@@ -54,14 +57,8 @@ func (store *postgresStore) Insert(ctx context.Context, user *user) (string, err
 	return user.ID, nil
 }
 
-func (store *postgresStore) GetByEmail(ctx context.Context, email string) (*user, error) {
-	const sql = `
-		SELECT id, first_name, last_name, email, password, created_at, updated_at, deleted_at
-		FROM public.users
-		WHERE email = $1 AND deleted_at IS NULL`
-
-	u := &user{}
-	err := store.db.QueryRow(ctx, sql, email).Scan(
+func scanUser(row pgx.Row, u *user) error {
+	return row.Scan(
 		&u.ID,
 		&u.FirstName,
 		&u.LastName,
@@ -71,6 +68,16 @@ func (store *postgresStore) GetByEmail(ctx context.Context, email string) (*user
 		&u.UpdatedAt,
 		&u.DeletedAt,
 	)
+}
+
+func (store *postgresStore) GetByID(ctx context.Context, id string) (*user, error) {
+	const sql = `
+		SELECT id, first_name, last_name, email, password, created_at, updated_at, deleted_at
+		FROM public.users
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	u := &user{}
+	err := scanUser(store.db.QueryRow(ctx, sql, id), u)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperror.NewNotFoundError("User not found", err)
@@ -78,4 +85,60 @@ func (store *postgresStore) GetByEmail(ctx context.Context, email string) (*user
 		return nil, err
 	}
 	return u, nil
+}
+
+func (store *postgresStore) GetByEmail(ctx context.Context, email string) (*user, error) {
+	const sql = `
+		SELECT id, first_name, last_name, email, password, created_at, updated_at, deleted_at
+		FROM public.users
+		WHERE email = $1 AND deleted_at IS NULL`
+
+	u := &user{}
+	err := scanUser(store.db.QueryRow(ctx, sql, email), u)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.NewNotFoundError("User not found", err)
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func (store *postgresStore) Update(ctx context.Context, user *user) error {
+	const sql = `
+		UPDATE public.users
+		SET first_name = $2,
+			last_name = $3,
+			updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	tag, err := store.db.Exec(ctx, sql,
+		user.ID,
+		user.FirstName,
+		user.LastName,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewNotFoundError("User not found", nil)
+	}
+	return nil
+}
+
+func (store *postgresStore) UpdatePassword(ctx context.Context, id, hashedPassword string) error {
+	const sql = `
+		UPDATE public.users
+		SET password = $2,
+			updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	tag, err := store.db.Exec(ctx, sql, id, hashedPassword)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewNotFoundError("User not found", nil)
+	}
+	return nil
 }

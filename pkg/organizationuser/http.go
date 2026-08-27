@@ -28,6 +28,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /organization-user/{id}", h.Get)
 	mux.HandleFunc("POST /organization-user", h.Insert)
 	mux.HandleFunc("PATCH /organization-user/{id}", h.Patch)
+	mux.HandleFunc("POST /organization-user/{id}/password", h.UpdatePassword)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -110,9 +111,11 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
-		render.WriteError(w, err)
-		return
+	if p.Type != principal.TypeOrganizationUser || p.ID != existing.ID {
+		if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+			render.WriteError(w, err)
+			return
+		}
 	}
 	var req patchOrganizationUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -124,4 +127,36 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusOK, map[string]string{"id": existing.ID})
+}
+
+func (h *httpHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	if err := principal.RequireOrganizationUser(p, "", ""); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	id := r.PathValue("id")
+	if id != p.ID {
+		render.WriteError(w, apperror.NewNotFoundError("Organization user not found", nil))
+		return
+	}
+	existing, err := h.service.Get(r.Context(), p, id)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	var req updatePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
+		return
+	}
+	if err := h.service.UpdatePassword(r.Context(), existing, req); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -40,3 +40,13 @@ type insertUserRequest struct {
 	Email     string `json:"email"`
 	Password  string `json:"password"`
 }
+
+type patchUserRequest struct {
+	FirstName *string `json:"firstName"`
+	LastName  *string `json:"lastName"`
+}
+
+type updatePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}

@@ -58,6 +58,11 @@ type patchOrganizationUserRequest struct {
 	Password  *string `json:"password"`
 }
 
+type updatePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
 type listParams struct {
 	UserID         string
 	Query          string

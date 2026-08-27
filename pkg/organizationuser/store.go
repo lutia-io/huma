@@ -27,6 +27,8 @@ type store interface {
 	Update(ctx context.Context, organizationUser *organizationUser, hashedPassword *string) error
 	GetByID(ctx context.Context, id string) (*organizationUser, error)
 	GetByEmail(ctx context.Context, email, networkID, organizationID string) (*organizationUser, error)
+	GetPasswordByID(ctx context.Context, id string) (string, error)
+	UpdatePassword(ctx context.Context, id, hashedPassword string) error
 	List(ctx context.Context, params listParams) (*listResult, error)
 }
 
@@ -190,6 +192,38 @@ func (store *postgresStore) GetByEmail(ctx context.Context, email, networkID, or
 		return nil, err
 	}
 	return u, nil
+}
+
+func (store *postgresStore) GetPasswordByID(ctx context.Context, id string) (string, error) {
+	const sql = `
+		SELECT password
+		FROM public.organization_users
+		WHERE id = $1 AND deleted_at IS NULL`
+	var password string
+	err := store.db.QueryRow(ctx, sql, id).Scan(&password)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", apperror.NewNotFoundError("Organization user not found", err)
+		}
+		return "", err
+	}
+	return password, nil
+}
+
+func (store *postgresStore) UpdatePassword(ctx context.Context, id, hashedPassword string) error {
+	const sql = `
+		UPDATE public.organization_users
+		SET password = $2,
+			updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL`
+	tag, err := store.db.Exec(ctx, sql, id, hashedPassword)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewNotFoundError("Organization user not found", nil)
+	}
+	return nil
 }
 
 func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
