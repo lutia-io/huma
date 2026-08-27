@@ -106,6 +106,15 @@ func (s *service) Patch(ctx context.Context, existing *organization, req patchOr
 	return nil
 }
 
+func (s *service) Delete(ctx context.Context, existing *organization) error {
+	if err := s.store.Delete(ctx, existing.ID); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to delete organization", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully deleted organization", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:

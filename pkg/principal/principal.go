@@ -51,6 +51,17 @@ func RequireUser(p Principal, networkID string) error {
 	return nil
 }
 
+// RequireCreator ensures the caller is the platform user who created the resource.
+func RequireCreator(p Principal, userID, networkID string) error {
+	if err := RequireUser(p, networkID); err != nil {
+		return err
+	}
+	if p.ID != userID {
+		return apperror.NewUnauthorizedError("Only the creator can perform this action", nil)
+	}
+	return nil
+}
+
 // RequireOrganizationUser ensures the caller is an organization user whose
 // token matches the given network and organization.
 func RequireOrganizationUser(p Principal, networkID, organizationID string) error {

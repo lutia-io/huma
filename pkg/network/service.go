@@ -96,6 +96,15 @@ func (s *service) Patch(ctx context.Context, existing *network, req patchNetwork
 	return nil
 }
 
+func (s *service) Delete(ctx context.Context, existing *network) error {
+	if err := s.store.Delete(ctx, existing.ID); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to delete network", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully deleted network", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *service) List(ctx context.Context, p principal.Principal) ([]*network, error) {
 	switch p.Type {
 	case principal.TypeUser:

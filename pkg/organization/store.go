@@ -19,6 +19,7 @@ const organizationListSelectColumns = `
 type store interface {
 	Insert(ctx context.Context, organization *organization) (string, error)
 	Update(ctx context.Context, organization *organization) error
+	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*organization, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 }
@@ -74,6 +75,22 @@ func (store *postgresStore) Update(ctx context.Context, organization *organizati
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return apperror.NewConflictError("Organization already exists", err)
 		}
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewNotFoundError("Organization not found", nil)
+	}
+	return nil
+}
+
+func (store *postgresStore) Delete(ctx context.Context, id string) error {
+	const sql = `
+		UPDATE public.organizations
+		SET deleted_at = now(), updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	tag, err := store.db.Exec(ctx, sql, id)
+	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
