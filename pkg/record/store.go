@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,6 +28,7 @@ type store interface {
 	Insert(ctx context.Context, rec *Record) (string, error)
 	Get(ctx context.Context, recordID string) (*Record, bool, error)
 	GetByID(ctx context.Context, id string) (*Record, error)
+	GetByIDs(ctx context.Context, ids []string) ([]*Record, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 	UpdateData(ctx context.Context, recordID string, data json.RawMessage) (bool, error)
 }
@@ -166,6 +168,32 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*Record, er
 	return rec, nil
 }
 
+func (store *postgresStore) GetByIDs(ctx context.Context, ids []string) ([]*Record, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	b := &queryBuilder{}
+	placeholders := make([]string, len(ids))
+	for i, id := range ids {
+		placeholders[i] = b.add(id)
+	}
+
+	sql := `
+		SELECT` + recordSelectColumns + `
+		FROM public.records r
+		JOIN public.networks n ON n.id = r.network_id
+		WHERE r.id IN (` + strings.Join(placeholders, ",") + `)
+			AND r.deleted_at IS NULL
+			AND n.deleted_at IS NULL`
+
+	rows, err := store.db.Query(ctx, sql, b.args...)
+	if err != nil {
+		return nil, err
+	}
+	return collectRecords(rows)
+}
+
 func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
 	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
 
@@ -190,6 +218,7 @@ func (store *postgresStore) List(ctx context.Context, params listParams) (*listR
 
 	return &listResult{
 		Items:    items,
+		Related:  map[string]RelatedRecord{},
 		Total:    total,
 		Page:     params.Page,
 		PageSize: pageSize,

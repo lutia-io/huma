@@ -13,11 +13,10 @@ import (
 // otherwise create under schemaId.
 type UpsertRecord struct {
 	records RecordService
-	schemas SchemaService
 }
 
-func NewUpsertRecord(records RecordService, schemas SchemaService) *UpsertRecord {
-	return &UpsertRecord{records: records, schemas: schemas}
+func NewUpsertRecord(records RecordService) *UpsertRecord {
+	return &UpsertRecord{records: records}
 }
 
 func (h *UpsertRecord) Type() action.Type {
@@ -33,13 +32,17 @@ func (h *UpsertRecord) Execute(ctx context.Context, execCtx executor.ExecutionCo
 		return nil, fmt.Errorf("invalid context type %T for UPSERT_RECORD", act.Context)
 	}
 
-	if c.RecordID != "" {
-		existing, found, err := h.records.Get(ctx, c.RecordID)
+	recordID, err := resolveRecordID(execCtx, c.RecordID)
+	if err != nil {
+		return nil, err
+	}
+	if recordID != "" {
+		existing, found, err := h.records.Get(ctx, recordID)
 		if err != nil {
-			return nil, fmt.Errorf("loading record %q: %w", c.RecordID, err)
+			return nil, fmt.Errorf("loading record %q: %w", recordID, err)
 		}
 		if found {
-			return updateRecord(ctx, h.records, h.schemas, execCtx, existing, c.Data)
+			return updateRecord(ctx, h.records, execCtx, existing, c.Data)
 		}
 	}
 

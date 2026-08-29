@@ -38,7 +38,7 @@ func (h *TriggerPipeline) Execute(ctx context.Context, execCtx executor.Executio
 		return nil, fmt.Errorf("TRIGGER_PIPELINE requires a pipeline")
 	}
 
-	input, err := resolver.Resolve(c.Input, execCtx.TriggerData)
+	input, err := resolver.Resolve(c.Input, trigger(execCtx))
 	if err != nil {
 		return nil, fmt.Errorf("resolving pipeline input: %w", err)
 	}

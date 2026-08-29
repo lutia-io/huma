@@ -13,6 +13,11 @@ type httpHandler struct {
 	service *Service
 }
 
+type recordResponse struct {
+	*Record
+	Related map[string]RelatedRecord `json:"related"`
+}
+
 func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 	handler := &httpHandler{
 		service: service,
@@ -53,12 +58,12 @@ func (h *httpHandler) Get(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	rec, err := h.service.GetVisible(r.Context(), p, r.PathValue("id"))
+	rec, related, err := h.service.GetVisibleWithRelated(r.Context(), p, r.PathValue("id"))
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, rec)
+	render.WriteJSON(w, http.StatusOK, recordResponse{Record: rec, Related: related})
 }
 
 func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {

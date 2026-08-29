@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
@@ -117,6 +118,9 @@ func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 		s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
 		return "", apperror.NewBadRequestError(err.Error(), err)
 	}
+	if err := s.validateForeignTargets(ctx, req.Definition, networkID, organizationID); err != nil {
+		return "", err
+	}
 
 	schema := &schema{
 		Name:           name,
@@ -179,6 +183,9 @@ func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRe
 		if err := validator.ValidateDefinition(req.Definition); err != nil {
 			s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
 			return apperror.NewBadRequestError(err.Error(), err)
+		}
+		if err := s.validateForeignTargets(ctx, req.Definition, existing.NetworkID, existing.OrganizationID); err != nil {
+			return err
 		}
 		existing.Definition = req.Definition
 	}
@@ -248,4 +255,73 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*s
 	}
 
 	return sch, nil
+}
+
+// Snapshot is the subset of a schema needed to resolve foreign fields.
+type Snapshot struct {
+	ID             string
+	Name           string
+	Definition     json.RawMessage
+	NetworkID      string
+	OrganizationID *string
+}
+
+// SnapshotByID returns the schema, or a not-found error.
+func (s *Service) SnapshotByID(ctx context.Context, schemaID string) (*Snapshot, error) {
+	if !uuid.Valid(schemaID) {
+		return nil, apperror.NewBadRequestError("Invalid schema ID", nil)
+	}
+	sch, err := s.store.GetByID(ctx, schemaID)
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to load schema", "schema_id", schemaID, logger.KeyError, err)
+		return nil, err
+	}
+	return &Snapshot{
+		ID:             sch.ID,
+		Name:           sch.Name,
+		Definition:     sch.Definition,
+		NetworkID:      sch.NetworkID,
+		OrganizationID: sch.OrganizationID,
+	}, nil
+}
+
+func (s *Service) validateForeignTargets(ctx context.Context, definition json.RawMessage, networkID string, organizationID *string) error {
+	fields, err := validator.ForeignFields(definition)
+	if err != nil {
+		return apperror.NewBadRequestError(err.Error(), err)
+	}
+	for _, field := range fields {
+		target, err := s.store.GetByID(ctx, field.SchemaID)
+		if err != nil {
+			var appErr *apperror.Error
+			if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+				s.logger.WarnContext(ctx, "Unknown foreign schema", "schema_id", field.SchemaID, "property", field.Name)
+				return apperror.NewBadRequestError(fmt.Sprintf("property %q: related schema not found", field.Name), err)
+			}
+			s.logger.ErrorContext(ctx, "Failed to load foreign schema", "schema_id", field.SchemaID, logger.KeyError, err)
+			return err
+		}
+		if !visibleAsForeignTarget(target, networkID, organizationID) {
+			s.logger.WarnContext(ctx, "Foreign schema not visible", "schema_id", field.SchemaID, "property", field.Name)
+			return apperror.NewBadRequestError(fmt.Sprintf("property %q: related schema not found", field.Name), nil)
+		}
+	}
+	return nil
+}
+
+func visibleAsForeignTarget(target *schema, networkID string, organizationID *string) bool {
+	if target.NetworkID != networkID {
+		return false
+	}
+	if target.OrganizationID == nil {
+		return true
+	}
+	if organizationID == nil {
+		return false
+	}
+	return *target.OrganizationID == *organizationID
 }

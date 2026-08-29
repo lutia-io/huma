@@ -55,11 +55,14 @@ type fieldFilter struct {
 	Kind         string
 	NumberValue  *float64
 	BooleanValue *bool
+	TitleKey     string
 }
 
 type schemaField struct {
-	Name string
-	Kind string
+	Name     string
+	Kind     string
+	SchemaID string
+	TitleKey string
 }
 
 type listParams struct {
@@ -78,9 +81,16 @@ type listParams struct {
 	PageSize       int
 }
 
+type RelatedRecord struct {
+	ID       string `json:"id"`
+	SchemaID string `json:"schemaId"`
+	Title    string `json:"title"`
+}
+
 type listResult struct {
-	Items    []*Record `json:"items"`
-	Total    int       `json:"total"`
-	Page     int       `json:"page"`
-	PageSize int       `json:"pageSize"`
+	Items    []*Record                `json:"items"`
+	Related  map[string]RelatedRecord `json:"related"`
+	Total    int                      `json:"total"`
+	Page     int                      `json:"page"`
+	PageSize int                      `json:"pageSize"`
 }

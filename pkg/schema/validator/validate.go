@@ -15,6 +15,10 @@ const schemaURL = "schema.json"
 // Schema authors use: {"type":"string","format":"file"}
 const FileFormat = "file"
 
+// ForeignFormat is the JSON Schema format name for a related record ID.
+// Schema authors use: {"type":"string","format":"foreign","schemaId":"<uuid>"}
+const ForeignFormat = "foreign"
+
 type deniedLoader struct{}
 
 func (deniedLoader) Load(url string) (any, error) {
@@ -29,6 +33,18 @@ func validateFileFormat(v any) error {
 	}
 	if !uuid.Valid(s) {
 		return fmt.Errorf("must be a file id (uuid)")
+	}
+	return nil
+}
+
+// validateForeignFormat asserts the value is a UUID string (a record ID).
+func validateForeignFormat(v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	if !uuid.Valid(s) {
+		return fmt.Errorf("must be a record id (uuid)")
 	}
 	return nil
 }
@@ -50,6 +66,10 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 		Name:     FileFormat,
 		Validate: validateFileFormat,
 	})
+	c.RegisterFormat(&jsonschema.Format{
+		Name:     ForeignFormat,
+		Validate: validateForeignFormat,
+	})
 	c.UseLoader(deniedLoader{})
 
 	if err := c.AddResource(schemaURL, doc); err != nil {
@@ -64,8 +84,10 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 
 // ValidateDefinition validates a JSON Schema definition.
 func ValidateDefinition(definition json.RawMessage) error {
-	_, err := compile(definition)
-	return err
+	if _, err := compile(definition); err != nil {
+		return err
+	}
+	return ValidateForeignKeywords(definition)
 }
 
 // ValidateData validates data against a JSON Schema definition.

@@ -13,8 +13,10 @@ type ExecutionContext struct {
 	// that triggered the workflow, so records created by actions belong to
 	// the same organization as the trigger.
 	TriggerRecordID string
-	// TriggerData is the snapshotted record document used for template
-	// resolution (resolver.Resolve) inside handlers.
+	// TriggerData is the snapshotted JSONB document of the trigger record.
+	// Handlers pass it to resolver.Resolve as Trigger.Data, so templates
+	// address fields as {{ .Record.data.<field> }} and the row UUID as
+	// {{ .Record.id }}.
 	TriggerData        map[string]any
 	OrganizationID     string
 	OrganizationUserID string

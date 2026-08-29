@@ -31,6 +31,7 @@ const (
 	fieldKindNumber  = "number"
 	fieldKindBoolean = "boolean"
 	fieldKindFile    = "file"
+	fieldKindForeign = "foreign"
 
 	fieldPrefix   = "field."
 	fieldOpPrefix = "fieldOp."
@@ -255,8 +256,9 @@ func parseBooleanFilter(value string) (bool, error) {
 func parseSchemaFields(definition json.RawMessage) (map[string]schemaField, error) {
 	var doc struct {
 		Properties map[string]struct {
-			Type   json.RawMessage `json:"type"`
-			Format string          `json:"format"`
+			Type     json.RawMessage `json:"type"`
+			Format   string          `json:"format"`
+			SchemaID string          `json:"schemaId"`
 		} `json:"properties"`
 	}
 	if len(definition) == 0 {
@@ -271,8 +273,9 @@ func parseSchemaFields(definition json.RawMessage) (map[string]schemaField, erro
 			continue
 		}
 		fields[name] = schemaField{
-			Name: name,
-			Kind: fieldKindFromProp(prop.Type, prop.Format),
+			Name:     name,
+			Kind:     fieldKindFromProp(prop.Type, prop.Format),
+			SchemaID: strings.TrimSpace(prop.SchemaID),
 		}
 	}
 	return fields, nil
@@ -281,6 +284,9 @@ func parseSchemaFields(definition json.RawMessage) (map[string]schemaField, erro
 func fieldKindFromProp(typeJSON json.RawMessage, format string) string {
 	if strings.EqualFold(format, "file") {
 		return fieldKindFile
+	}
+	if strings.EqualFold(format, "foreign") {
+		return fieldKindForeign
 	}
 	typeName := jsonSchemaTypeName(typeJSON)
 	switch typeName {
@@ -382,6 +388,8 @@ func applyFieldFilter(b *queryBuilder, where *[]string, field fieldFilter) {
 			"(SELECT f.filename FROM public.files f WHERE f.id::text = r.data ->> %s AND f.deleted_at IS NULL)",
 			key,
 		), field.Value, field.Op)
+	case fieldKindForeign:
+		applyStringFilter(b, where, relatedTitleExpr(b, key, field.TitleKey), field.Value, field.Op)
 	default:
 		applyStringFilter(b, where, fmt.Sprintf("r.data ->> %s", key), field.Value, field.Op)
 	}
@@ -403,9 +411,23 @@ func sortExpression(params listParams, b *queryBuilder) string {
 		return fmt.Sprintf("(CASE WHEN jsonb_typeof(r.data -> %s) = 'boolean' THEN (r.data ->> %s)::boolean END)", key, key)
 	case fieldKindFile:
 		return fmt.Sprintf("(SELECT f.filename FROM public.files f WHERE f.id::text = r.data ->> %s AND f.deleted_at IS NULL)", key)
+	case fieldKindForeign:
+		return relatedTitleExpr(b, key, meta.TitleKey)
 	default:
 		return fmt.Sprintf("r.data ->> %s", key)
 	}
+}
+
+func relatedTitleExpr(b *queryBuilder, fieldKeyPlaceholder, titleKey string) string {
+	idMatch := fmt.Sprintf("related.id::text = r.data ->> %s AND related.deleted_at IS NULL", fieldKeyPlaceholder)
+	if titleKey == "" {
+		return fmt.Sprintf("(SELECT related.id::text FROM public.records related WHERE %s)", idMatch)
+	}
+	titlePlaceholder := b.add(titleKey)
+	return fmt.Sprintf(
+		"(SELECT COALESCE(NULLIF(related.data ->> %s, ''), related.id::text) FROM public.records related WHERE %s)",
+		titlePlaceholder, idMatch,
+	)
 }
 
 func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, listArgs []any) {

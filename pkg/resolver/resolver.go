@@ -17,19 +17,24 @@
 // cannot parse ".1" as a field name. The only custom function today is now,
 // which returns the current UTC time in RFC 3339:
 //
-//	{"email": "{{ .Record.email }}", "createdAt": "{{ now }}", "note": "hi {{ .Record.email }}"}
+//	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "note": "hi {{ .Record.data.email }}"}
+//
+// .Record is the trigger row, not the JSONB document:
+//
+//	{{ .Record.id }}           the records row UUID
+//	{{ .Record.data.age }}     a field on the JSONB document
 //
 // Built-in template functions such as or work as usual, e.g.
-// {{ or .Record.nickname "friend" }}.
+// {{ or .Record.data.nickname "friend" }}.
 //
 // # Typed vs string results
 //
 // text/template always writes strings. That is fine for mixed interpolation
-// ("Hello {{ .Record.email }}"), but action fields that should stay numbers,
+// ("Hello {{ .Record.data.email }}"), but action fields that should stay numbers,
 // booleans, objects, or arrays would otherwise become strings and fail schema
 // validation after JSON marshaling.
 //
-// So when a string is exactly one field path — "{{ .Record.age }}" or even
+// So when a string is exactly one field path — "{{ .Record.data.age }}" or even
 // "{{ . }}" — Resolve looks the path up with reflect and returns the native
 // value. Any other template (functions, pipelines, surrounding text) executes
 // normally and yields a string.
@@ -65,9 +70,32 @@ var tmplCache sync.Map // map[string]*template.Template
 // top-level names templates can reference (.Record, .Input). Keeping a struct
 // (rather than passing the record map as ".") leaves room to add more roots
 // later without breaking existing .Record.* templates.
+//
+// Record is a map so template paths stay lowercase: {{ .Record.id }},
+// {{ .Record.data.name }}. A Go struct would force {{ .Record.ID }}.
 type env struct {
 	Record map[string]any
 	Input  map[string]any
+}
+
+// Trigger is the workflow's trigger record. Templates address it as .Record.
+type Trigger struct {
+	ID   string
+	Data map[string]any
+}
+
+func recordEnv(t Trigger) env {
+	data := t.Data
+	if data == nil {
+		data = map[string]any{}
+	}
+	return env{
+		Record: map[string]any{
+			"id":   t.ID,
+			"data": data,
+		},
+		Input: map[string]any{},
+	}
 }
 
 // Resolve returns a shallow-copied tree of data where every templated string
@@ -75,19 +103,21 @@ type env struct {
 // recursively; non-string values and strings without "{{" pass through
 // unchanged. The input maps/slices are not mutated.
 //
-// record is the workflow trigger's data document. A nil record is treated as
-// an empty map so templates that only use now still work.
-func Resolve(data map[string]any, record map[string]any) (map[string]any, error) {
-	if record == nil {
-		record = map[string]any{}
-	}
-	resolved, err := resolveValue(data, env{Record: record, Input: map[string]any{}})
+// A zero Trigger is treated as an empty record so templates that only use now
+// still work.
+func Resolve(data map[string]any, trigger Trigger) (map[string]any, error) {
+	resolved, err := resolveValue(data, recordEnv(trigger))
 	if err != nil {
 		return nil, err
 	}
 	// resolveValue preserves map[string]any for map inputs; the assertion is
 	// safe for the top-level call.
 	return resolved.(map[string]any), nil
+}
+
+// ResolveOne interpolates a single templated string against .Record.
+func ResolveOne(s string, trigger Trigger) (any, error) {
+	return resolveString(s, recordEnv(trigger))
 }
 
 // ResolveInput is like Resolve but templates read from .Input (pipeline level
@@ -219,7 +249,7 @@ func parseTemplate(s string) (*template.Template, error) {
 }
 
 // pureFieldPath reports whether tmpl is exactly one field selection on the
-// root data — "{{ .Record.email }}", "{{ .Record }}", or "{{ . }}" — with no
+// root data — "{{ .Record.data.email }}", "{{ .Record }}", or "{{ . }}" — with no
 // surrounding text, function calls, pipelines, or declarations.
 //
 // It inspects the parse tree rather than matching strings so the check stays
@@ -242,13 +272,13 @@ func pureFieldPath(tmpl *template.Template) ([]string, bool) {
 	}
 	cmd := action.Pipe.Cmds[0]
 	// A single arg is a bare field/dot; multiple args means a function call
-	// such as {{ or .Record.nickname "friend" }} or {{ now }}.
+	// such as {{ or .Record.data.nickname "friend" }} or {{ now }}.
 	if len(cmd.Args) != 1 {
 		return nil, false
 	}
 	switch arg := cmd.Args[0].(type) {
 	case *parse.FieldNode:
-		// Ident is already split: ".Record.address.city" → ["Record","address","city"].
+		// Ident is already split: ".Record.data.address.city" → ["Record","data","address","city"].
 		return arg.Ident, true
 	case *parse.DotNode:
 		return nil, true
@@ -297,7 +327,7 @@ func pureInputIndexPath(tmpl *template.Template) ([]string, bool) {
 // selection: exported struct fields by name, string-keyed map entries by key.
 // Interfaces and pointers are dereferenced at each step.
 //
-// Missing map keys return (nil, nil) — the zero value — so "{{ .Record.missing }}"
+// Missing map keys return (nil, nil) — the zero value — so "{{ .Record.data.missing }}"
 // yields JSON null. Missing struct fields return an error, so typos on env
 // ({{ .Contxt }}) fail the same way Execute would.
 //

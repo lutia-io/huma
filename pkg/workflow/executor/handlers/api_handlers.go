@@ -18,20 +18,33 @@ import (
 type RecordService interface {
 	Create(ctx context.Context, params record.CreateParams) (string, error)
 	Get(ctx context.Context, recordID string) (*record.Record, bool, error)
-	UpdateData(ctx context.Context, recordID string, data json.RawMessage) (bool, error)
+	PatchData(ctx context.Context, rec *record.Record, data json.RawMessage) error
 }
 
-// SchemaService validates record data against a schema, satisfied by
-// *schema.Service.
-type SchemaService interface {
-	ValidateRecordData(ctx context.Context, schemaID string, data json.RawMessage) error
+func trigger(execCtx executor.ExecutionContext) resolver.Trigger {
+	return resolver.Trigger{ID: execCtx.TriggerRecordID, Data: execCtx.TriggerData}
+}
+
+func resolveRecordID(execCtx executor.ExecutionContext, raw string) (string, error) {
+	v, err := resolver.ResolveOne(raw, trigger(execCtx))
+	if err != nil {
+		return "", fmt.Errorf("resolving recordId: %w", err)
+	}
+	if v == nil {
+		return "", nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("recordId resolved to %T, want string", v)
+	}
+	return s, nil
 }
 
 // createRecord is the shared create path for CREATE_RECORD and the
 // insert branch of UPSERT_RECORD. Schema validation happens inside
 // record.Service.Create.
 func createRecord(ctx context.Context, records RecordService, execCtx executor.ExecutionContext, schemaID string, data map[string]any) (json.RawMessage, error) {
-	resolved, err := resolver.Resolve(data, execCtx.TriggerData)
+	resolved, err := resolver.Resolve(data, trigger(execCtx))
 	if err != nil {
 		return nil, fmt.Errorf("resolving action data: %w", err)
 	}
@@ -58,8 +71,8 @@ func createRecord(ctx context.Context, records RecordService, execCtx executor.E
 // update branch of UPSERT_RECORD. It shallow-merges the resolved action data
 // over the existing record data, validates the merged document against the
 // record's schema, and writes the full document (set-to-value, idempotent).
-func updateRecord(ctx context.Context, records RecordService, schemas SchemaService, execCtx executor.ExecutionContext, existing *record.Record, data map[string]any) (json.RawMessage, error) {
-	resolved, err := resolver.Resolve(data, execCtx.TriggerData)
+func updateRecord(ctx context.Context, records RecordService, execCtx executor.ExecutionContext, existing *record.Record, data map[string]any) (json.RawMessage, error) {
+	resolved, err := resolver.Resolve(data, trigger(execCtx))
 	if err != nil {
 		return nil, fmt.Errorf("resolving action data: %w", err)
 	}
@@ -76,16 +89,8 @@ func updateRecord(ctx context.Context, records RecordService, schemas SchemaServ
 		return nil, fmt.Errorf("marshaling merged record data: %w", err)
 	}
 
-	if err := schemas.ValidateRecordData(ctx, existing.SchemaID, raw); err != nil {
-		return nil, fmt.Errorf("validating merged record data: %w", err)
-	}
-
-	found, err := records.UpdateData(ctx, existing.ID, raw)
-	if err != nil {
+	if err := records.PatchData(ctx, existing, raw); err != nil {
 		return nil, fmt.Errorf("updating record %q: %w", existing.ID, err)
-	}
-	if !found {
-		return nil, fmt.Errorf("record %q disappeared during update", existing.ID)
 	}
 	return json.Marshal(map[string]string{"id": existing.ID})
 }

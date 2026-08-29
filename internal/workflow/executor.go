@@ -69,8 +69,8 @@ func NewExecutor() {
 
 	registry := executor.NewRegistry(
 		handlers.NewCreateRecord(recordService),
-		handlers.NewUpdateRecord(recordService, schemaService),
-		handlers.NewUpsertRecord(recordService, schemaService),
+		handlers.NewUpdateRecord(recordService),
+		handlers.NewUpsertRecord(recordService),
 		handlers.NewTriggerPipeline(log, pipelineService),
 	)
 

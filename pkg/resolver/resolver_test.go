@@ -7,13 +7,16 @@ import (
 )
 
 func TestResolve(t *testing.T) {
-	record := map[string]any{
-		"email": "jane@example.com",
-		"age":   float64(42),
-		"vip":   true,
-		"tags":  []any{"a", "b"},
-		"address": map[string]any{
-			"city": "Berlin",
+	trigger := Trigger{
+		ID: "rec-1",
+		Data: map[string]any{
+			"email": "jane@example.com",
+			"age":   float64(42),
+			"vip":   true,
+			"tags":  []any{"a", "b"},
+			"address": map[string]any{
+				"city": "Berlin",
+			},
 		},
 	}
 
@@ -28,40 +31,45 @@ func TestResolve(t *testing.T) {
 			want: map[string]any{"literal": "hello", "n": float64(7), "b": false, "nil": nil},
 		},
 		{
+			name: "record id is the row uuid",
+			data: map[string]any{"shipmentid": "{{ .Record.id }}"},
+			want: map[string]any{"shipmentid": "rec-1"},
+		},
+		{
 			name: "single field path keeps string type",
-			data: map[string]any{"email": "{{ .Record.email }}"},
+			data: map[string]any{"email": "{{ .Record.data.email }}"},
 			want: map[string]any{"email": "jane@example.com"},
 		},
 		{
 			name: "single field path keeps number type",
-			data: map[string]any{"age": "{{ .Record.age }}"},
+			data: map[string]any{"age": "{{ .Record.data.age }}"},
 			want: map[string]any{"age": float64(42)},
 		},
 		{
 			name: "single field path keeps bool type",
-			data: map[string]any{"vip": "{{ .Record.vip }}"},
+			data: map[string]any{"vip": "{{ .Record.data.vip }}"},
 			want: map[string]any{"vip": true},
 		},
 		{
 			name: "single field path keeps object and array types",
-			data: map[string]any{"addr": "{{ .Record.address }}", "tags": "{{ .Record.tags }}"},
+			data: map[string]any{"addr": "{{ .Record.data.address }}", "tags": "{{ .Record.data.tags }}"},
 			want: map[string]any{"addr": map[string]any{"city": "Berlin"}, "tags": []any{"a", "b"}},
 		},
 		{
 			name: "nested path lookup",
-			data: map[string]any{"city": "{{ .Record.address.city }}"},
+			data: map[string]any{"city": "{{ .Record.data.address.city }}"},
 			want: map[string]any{"city": "Berlin"},
 		},
 		{
 			name: "mixed text interpolates to string",
-			data: map[string]any{"greeting": "Hello {{ .Record.email }}, age {{ .Record.age }}"},
+			data: map[string]any{"greeting": "Hello {{ .Record.data.email }}, age {{ .Record.data.age }}"},
 			want: map[string]any{"greeting": "Hello jane@example.com, age 42"},
 		},
 		{
 			name: "recurses into nested maps and slices",
 			data: map[string]any{
-				"outer": map[string]any{"email": "{{ .Record.email }}"},
-				"list":  []any{"{{ .Record.vip }}", "plain"},
+				"outer": map[string]any{"email": "{{ .Record.data.email }}"},
+				"list":  []any{"{{ .Record.data.vip }}", "plain"},
 			},
 			want: map[string]any{
 				"outer": map[string]any{"email": "jane@example.com"},
@@ -70,14 +78,14 @@ func TestResolve(t *testing.T) {
 		},
 		{
 			name: "default with or for missing field",
-			data: map[string]any{"name": `{{ or .Record.nickname "friend" }}`},
+			data: map[string]any{"name": `{{ or .Record.data.nickname "friend" }}`},
 			want: map[string]any{"name": "friend"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Resolve(tt.data, record)
+			got, err := Resolve(tt.data, trigger)
 			if err != nil {
 				t.Fatalf("Resolve() error: %v", err)
 			}
@@ -97,7 +105,7 @@ func TestResolveDateNow(t *testing.T) {
 	got, err := Resolve(map[string]any{
 		"at":   "{{ now }}",
 		"note": "created at {{ now }}",
-	}, nil)
+	}, Trigger{})
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
@@ -110,7 +118,7 @@ func TestResolveDateNow(t *testing.T) {
 }
 
 func TestResolveErrors(t *testing.T) {
-	record := map[string]any{"email": "jane@example.com"}
+	trigger := Trigger{Data: map[string]any{"email": "jane@example.com"}}
 
 	tests := []struct {
 		name string
@@ -118,7 +126,7 @@ func TestResolveErrors(t *testing.T) {
 	}{
 		{
 			name: "unknown top-level field",
-			data: map[string]any{"x": "{{ .Contxt.Record.email }}"},
+			data: map[string]any{"x": "{{ .Contxt.Record.data.email }}"},
 		},
 		{
 			name: "unknown function",
@@ -130,7 +138,7 @@ func TestResolveErrors(t *testing.T) {
 		},
 		{
 			name: "unclosed template",
-			data: map[string]any{"x": "{{ .Record.email"},
+			data: map[string]any{"x": "{{ .Record.data.email"},
 		},
 		{
 			name: "error inside nested value",
@@ -140,7 +148,7 @@ func TestResolveErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Resolve(tt.data, record); err == nil {
+			if _, err := Resolve(tt.data, trigger); err == nil {
 				t.Fatal("Resolve() expected error, got nil")
 			}
 		})
@@ -151,7 +159,7 @@ func TestResolveErrors(t *testing.T) {
 // schema validation downstream rejects them where they are not allowed, and
 // the or function provides defaults.
 func TestResolveMissingRecordField(t *testing.T) {
-	got, err := Resolve(map[string]any{"x": "{{ .Record.missing }}"}, map[string]any{})
+	got, err := Resolve(map[string]any{"x": "{{ .Record.data.missing }}"}, Trigger{})
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
@@ -161,12 +169,22 @@ func TestResolveMissingRecordField(t *testing.T) {
 }
 
 func TestResolveNilRecord(t *testing.T) {
-	got, err := Resolve(map[string]any{"literal": "hello"}, nil)
+	got, err := Resolve(map[string]any{"literal": "hello"}, Trigger{})
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
 	if got["literal"] != "hello" {
 		t.Errorf("literal = %v, want hello", got["literal"])
+	}
+}
+
+func TestResolveOne(t *testing.T) {
+	got, err := ResolveOne("{{ .Record.id }}", Trigger{ID: "rec-1", Data: map[string]any{"name": "A"}})
+	if err != nil {
+		t.Fatalf("ResolveOne() error: %v", err)
+	}
+	if got != "rec-1" {
+		t.Errorf("ResolveOne() = %#v, want rec-1", got)
 	}
 }
 

@@ -71,7 +71,8 @@ func TestParseSchemaFields(t *testing.T) {
 			"status": { "type": "string", "enum": ["open", "closed"] },
 			"declaredValue": { "type": "number" },
 			"signatureCaptured": { "type": "boolean" },
-			"proofFileId": { "type": "string", "format": "file" }
+			"proofFileId": { "type": "string", "format": "file" },
+			"investorId": { "type": "string", "format": "foreign", "schemaId": "11111111-1111-1111-1111-111111111111" }
 		}
 	}`))
 	if err != nil {
@@ -88,6 +89,12 @@ func TestParseSchemaFields(t *testing.T) {
 	}
 	if fields["proofFileId"].Kind != fieldKindFile {
 		t.Fatalf("proofFileId kind=%s", fields["proofFileId"].Kind)
+	}
+	if fields["investorId"].Kind != fieldKindForeign {
+		t.Fatalf("investorId kind=%s", fields["investorId"].Kind)
+	}
+	if fields["investorId"].SchemaID != "11111111-1111-1111-1111-111111111111" {
+		t.Fatalf("investorId schemaId=%s", fields["investorId"].SchemaID)
 	}
 }
 
@@ -153,12 +160,14 @@ func TestBuildListQuery_dynamicFields(t *testing.T) {
 		Fields: []fieldFilter{
 			{Name: "declaredValue", Value: "100", Op: opGte, Kind: fieldKindNumber, NumberValue: &value},
 			{Name: "proofFileId", Value: "pod", Op: opContains, Kind: fieldKindFile},
+			{Name: "investorId", Value: "Acme", Op: opContains, Kind: fieldKindForeign, TitleKey: "legalName"},
 			{Name: "signatureCaptured", Value: "true", Op: opEq, Kind: fieldKindBoolean, BooleanValue: &captured},
 			{Name: "status", Value: "delivered", Op: opEq, Kind: fieldKindString},
 		},
 		SchemaFields: map[string]schemaField{
 			"declaredValue":     {Name: "declaredValue", Kind: fieldKindNumber},
 			"proofFileId":       {Name: "proofFileId", Kind: fieldKindFile},
+			"investorId":        {Name: "investorId", Kind: fieldKindForeign, TitleKey: "legalName"},
 			"signatureCaptured": {Name: "signatureCaptured", Kind: fieldKindBoolean},
 			"status":            {Name: "status", Kind: fieldKindString},
 		},
@@ -169,16 +178,19 @@ func TestBuildListQuery_dynamicFields(t *testing.T) {
 	if !strings.Contains(countSQL, "(jsonb_typeof(r.data -> $2) = 'number' AND (r.data ->> $2)::numeric >= $3)") {
 		t.Fatalf("missing number filter: %s", countSQL)
 	}
-	if !strings.Contains(countSQL, "r.data -> $6 = 'true'::jsonb") {
+	if !strings.Contains(countSQL, "r.data -> $9 = 'true'::jsonb") {
 		t.Fatalf("missing boolean filter: %s", countSQL)
 	}
-	if !strings.Contains(countSQL, "r.data ->> $7 ILIKE") {
+	if !strings.Contains(countSQL, "r.data ->> $10 ILIKE") {
 		t.Fatalf("missing string filter: %s", countSQL)
 	}
 	if !strings.Contains(countSQL, "SELECT f.filename FROM public.files") {
 		t.Fatalf("missing file filter: %s", countSQL)
 	}
-	if !strings.Contains(listSQL, "ORDER BY (CASE WHEN jsonb_typeof(r.data -> $9) = 'number' THEN (r.data ->> $9)::numeric END) DESC") {
+	if !strings.Contains(countSQL, "SELECT COALESCE(NULLIF(related.data ->>") {
+		t.Fatalf("missing foreign filter: %s", countSQL)
+	}
+	if !strings.Contains(listSQL, "ORDER BY (CASE WHEN jsonb_typeof(r.data -> $12) = 'number' THEN (r.data ->> $12)::numeric END) DESC") {
 		t.Fatalf("missing numeric sort: %s", listSQL)
 	}
 }

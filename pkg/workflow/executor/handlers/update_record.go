@@ -13,11 +13,10 @@ import (
 // shallow-merge action data onto it, validate, and write the full document.
 type UpdateRecord struct {
 	records RecordService
-	schemas SchemaService
 }
 
-func NewUpdateRecord(records RecordService, schemas SchemaService) *UpdateRecord {
-	return &UpdateRecord{records: records, schemas: schemas}
+func NewUpdateRecord(records RecordService) *UpdateRecord {
+	return &UpdateRecord{records: records}
 }
 
 func (h *UpdateRecord) Type() action.Type {
@@ -29,16 +28,20 @@ func (h *UpdateRecord) Execute(ctx context.Context, execCtx executor.ExecutionCo
 	if !ok {
 		return nil, fmt.Errorf("invalid context type %T for UPDATE_RECORD", act.Context)
 	}
-	if c.RecordID == "" {
+	recordID, err := resolveRecordID(execCtx, c.RecordID)
+	if err != nil {
+		return nil, err
+	}
+	if recordID == "" {
 		return nil, fmt.Errorf("UPDATE_RECORD requires a recordId")
 	}
 
-	existing, found, err := h.records.Get(ctx, c.RecordID)
+	existing, found, err := h.records.Get(ctx, recordID)
 	if err != nil {
-		return nil, fmt.Errorf("loading record %q: %w", c.RecordID, err)
+		return nil, fmt.Errorf("loading record %q: %w", recordID, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("record %q not found", c.RecordID)
+		return nil, fmt.Errorf("record %q not found", recordID)
 	}
-	return updateRecord(ctx, h.records, h.schemas, execCtx, existing, c.Data)
+	return updateRecord(ctx, h.records, execCtx, existing, c.Data)
 }
