@@ -2,7 +2,6 @@ package network
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
@@ -51,8 +50,7 @@ func (s *service) Insert(ctx context.Context, req insertNetworkRequest) (string,
 
 	id, err := s.store.Insert(ctx, network)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+		if apperror.IsConflict(err) {
 			s.logger.WarnContext(ctx, "Rejected duplicate network", logger.KeySlug, slug)
 			return "", err
 		}
@@ -84,8 +82,7 @@ func (s *service) Patch(ctx context.Context, existing *network, req patchNetwork
 	existing.Slug = slug
 
 	if err := s.store.Update(ctx, existing); err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+		if apperror.IsConflict(err) {
 			s.logger.WarnContext(ctx, "Rejected duplicate network", logger.KeySlug, slug)
 			return err
 		}
@@ -116,7 +113,7 @@ func (s *service) List(ctx context.Context, p principal.Principal) ([]*network, 
 		return networks, nil
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network", nil)
 		}
 		n, err := s.Get(ctx, p, p.NetworkID)
 		if err != nil {
@@ -135,8 +132,7 @@ func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*n
 
 	n, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get network", logger.KeyID, id, logger.KeyError, err)

@@ -2,7 +2,6 @@ package organizationuser
 
 import (
 	"context"
-	"errors"
 	"net/mail"
 	"strings"
 
@@ -78,8 +77,7 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationUserRequest)
 
 	id, err := s.store.Insert(ctx, organizationUser)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+		if apperror.IsConflict(err) {
 			s.logger.WarnContext(ctx, "Rejected duplicate organization user", "organization_id", organizationID, logger.KeyEmail, email)
 			return "", err
 		}
@@ -141,8 +139,7 @@ func (s *service) Patch(ctx context.Context, existing *organizationUser, req pat
 	}
 
 	if err := s.store.Update(ctx, existing, hashedPassword); err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+		if apperror.IsConflict(err) {
 			s.logger.WarnContext(ctx, "Rejected duplicate organization user", logger.KeyID, existing.ID, logger.KeyEmail, existing.Email)
 			return err
 		}
@@ -166,8 +163,7 @@ func (s *service) UpdatePassword(ctx context.Context, existing *organizationUser
 
 	hashedCurrent, err := s.store.GetPasswordByID(ctx, existing.ID)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return err
 		}
 		s.logger.ErrorContext(ctx, "Failed to load current password", logger.KeyID, existing.ID, logger.KeyError, err)
@@ -203,7 +199,7 @@ func (s *service) List(ctx context.Context, p principal.Principal, params listPa
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -227,8 +223,7 @@ func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*o
 
 	u, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get organization user", logger.KeyID, id, logger.KeyError, err)

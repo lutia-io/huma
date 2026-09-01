@@ -124,7 +124,7 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -148,8 +148,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*F
 
 	f, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get file", logger.KeyID, id, logger.KeyError, err)

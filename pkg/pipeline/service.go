@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
@@ -69,8 +68,7 @@ func (s *Service) Insert(ctx context.Context, req insertPipelineDefinitionReques
 
 	id, err := s.store.Insert(ctx, p)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+		if apperror.IsConflict(err) {
 			s.logger.WarnContext(ctx, "Rejected duplicate pipeline definition", logger.KeySlug, slug)
 			return "", err
 		}
@@ -118,8 +116,7 @@ func (s *Service) Patch(ctx context.Context, existing *pipelineDefinition, req p
 	}
 
 	if err := s.store.Update(ctx, existing); err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantNotFound) {
+		if apperror.IsConflict(err) || apperror.IsNotFound(err) {
 			s.logger.WarnContext(ctx, "Rejected pipeline definition update", logger.KeyID, existing.ID, logger.KeyError, err)
 			return err
 		}
@@ -136,7 +133,7 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -159,8 +156,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*p
 
 	pipeline, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get pipeline definition", logger.KeyID, id, logger.KeyError, err)
@@ -272,7 +268,7 @@ func (s *Service) ListPipelines(ctx context.Context, p principal.Principal, para
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -296,8 +292,7 @@ func (s *Service) GetPipeline(ctx context.Context, p principal.Principal, id str
 
 	run, err := s.store.GetPipelineByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get pipeline", logger.KeyID, id, logger.KeyError, err)
@@ -327,8 +322,7 @@ func (s *Service) GetPipelineNode(ctx context.Context, p principal.Principal, id
 	}
 	n, err := s.store.GetPipelineNodeByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get pipeline node", logger.KeyID, id, logger.KeyError, err)

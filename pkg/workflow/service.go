@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -80,8 +79,7 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 
 	id, err := s.store.Insert(ctx, wfd)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantBadRequest) {
+		if apperror.IsConflict(err) || apperror.IsBadRequest(err) {
 			s.logger.WarnContext(ctx, "Rejected workflow definition insert", logger.KeySlug, slug, logger.KeyError, err)
 			return "", err
 		}
@@ -142,8 +140,7 @@ func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req p
 	}
 
 	if err := s.store.Update(ctx, existing); err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantBadRequest) {
+		if apperror.IsConflict(err) || apperror.IsBadRequest(err) {
 			s.logger.WarnContext(ctx, "Rejected workflow definition update", logger.KeyID, existing.ID, logger.KeyError, err)
 			return err
 		}
@@ -160,7 +157,7 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -184,8 +181,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*W
 
 	wf, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get workflow definition", logger.KeyID, id, logger.KeyError, err)
@@ -222,7 +218,7 @@ func (s *Service) ListWorkflows(ctx context.Context, p principal.Principal, para
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -246,8 +242,7 @@ func (s *Service) GetWorkflow(ctx context.Context, p principal.Principal, id str
 
 	wf, err := s.store.GetWorkflowByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get workflow", logger.KeyID, id, logger.KeyError, err)
@@ -280,8 +275,7 @@ func (s *Service) GetWorkflowAction(ctx context.Context, p principal.Principal, 
 
 	wfAction, err := s.store.GetWorkflowActionByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get workflow action", logger.KeyID, id, logger.KeyError, err)

@@ -3,7 +3,6 @@ package schema
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -34,8 +33,7 @@ func (s *Service) Definition(ctx context.Context, schemaID string) (json.RawMess
 	}
 	sch, err := s.store.GetByID(ctx, schemaID)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to load schema", "schema_id", schemaID, logger.KeyError, err)
@@ -135,8 +133,7 @@ func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 
 	id, err := s.store.Insert(ctx, schema)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantBadRequest) {
+		if apperror.IsConflict(err) || apperror.IsBadRequest(err) {
 			s.logger.WarnContext(ctx, "Rejected schema insert", logger.KeySlug, slug, logger.KeyError, err)
 			return "", err
 		}
@@ -191,8 +188,7 @@ func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRe
 	}
 
 	if err := s.store.Update(ctx, existing); err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantBadRequest) {
+		if apperror.IsConflict(err) || apperror.IsBadRequest(err) {
 			s.logger.WarnContext(ctx, "Rejected schema update", logger.KeyID, existing.ID, logger.KeyError, err)
 			return err
 		}
@@ -209,7 +205,7 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -233,8 +229,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*s
 
 	sch, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get schema", logger.KeyID, id, logger.KeyError, err)
@@ -273,8 +268,7 @@ func (s *Service) SnapshotByID(ctx context.Context, schemaID string) (*Snapshot,
 	}
 	sch, err := s.store.GetByID(ctx, schemaID)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to load schema", "schema_id", schemaID, logger.KeyError, err)
@@ -297,8 +291,7 @@ func (s *Service) validateForeignTargets(ctx context.Context, definition json.Ra
 	for _, field := range fields {
 		target, err := s.store.GetByID(ctx, field.SchemaID)
 		if err != nil {
-			var appErr *apperror.Error
-			if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			if apperror.IsNotFound(err) {
 				s.logger.WarnContext(ctx, "Unknown foreign schema", "schema_id", field.SchemaID, "property", field.Name)
 				return apperror.NewBadRequestError(fmt.Sprintf("property %q: related schema not found", field.Name), err)
 			}

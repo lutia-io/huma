@@ -43,10 +43,10 @@ func FromContext(ctx context.Context) (Principal, bool) {
 // of that network is enforced separately where needed.
 func RequireUser(p Principal, networkID string) error {
 	if p.Type != TypeUser {
-		return apperror.NewUnauthorizedError("Platform user authentication required", nil)
+		return apperror.NewForbiddenError("Platform user authentication required", nil)
 	}
 	if p.NetworkID != "" && networkID != "" && p.NetworkID != networkID {
-		return apperror.NewUnauthorizedError("Network mismatch", nil)
+		return apperror.NewForbiddenError("Network mismatch", nil)
 	}
 	return nil
 }
@@ -57,7 +57,7 @@ func RequireCreator(p Principal, userID, networkID string) error {
 		return err
 	}
 	if p.ID != userID {
-		return apperror.NewUnauthorizedError("Only the creator can perform this action", nil)
+		return apperror.NewForbiddenError("Only the creator can perform this action", nil)
 	}
 	return nil
 }
@@ -66,13 +66,13 @@ func RequireCreator(p Principal, userID, networkID string) error {
 // token matches the given network and organization.
 func RequireOrganizationUser(p Principal, networkID, organizationID string) error {
 	if p.Type != TypeOrganizationUser {
-		return apperror.NewUnauthorizedError("Organization user authentication required", nil)
+		return apperror.NewForbiddenError("Organization user authentication required", nil)
 	}
 	if networkID != "" && p.NetworkID != networkID {
-		return apperror.NewUnauthorizedError("Network mismatch", nil)
+		return apperror.NewForbiddenError("Network mismatch", nil)
 	}
 	if organizationID != "" && p.OrganizationID != organizationID {
-		return apperror.NewUnauthorizedError("Organization mismatch", nil)
+		return apperror.NewForbiddenError("Organization mismatch", nil)
 	}
 	return nil
 }

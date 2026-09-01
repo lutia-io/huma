@@ -3,7 +3,6 @@ package record
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -126,7 +125,7 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" || p.OrganizationID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -226,8 +225,7 @@ func (s *Service) GetVisible(ctx context.Context, p principal.Principal, id stri
 
 	rec, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get record", logger.KeyID, id, logger.KeyError, err)
@@ -300,8 +298,7 @@ func (s *Service) resolveForeignTitleKeys(ctx context.Context, fields map[string
 		}
 		snap, err := s.schemaService.SnapshotByID(ctx, meta.SchemaID)
 		if err != nil {
-			var appErr *apperror.Error
-			if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			if apperror.IsNotFound(err) {
 				continue
 			}
 			return err
@@ -414,8 +411,7 @@ func (s *Service) relatedMap(ctx context.Context, records []*Record) (map[string
 	for _, rec := range records {
 		def, err := definition(rec.SchemaID)
 		if err != nil {
-			var appErr *apperror.Error
-			if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+			if apperror.IsNotFound(err) {
 				continue
 			}
 			return nil, err

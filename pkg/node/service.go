@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
@@ -74,8 +73,7 @@ func (s *Service) Insert(ctx context.Context, req insertNodeDefinitionRequest) (
 
 	id, err := s.store.Insert(ctx, n)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+		if apperror.IsConflict(err) {
 			s.logger.WarnContext(ctx, "Rejected duplicate node definition", logger.KeySlug, slug)
 			return "", err
 		}
@@ -143,8 +141,7 @@ func (s *Service) Patch(ctx context.Context, existing *NodeDefinition, req patch
 	}
 
 	if err := s.store.Update(ctx, existing); err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && (appErr.Variant == apperror.ErrorVariantConflict || appErr.Variant == apperror.ErrorVariantNotFound) {
+		if apperror.IsConflict(err) || apperror.IsNotFound(err) {
 			s.logger.WarnContext(ctx, "Rejected node definition update", logger.KeyID, existing.ID, logger.KeyError, err)
 			return err
 		}
@@ -161,7 +158,7 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" {
-			return nil, apperror.NewUnauthorizedError("Organization user token missing network", nil)
+			return nil, apperror.NewForbiddenError("Organization user token missing network", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
@@ -184,8 +181,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*N
 
 	n, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get node definition", logger.KeyID, id, logger.KeyError, err)

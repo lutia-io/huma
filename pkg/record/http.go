@@ -77,7 +77,7 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.NetworkID == "" || p.OrganizationID == "" {
-		render.WriteError(w, apperror.NewUnauthorizedError("Organization user token missing network or organization", nil))
+		render.WriteError(w, apperror.NewForbiddenError("Organization user token missing network or organization", nil))
 		return
 	}
 	var req insertRecordRequest

@@ -42,7 +42,7 @@ func TestNewRecover_panic(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status: got %d want 500", rec.Code)
 	}
-	if got := strings.TrimSpace(rec.Body.String()); got != `{"message":"Internal error"}` {
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"code":"internal","message":"Internal error"}` {
 		t.Fatalf("body: got %q want internal error json", got)
 	}
 	out := buf.String()

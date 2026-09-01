@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"net/mail"
 	"strings"
 
@@ -70,8 +69,7 @@ func (s *service) Insert(ctx context.Context, req insertUserRequest) (string, er
 
 	_, err = s.store.Insert(ctx, user)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantConflict {
+		if apperror.IsConflict(err) {
 			s.logger.WarnContext(ctx, "Rejected duplicate user", logger.KeyEmail, user.Email)
 			return "", err
 		}
@@ -95,8 +93,7 @@ func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*u
 
 	u, err := s.store.GetByID(ctx, id)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, err
 		}
 		s.logger.ErrorContext(ctx, "Failed to get user", logger.KeyID, id, logger.KeyError, err)

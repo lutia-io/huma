@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"net/mail"
 	"strings"
 	"time"
@@ -85,8 +84,7 @@ func (s *service) LoginUser(ctx context.Context, req loginUserRequest, clientIP 
 	}
 	user, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, apperror.NewUnauthorizedError("Invalid email or password", err)
 		}
 		s.logger.ErrorContext(ctx, "Failed to load user", logger.KeyError, err)
@@ -119,8 +117,7 @@ func (s *service) LoginOrganizationUser(ctx context.Context, req loginOrganizati
 	}
 	org, err := s.store.GetOrganizationByID(ctx, organizationID)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, apperror.NewBadRequestError("Organization not found", err)
 		}
 		s.logger.ErrorContext(ctx, "Failed to load organization", logger.KeyError, err)
@@ -132,8 +129,7 @@ func (s *service) LoginOrganizationUser(ctx context.Context, req loginOrganizati
 
 	orgUser, err := s.store.GetOrganizationUserByEmail(ctx, email, networkID, organizationID)
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, apperror.NewUnauthorizedError("Invalid email or password", err)
 		}
 		s.logger.ErrorContext(ctx, "Failed to load organization user", logger.KeyError, err)
@@ -162,8 +158,7 @@ func (s *service) Logout(ctx context.Context, refreshToken string) error {
 	}
 	row, err := s.store.GetTokenByHash(ctx, hashRefreshToken(refreshToken))
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantUnauthorized {
+		if apperror.IsUnauthorized(err) {
 			return nil
 		}
 		return err
@@ -185,8 +180,7 @@ func (s *service) Me(ctx context.Context, p principal.Principal) (*meResponse, e
 		return nil, apperror.NewUnauthorizedError("Invalid access token", nil)
 	}
 	if err != nil {
-		var appErr *apperror.Error
-		if errors.As(err, &appErr) && appErr.Variant == apperror.ErrorVariantNotFound {
+		if apperror.IsNotFound(err) {
 			return nil, apperror.NewUnauthorizedError("Authentication required", err)
 		}
 		s.logger.ErrorContext(ctx, "Failed to load current user", logger.KeyError, err)
