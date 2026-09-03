@@ -23,7 +23,7 @@ const (
 	opGte        = "gte"
 	opLte        = "lte"
 
-	propertyCountExpr = `CASE WHEN jsonb_typeof(s.definition->'properties') = 'object' THEN (SELECT count(*) FROM jsonb_object_keys(s.definition->'properties')) ELSE 0 END`
+	propertyCountExpr = `CASE WHEN json_typeof(s.definition->'properties') = 'object' THEN (SELECT count(*) FROM json_object_keys(s.definition->'properties')) ELSE 0 END`
 )
 
 var listSortColumns = map[string]string{

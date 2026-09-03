@@ -32,6 +32,7 @@ const (
 	fieldKindBoolean = "boolean"
 	fieldKindFile    = "file"
 	fieldKindForeign = "foreign"
+	fieldKindAddress = "address"
 
 	fieldPrefix   = "field."
 	fieldOpPrefix = "fieldOp."
@@ -288,6 +289,9 @@ func fieldKindFromProp(typeJSON json.RawMessage, format string) string {
 	if strings.EqualFold(format, "foreign") {
 		return fieldKindForeign
 	}
+	if strings.EqualFold(format, "address") {
+		return fieldKindAddress
+	}
 	typeName := jsonSchemaTypeName(typeJSON)
 	switch typeName {
 	case "number", "integer":
@@ -390,6 +394,8 @@ func applyFieldFilter(b *queryBuilder, where *[]string, field fieldFilter) {
 		), field.Value, field.Op)
 	case fieldKindForeign:
 		applyStringFilter(b, where, relatedTitleExpr(b, key, field.TitleKey), field.Value, field.Op)
+	case fieldKindAddress:
+		applyStringFilter(b, where, addressTextExpr(key), field.Value, field.Op)
 	default:
 		applyStringFilter(b, where, fmt.Sprintf("r.data ->> %s", key), field.Value, field.Op)
 	}
@@ -413,9 +419,18 @@ func sortExpression(params listParams, b *queryBuilder) string {
 		return fmt.Sprintf("(SELECT f.filename FROM public.files f WHERE f.id::text = r.data ->> %s AND f.deleted_at IS NULL)", key)
 	case fieldKindForeign:
 		return relatedTitleExpr(b, key, meta.TitleKey)
+	case fieldKindAddress:
+		return addressTextExpr(key)
 	default:
 		return fmt.Sprintf("r.data ->> %s", key)
 	}
+}
+
+func addressTextExpr(key string) string {
+	return fmt.Sprintf(
+		`concat_ws(' ', r.data -> %s ->> 'line1', r.data -> %s ->> 'line2', r.data -> %s ->> 'city', r.data -> %s ->> 'region', r.data -> %s ->> 'postalCode', r.data -> %s ->> 'country')`,
+		key, key, key, key, key, key,
+	)
 }
 
 func relatedTitleExpr(b *queryBuilder, fieldKeyPlaceholder, titleKey string) string {

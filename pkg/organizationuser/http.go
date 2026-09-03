@@ -12,10 +12,10 @@ import (
 )
 
 type httpHandler struct {
-	service *service
+	service *Service
 }
 
-func newHTTPHandler(service *service, mux *http.ServeMux) *httpHandler {
+func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
 	handler := &httpHandler{
 		service: service,
 	}

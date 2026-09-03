@@ -72,7 +72,8 @@ func TestParseSchemaFields(t *testing.T) {
 			"declaredValue": { "type": "number" },
 			"signatureCaptured": { "type": "boolean" },
 			"proofFileId": { "type": "string", "format": "file" },
-			"investorId": { "type": "string", "format": "foreign", "schemaId": "11111111-1111-1111-1111-111111111111" }
+			"investorId": { "type": "string", "format": "foreign", "schemaId": "11111111-1111-1111-1111-111111111111" },
+			"mailingAddress": { "type": "object", "format": "address" }
 		}
 	}`))
 	if err != nil {
@@ -95,6 +96,9 @@ func TestParseSchemaFields(t *testing.T) {
 	}
 	if fields["investorId"].SchemaID != "11111111-1111-1111-1111-111111111111" {
 		t.Fatalf("investorId schemaId=%s", fields["investorId"].SchemaID)
+	}
+	if fields["mailingAddress"].Kind != fieldKindAddress {
+		t.Fatalf("mailingAddress kind=%s", fields["mailingAddress"].Kind)
 	}
 }
 
@@ -221,5 +225,26 @@ func TestBuildListQuery_emptyField(t *testing.T) {
 	countSQL, _, _, _ := buildListQuery(params)
 	if !strings.Contains(countSQL, "jsonb_typeof(r.data -> $2) = 'null'") {
 		t.Fatalf("missing empty json filter: %s", countSQL)
+	}
+}
+
+func TestBuildListQuery_addressField(t *testing.T) {
+	params := listParams{
+		UserID: "user-1",
+		Fields: []fieldFilter{
+			{Name: "mailingAddress", Value: "Francisco", Op: opContains, Kind: fieldKindAddress},
+		},
+		SchemaFields: map[string]schemaField{
+			"mailingAddress": {Name: "mailingAddress", Kind: fieldKindAddress},
+		},
+		Sort:  "mailingAddress",
+		Order: "asc",
+	}
+	countSQL, listSQL, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "concat_ws(' ', r.data -> $2 ->> 'line1'") {
+		t.Fatalf("missing address filter: %s", countSQL)
+	}
+	if !strings.Contains(listSQL, "ORDER BY concat_ws(' ', r.data -> $4 ->> 'line1'") {
+		t.Fatalf("missing address sort: %s", listSQL)
 	}
 }

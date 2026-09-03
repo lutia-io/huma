@@ -67,6 +67,19 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 		return "", apperror.NewBadRequestError("Network ID is required", nil)
 	}
 
+	snap, err := s.schemaService.SnapshotByID(ctx, schemaID)
+	if err != nil {
+		return "", err
+	}
+	if snap.NetworkID != networkID {
+		s.logger.WarnContext(ctx, "Schema network mismatch", "schema_id", schemaID, "network_id", networkID)
+		return "", apperror.NewBadRequestError("Schema does not belong to this network", nil)
+	}
+	if snap.OrganizationID != nil && *snap.OrganizationID != organizationID {
+		s.logger.WarnContext(ctx, "Schema organization mismatch", "schema_id", schemaID, "organization_id", organizationID)
+		return "", apperror.NewBadRequestError("Schema does not belong to this organization", nil)
+	}
+
 	if err := s.schemaService.ValidateRecordData(ctx, schemaID, params.Data); err != nil {
 		return "", err
 	}

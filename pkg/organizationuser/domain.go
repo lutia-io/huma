@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+// Scope is the network and organization an organization user belongs to.
+type Scope struct {
+	ID             string
+	OrganizationID string
+	NetworkID      string
+	UserID         string
+}
+
 type organizationUser struct {
 	ID string `json:"id"`
 

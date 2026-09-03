@@ -5,12 +5,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/organizationuser"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, objs jetstream.ObjectStore) *Service {
+func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, objs jetstream.ObjectStore, orgUsers *organizationuser.Service) *Service {
 	service := NewWithPool(logger, pool, objs)
-	newHTTPHandler(service, mux)
+	newHTTPHandler(service, orgUsers, mux)
 	return service
 }
 

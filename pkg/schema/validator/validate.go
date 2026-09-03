@@ -70,6 +70,10 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 		Name:     ForeignFormat,
 		Validate: validateForeignFormat,
 	})
+	c.RegisterFormat(&jsonschema.Format{
+		Name:     AddressFormat,
+		Validate: validateAddressFormat,
+	})
 	c.UseLoader(deniedLoader{})
 
 	if err := c.AddResource(schemaURL, doc); err != nil {
@@ -87,7 +91,10 @@ func ValidateDefinition(definition json.RawMessage) error {
 	if _, err := compile(definition); err != nil {
 		return err
 	}
-	return ValidateForeignKeywords(definition)
+	if err := ValidateForeignKeywords(definition); err != nil {
+		return err
+	}
+	return ValidateAddressKeywords(definition)
 }
 
 // ValidateData validates data against a JSON Schema definition.

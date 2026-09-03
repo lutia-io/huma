@@ -12,21 +12,21 @@ import (
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
-type service struct {
+type Service struct {
 	logger *logger.Logger
 	store  store
 	hasher hasher.Hasher
 }
 
-func newService(logger *logger.Logger, store store, hasher hasher.Hasher) *service {
-	return &service{
+func NewService(logger *logger.Logger, store store, hasher hasher.Hasher) *Service {
+	return &Service{
 		logger: logger,
 		store:  store,
 		hasher: hasher,
 	}
 }
 
-func (s *service) Insert(ctx context.Context, req insertOrganizationUserRequest) (string, error) {
+func (s *Service) Insert(ctx context.Context, req insertOrganizationUserRequest) (string, error) {
 	firstName := strings.TrimSpace(req.FirstName)
 	if firstName == "" {
 		s.logger.WarnContext(ctx, "Empty first name")
@@ -88,7 +88,7 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationUserRequest)
 	return id, nil
 }
 
-func (s *service) Patch(ctx context.Context, existing *organizationUser, req patchOrganizationUserRequest) error {
+func (s *Service) Patch(ctx context.Context, existing *organizationUser, req patchOrganizationUserRequest) error {
 	if req.FirstName == nil && req.LastName == nil && req.Email == nil && req.Password == nil {
 		return apperror.NewBadRequestError("No fields to update", nil)
 	}
@@ -150,7 +150,7 @@ func (s *service) Patch(ctx context.Context, existing *organizationUser, req pat
 	return nil
 }
 
-func (s *service) UpdatePassword(ctx context.Context, existing *organizationUser, req updatePasswordRequest) error {
+func (s *Service) UpdatePassword(ctx context.Context, existing *organizationUser, req updatePasswordRequest) error {
 	if req.CurrentPassword == "" {
 		return apperror.NewBadRequestError("Current password is required", nil)
 	}
@@ -193,7 +193,7 @@ func (s *service) UpdatePassword(ctx context.Context, existing *organizationUser
 	return nil
 }
 
-func (s *service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
+func (s *Service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:
 		params.UserID = p.ID
@@ -216,7 +216,7 @@ func (s *service) List(ctx context.Context, p principal.Principal, params listPa
 	return result, nil
 }
 
-func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*organizationUser, error) {
+func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*organizationUser, error) {
 	if !uuid.Valid(id) {
 		return nil, apperror.NewBadRequestError("Invalid organization user ID", nil)
 	}
@@ -244,4 +244,64 @@ func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*o
 	}
 
 	return u, nil
+}
+
+// Scope returns the network and organization for an organization user.
+func (s *Service) Scope(ctx context.Context, id string) (*Scope, error) {
+	if !uuid.Valid(id) {
+		return nil, apperror.NewBadRequestError("Invalid organization user ID", nil)
+	}
+	u, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		if apperror.IsNotFound(err) {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "Failed to get organization user", logger.KeyID, id, logger.KeyError, err)
+		return nil, err
+	}
+	return &Scope{
+		ID:             u.ID,
+		OrganizationID: u.OrganizationID,
+		NetworkID:      u.NetworkID,
+		UserID:         u.UserID,
+	}, nil
+}
+
+// ResolveCreateActor returns the organization user a record or file should be
+// created as. Organization-user sessions always create as themselves.
+// Platform users must pass an organizationUserId they administer.
+func ResolveCreateActor(ctx context.Context, p principal.Principal, organizationUserID string, lookup func(context.Context, string) (*Scope, error)) (*Scope, error) {
+	requestedID := strings.TrimSpace(organizationUserID)
+
+	switch p.Type {
+	case principal.TypeOrganizationUser:
+		if p.NetworkID == "" || p.OrganizationID == "" {
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
+		}
+		if requestedID != "" && requestedID != p.ID {
+			return nil, apperror.NewForbiddenError("Cannot create as another organization user", nil)
+		}
+		return &Scope{
+			ID:             p.ID,
+			OrganizationID: p.OrganizationID,
+			NetworkID:      p.NetworkID,
+		}, nil
+	case principal.TypeUser:
+		if requestedID == "" {
+			return nil, apperror.NewBadRequestError("Organization user ID is required", nil)
+		}
+		scope, err := lookup(ctx, requestedID)
+		if err != nil {
+			return nil, err
+		}
+		if scope.UserID != p.ID {
+			return nil, apperror.NewNotFoundError("Organization user not found", nil)
+		}
+		if p.NetworkID != "" && p.NetworkID != scope.NetworkID {
+			return nil, apperror.NewForbiddenError("Network mismatch", nil)
+		}
+		return scope, nil
+	default:
+		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
+	}
 }

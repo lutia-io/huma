@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/organizationuser"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
 )
@@ -16,12 +17,14 @@ import (
 const maxMultipartMemory = 32 << 20 // 32 MiB
 
 type httpHandler struct {
-	service *Service
+	service  *Service
+	orgUsers *organizationuser.Service
 }
 
-func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
+func newHTTPHandler(service *Service, orgUsers *organizationuser.Service, mux *http.ServeMux) *httpHandler {
 	handler := &httpHandler{
-		service: service,
+		service:  service,
+		orgUsers: orgUsers,
 	}
 	handler.Register(mux)
 	return handler
@@ -60,16 +63,13 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	if err := principal.RequireOrganizationUser(p, p.NetworkID, p.OrganizationID); err != nil {
-		render.WriteError(w, err)
-		return
-	}
-	if p.NetworkID == "" || p.OrganizationID == "" {
-		render.WriteError(w, apperror.NewForbiddenError("Organization user token missing network or organization", nil))
-		return
-	}
 	if err := r.ParseMultipartForm(maxMultipartMemory); err != nil {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid multipart form", err))
+		return
+	}
+	actor, err := organizationuser.ResolveCreateActor(r.Context(), p, r.FormValue("organizationUserId"), h.orgUsers.Scope)
+	if err != nil {
+		render.WriteError(w, err)
 		return
 	}
 
@@ -98,9 +98,9 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 	id, err := h.service.Create(r.Context(), CreateParams{
 		Filename:           filename,
 		ContentType:        contentType,
-		OrganizationID:     p.OrganizationID,
-		OrganizationUserID: p.ID,
-		NetworkID:          p.NetworkID,
+		OrganizationID:     actor.OrganizationID,
+		OrganizationUserID: actor.ID,
+		NetworkID:          actor.NetworkID,
 		IdempotencyKey:     r.FormValue("idempotencyKey"),
 		Content:            file,
 	})

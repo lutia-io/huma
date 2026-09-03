@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
 )
@@ -88,6 +89,10 @@ func (store *postgresStore) Insert(ctx context.Context, f *File) (string, bool, 
 		return id, false, nil
 	}
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return "", false, apperror.NewBadRequestError("Invalid organization, user, or network", err)
+		}
 		return "", false, err
 	}
 	return id, true, nil

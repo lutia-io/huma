@@ -20,6 +20,7 @@ type CreateRecordContext struct {
 }
 
 type UpdateRecordContext struct {
+	SchemaID string         `json:"schemaId,omitempty"`
 	RecordID string         `json:"recordId"`
 	Data     map[string]any `json:"data"`
 }

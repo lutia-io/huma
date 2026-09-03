@@ -39,9 +39,7 @@ type CreateParams struct {
 type insertRecordRequest struct {
 	Data               json.RawMessage `json:"data"`
 	SchemaID           string          `json:"schemaId"`
-	OrganizationID     string          `json:"-"`
-	OrganizationUserID string          `json:"-"`
-	NetworkID          string          `json:"-"`
+	OrganizationUserID string          `json:"organizationUserId"`
 }
 
 type patchRecordRequest struct {

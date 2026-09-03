@@ -4,7 +4,8 @@ CREATE TABLE public.schemas (
     slug TEXT NOT NULL,
     active BOOLEAN NOT NULL DEFAULT FALSE,
     internal BOOLEAN NOT NULL DEFAULT FALSE,
-    definition JSONB NOT NULL,
+    -- JSON (not JSONB) preserves object key order for properties and TitleKey.
+    definition JSON NOT NULL,
     network_id UUID NOT NULL REFERENCES public.networks(id),
     organization_id UUID REFERENCES public.organizations(id),
     user_id UUID NOT NULL REFERENCES public.users(id),

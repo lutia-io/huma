@@ -73,13 +73,13 @@ func New() {
 	user.New(log, pool, mux)
 	network.New(log, pool, mux)
 	organization.New(log, pool, mux)
-	organizationuser.New(log, pool, mux)
+	orgUserService := organizationuser.New(log, pool, mux)
 	schemaService := schema.New(log, pool, mux)
 	nodeService := node.New(log, pool, mux)
 	pipeline.New(log, pool, mux, nodeService)
 	workflow.New(log, pool, mux)
-	file.New(log, pool, mux, objs)
-	record.New(log, pool, mux, js, schemaService)
+	file.New(log, pool, mux, objs, orgUserService)
+	record.New(log, pool, mux, js, schemaService, orgUserService)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

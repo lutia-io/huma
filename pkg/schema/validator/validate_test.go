@@ -182,6 +182,33 @@ func TestForeignFields(t *testing.T) {
 	}
 }
 
+func TestPropertiesDocumentOrder(t *testing.T) {
+	def := json.RawMessage(`{
+		"properties": {
+			"legalName": { "type": "string" },
+			"email": { "type": "string" },
+			"investorId": { "type": "string", "format": "foreign", "schemaId": "550e8400-e29b-41d4-a716-446655440000" }
+		}
+	}`)
+	properties, err := Properties(def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(properties))
+	for i, property := range properties {
+		got[i] = property.Name
+	}
+	want := []string{"legalName", "email", "investorId"}
+	if len(got) != len(want) {
+		t.Fatalf("properties=%v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("properties=%v want %v", got, want)
+		}
+	}
+}
+
 func TestDisplayTitle(t *testing.T) {
 	def := json.RawMessage(`{
 		"properties": {
@@ -201,6 +228,112 @@ func TestDisplayTitle(t *testing.T) {
 	}
 	if got := DisplayTitle(json.RawMessage(`{}`), def, "Investor"); got != "Investor" {
 		t.Fatalf("fallback=%q", got)
+	}
+}
+
+func TestValidateDefinition_addressFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		def     string
+		wantErr string
+	}{
+		{
+			name: "valid",
+			def:  `{"type":"object","properties":{"mailingAddress":{"type":"object","format":"address"}}}`,
+		},
+		{
+			name:    "non-object type",
+			def:     `{"type":"object","properties":{"mailingAddress":{"type":"string","format":"address"}}}`,
+			wantErr: "format address requires type object",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDefinition(json.RawMessage(tt.def))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateDataAddressFormat(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"mailingAddress": {
+				"type": "object",
+				"format": "address",
+				"additionalProperties": false,
+				"properties": {
+					"line1": { "type": "string" },
+					"line2": { "type": "string" },
+					"city": { "type": "string" },
+					"region": { "type": "string" },
+					"postalCode": { "type": "string" },
+					"country": { "type": "string" }
+				},
+				"required": ["line1", "city", "country"]
+			}
+		},
+		"required": ["mailingAddress"]
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{
+			name: "valid address",
+			data: `{"mailingAddress":{"line1":"1 Market St","city":"San Francisco","region":"CA","postalCode":"94105","country":"US"}}`,
+		},
+		{
+			name:    "missing required line1",
+			data:    `{"mailingAddress":{"city":"San Francisco","country":"US"}}`,
+			wantErr: true,
+		},
+		{
+			name:    "string instead of object",
+			data:    `{"mailingAddress":"1 Market St"}`,
+			wantErr: true,
+		},
+		{
+			name:    "unknown address field",
+			data:    `{"mailingAddress":{"line1":"1 Market St","city":"San Francisco","country":"US","lat":1}}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestTitleKeySkipsAddress(t *testing.T) {
+	def := json.RawMessage(`{
+		"properties": {
+			"mailingAddress": { "type": "object", "format": "address" },
+			"legalName": { "type": "string" }
+		}
+	}`)
+	if got := TitleKey(def); got != "legalName" {
+		t.Fatalf("title key=%q", got)
 	}
 }
 

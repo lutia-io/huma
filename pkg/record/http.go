@@ -5,12 +5,14 @@ import (
 	"net/http"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/organizationuser"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
 )
 
 type httpHandler struct {
-	service *Service
+	service  *Service
+	orgUsers *organizationuser.Service
 }
 
 type recordResponse struct {
@@ -18,9 +20,10 @@ type recordResponse struct {
 	Related map[string]RelatedRecord `json:"related"`
 }
 
-func newHTTPHandler(service *Service, mux *http.ServeMux) *httpHandler {
+func newHTTPHandler(service *Service, orgUsers *organizationuser.Service, mux *http.ServeMux) *httpHandler {
 	handler := &httpHandler{
-		service: service,
+		service:  service,
+		orgUsers: orgUsers,
 	}
 	handler.Register(mux)
 	return handler
@@ -72,24 +75,21 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	if err := principal.RequireOrganizationUser(p, p.NetworkID, p.OrganizationID); err != nil {
-		render.WriteError(w, err)
-		return
-	}
-	if p.NetworkID == "" || p.OrganizationID == "" {
-		render.WriteError(w, apperror.NewForbiddenError("Organization user token missing network or organization", nil))
-		return
-	}
 	var req insertRecordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
+	actor, err := organizationuser.ResolveCreateActor(r.Context(), p, req.OrganizationUserID, h.orgUsers.Scope)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
 	id, err := h.service.Create(r.Context(), CreateParams{
 		SchemaID:           req.SchemaID,
-		OrganizationID:     p.OrganizationID,
-		OrganizationUserID: p.ID,
-		NetworkID:          p.NetworkID,
+		OrganizationID:     actor.OrganizationID,
+		OrganizationUserID: actor.ID,
+		NetworkID:          actor.NetworkID,
 		Data:               req.Data,
 	})
 	if err != nil {

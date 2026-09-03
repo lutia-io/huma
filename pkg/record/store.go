@@ -80,7 +80,7 @@ func (store *postgresStore) Insert(ctx context.Context, rec *Record) (string, er
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-			return "", apperror.NewBadRequestError("Invalid schema, organization, or network", err)
+			return "", apperror.NewBadRequestError("Invalid schema, organization, user, or network", err)
 		}
 		return "", err
 	}
