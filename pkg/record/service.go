@@ -34,7 +34,8 @@ func NewService(logger *logger.Logger, store store, js jetstream.JetStream, sche
 	}
 }
 
-// Create validates and inserts a record, then publishes records.created.
+// Create applies schema defaults for missing properties, validates, and
+// inserts a record, then publishes records.created.
 // When IdempotencyKey is set, a replay resolves to the existing record and
 // the event is published with that key as the JetStream message ID.
 func (s *Service) Create(ctx context.Context, params CreateParams) (string, error) {
@@ -80,15 +81,21 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 		return "", apperror.NewBadRequestError("Schema does not belong to this organization", nil)
 	}
 
-	if err := s.schemaService.ValidateRecordData(ctx, schemaID, params.Data); err != nil {
+	data, err := validator.ApplyDefaults(snap.Definition, params.Data)
+	if err != nil {
+		s.logger.WarnContext(ctx, "Failed to apply schema defaults", "schema_id", schemaID, logger.KeyError, err)
+		return "", apperror.NewBadRequestError(err.Error(), err)
+	}
+
+	if err := s.schemaService.ValidateRecordData(ctx, schemaID, data); err != nil {
 		return "", err
 	}
-	if err := s.validateForeignRefs(ctx, schemaID, params.NetworkID, params.OrganizationID, params.Data); err != nil {
+	if err := s.validateForeignRefs(ctx, schemaID, params.NetworkID, params.OrganizationID, data); err != nil {
 		return "", err
 	}
 
 	rec := &Record{
-		Data:               params.Data,
+		Data:               data,
 		SchemaID:           schemaID,
 		OrganizationID:     organizationID,
 		OrganizationUserID: organizationUserID,

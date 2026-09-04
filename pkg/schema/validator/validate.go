@@ -94,7 +94,10 @@ func ValidateDefinition(definition json.RawMessage) error {
 	if err := ValidateForeignKeywords(definition); err != nil {
 		return err
 	}
-	return ValidateAddressKeywords(definition)
+	if err := ValidateAddressKeywords(definition); err != nil {
+		return err
+	}
+	return ValidateDefaultKeywords(definition)
 }
 
 // ValidateData validates data against a JSON Schema definition.

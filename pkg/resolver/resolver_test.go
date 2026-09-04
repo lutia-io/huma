@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -173,6 +174,27 @@ func TestResolveAddInputIndex(t *testing.T) {
 	}
 }
 
+func TestResolveUUID(t *testing.T) {
+	const id = "550e8400-e29b-41d4-a716-446655440000"
+	orig := uuidFunc
+	uuidFunc = func() (string, error) { return id, nil }
+	defer func() { uuidFunc = orig }()
+
+	got, err := Resolve(map[string]any{
+		"id":   "{{ uuid }}",
+		"note": "id {{ uuid }}",
+	}, Trigger{})
+	if err != nil {
+		t.Fatalf("Resolve() error: %v", err)
+	}
+	if got["id"] != id {
+		t.Errorf("id = %v, want %s", got["id"], id)
+	}
+	if got["note"] != "id "+id {
+		t.Errorf("note = %v", got["note"])
+	}
+}
+
 func TestResolveDateNow(t *testing.T) {
 	fixed := time.Date(2026, 8, 4, 12, 30, 0, 0, time.UTC)
 	orig := nowFunc
@@ -222,6 +244,12 @@ func TestResolveErrors(t *testing.T) {
 			data: map[string]any{"x": "{{ add .Record.data.missing 1 }}"},
 		},
 		{
+			name: "nested braces in add",
+			data: map[string]any{
+				"x": "{{ add {{ .Context.data.total }} {{ .Record.data.amount }} }}",
+			},
+		},
+		{
 			name: "malformed template",
 			data: map[string]any{"x": "{{ .Record. }}"},
 		},
@@ -237,8 +265,12 @@ func TestResolveErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Resolve(tt.data, trigger); err == nil {
+			_, err := Resolve(tt.data, trigger)
+			if err == nil {
 				t.Fatal("Resolve() expected error, got nil")
+			}
+			if tt.name == "nested braces in add" && !strings.Contains(err.Error(), "function arguments are field paths") {
+				t.Fatalf("error = %v, want nested-brace hint", err)
 			}
 		})
 	}
@@ -264,6 +296,74 @@ func TestResolveNilRecord(t *testing.T) {
 	}
 	if got["literal"] != "hello" {
 		t.Errorf("literal = %v, want hello", got["literal"])
+	}
+}
+
+func TestResolveWithTarget(t *testing.T) {
+	trigger := Trigger{
+		ID: "contrib-1",
+		Data: map[string]any{
+			"amountCents": float64(50),
+			"fundId":     "fund-1",
+		},
+	}
+	target := Target{
+		ID: "fund-1",
+		Data: map[string]any{
+			"contributedAmountCents": float64(100),
+			"name":                   "General",
+		},
+	}
+
+	tests := []struct {
+		name string
+		data map[string]any
+		want map[string]any
+	}{
+		{
+			name: "context id is the target row uuid",
+			data: map[string]any{"id": "{{ .Context.id }}"},
+			want: map[string]any{"id": "fund-1"},
+		},
+		{
+			name: "context field keeps number type",
+			data: map[string]any{"total": "{{ .Context.data.contributedAmountCents }}"},
+			want: map[string]any{"total": float64(100)},
+		},
+		{
+			name: "add context and record fields",
+			data: map[string]any{
+				"contributedAmountCents": "{{ add .Context.data.contributedAmountCents .Record.data.amountCents }}",
+			},
+			want: map[string]any{"contributedAmountCents": int64(150)},
+		},
+		{
+			name: "missing context field is nil",
+			data: map[string]any{"x": "{{ .Context.data.missing }}"},
+			want: map[string]any{"x": nil},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveWithTarget(tt.data, trigger, target)
+			if err != nil {
+				t.Fatalf("ResolveWithTarget() error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ResolveWithTarget() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveContextWithoutTarget(t *testing.T) {
+	got, err := Resolve(map[string]any{"x": "{{ .Context.data.total }}"}, Trigger{})
+	if err != nil {
+		t.Fatalf("Resolve() error: %v", err)
+	}
+	if got["x"] != nil {
+		t.Errorf("x = %#v, want nil", got["x"])
 	}
 }
 

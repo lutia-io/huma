@@ -11,25 +11,39 @@
 // text/template is used rather than html/template so interpolated values are
 // not HTML-escaped; action payloads are JSON data, not HTML.
 //
-// The root data object is env: the trigger record is .Record and pipeline
-// level data is .Input. Numeric pipeline indexes are written as
-// {{ .Input.1.body.name }} and rewritten to index calls because Go templates
-// cannot parse ".1" as a field name. Custom functions:
+// The root data object is env: the trigger record is .Record, the record an
+// update action is writing to is .Context, and pipeline level data is .Input.
+// Numeric pipeline indexes are written as {{ .Input.1.body.name }} and
+// rewritten to index calls because Go templates cannot parse ".1" as a field
+// name. Custom functions:
 //
 //	{{ now }}                         current UTC time in RFC 3339
+//	{{ uuid }}                        a random UUID v4
 //	{{ add 1 1 }}                     sum two or more numbers
 //	{{ add .Record.data.count 1 }}    increment a numeric field
+//	{{ add .Context.data.total .Record.data.amount }}
 //
-//	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "total": "{{ add .Record.data.count 1 }}"}
+//	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "id": "{{ uuid }}", "total": "{{ add .Record.data.count 1 }}"}
+//
+// Schema property default values use the same language, evaluated with an
+// empty trigger so only functions (now, uuid, add on literals) are useful.
 //
 // .Record is the trigger row, not the JSONB document:
 //
 //	{{ .Record.id }}           the records row UUID
 //	{{ .Record.data.age }}     a field on the JSONB document
 //
+// .Context is the existing row an UPDATE_RECORD (or UPSERT_RECORD update) is
+// writing to, with the same shape. It is empty when Resolve is called without
+// a Target (create, pipeline input, recordId):
+//
+//	{{ .Context.id }}          the target records row UUID
+//	{{ .Context.data.total }}  a field on the target JSONB document
+//
 // Built-in template functions such as or work as usual, e.g.
 // {{ or .Record.data.nickname "friend" }}. Go templates take space-separated
-// arguments ({{ add 1 1 }}), not math.add(1, 1).
+// arguments ({{ add 1 1 }}), not math.add(1, 1), and do not nest {{ }} around
+// those arguments.
 //
 // # Typed vs string results
 //
@@ -44,10 +58,10 @@
 // same way and keeps its numeric type. Any other template (functions,
 // pipelines, surrounding text) executes normally and yields a string.
 //
-// Missing keys inside .Record (a map) resolve to nil rather than erroring;
-// schema validation downstream rejects them where they are required, and or
-// provides defaults. Missing fields on the env struct itself (typos like
-// .Contxt) still error, matching text/template's struct behavior.
+// Missing keys inside .Record or .Context (maps) resolve to nil rather than
+// erroring; schema validation downstream rejects them where they are required,
+// and or provides defaults. Missing fields on the env struct itself (typos
+// like .Contxt) still error, matching text/template's struct behavior.
 package resolver
 
 import (
@@ -72,15 +86,17 @@ var nowFunc = time.Now
 var tmplCache sync.Map // map[string]*template.Template
 
 // env is the root data passed to every template. Exported fields become the
-// top-level names templates can reference (.Record, .Input). Keeping a struct
-// (rather than passing the record map as ".") leaves room to add more roots
-// later without breaking existing .Record.* templates.
+// top-level names templates can reference (.Record, .Context, .Input).
+// Keeping a struct (rather than passing the record map as ".") leaves room to
+// add more roots later without breaking existing .Record.* templates.
 //
-// Record is a map so template paths stay lowercase: {{ .Record.id }},
-// {{ .Record.data.name }}. A Go struct would force {{ .Record.ID }}.
+// Record and Context are maps so template paths stay lowercase:
+// {{ .Record.id }}, {{ .Context.data.name }}. A Go struct would force
+// {{ .Record.ID }}.
 type env struct {
-	Record map[string]any
-	Input  map[string]any
+	Record  map[string]any
+	Context map[string]any
+	Input   map[string]any
 }
 
 // Trigger is the workflow's trigger record. Templates address it as .Record.
@@ -89,17 +105,28 @@ type Trigger struct {
 	Data map[string]any
 }
 
-func recordEnv(t Trigger) env {
-	data := t.Data
+// Target is the record an update action is writing to. Templates address it
+// as .Context.
+type Target struct {
+	ID   string
+	Data map[string]any
+}
+
+func recordMap(id string, data map[string]any) map[string]any {
 	if data == nil {
 		data = map[string]any{}
 	}
+	return map[string]any{
+		"id":   id,
+		"data": data,
+	}
+}
+
+func recordEnv(t Trigger, target Target) env {
 	return env{
-		Record: map[string]any{
-			"id":   t.ID,
-			"data": data,
-		},
-		Input: map[string]any{},
+		Record:  recordMap(t.ID, t.Data),
+		Context: recordMap(target.ID, target.Data),
+		Input:   map[string]any{},
 	}
 }
 
@@ -111,7 +138,14 @@ func recordEnv(t Trigger) env {
 // A zero Trigger is treated as an empty record so templates that only use now
 // still work.
 func Resolve(data map[string]any, trigger Trigger) (map[string]any, error) {
-	resolved, err := resolveValue(data, recordEnv(trigger))
+	return ResolveWithTarget(data, trigger, Target{})
+}
+
+// ResolveWithTarget is like Resolve but templates can also read .Context, the
+// existing record being updated. UPDATE_RECORD (and the update branch of
+// UPSERT_RECORD) pass the loaded row as target after resolving recordId.
+func ResolveWithTarget(data map[string]any, trigger Trigger, target Target) (map[string]any, error) {
+	resolved, err := resolveValue(data, recordEnv(trigger, target))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +156,7 @@ func Resolve(data map[string]any, trigger Trigger) (map[string]any, error) {
 
 // ResolveOne interpolates a single templated string against .Record.
 func ResolveOne(s string, trigger Trigger) (any, error) {
-	return resolveString(s, recordEnv(trigger))
+	return resolveString(s, recordEnv(trigger, Target{}))
 }
 
 // ResolveInput is like Resolve but templates read from .Input (pipeline level
@@ -131,7 +165,7 @@ func ResolveInput(data map[string]any, input map[string]any) (map[string]any, er
 	if input == nil {
 		input = map[string]any{}
 	}
-	resolved, err := resolveValue(data, env{Record: map[string]any{}, Input: input})
+	resolved, err := resolveValue(data, env{Record: map[string]any{}, Context: map[string]any{}, Input: input})
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +177,7 @@ func ResolveString(s string, input map[string]any) (any, error) {
 	if input == nil {
 		input = map[string]any{}
 	}
-	return resolveString(s, env{Record: map[string]any{}, Input: input})
+	return resolveString(s, env{Record: map[string]any{}, Context: map[string]any{}, Input: input})
 }
 
 // resolveValue dispatches on the JSON-shaped types that appear in action
@@ -250,6 +284,9 @@ func parseTemplate(s string) (*template.Template, error) {
 		Funcs(templateFuncs()).
 		Parse(s)
 	if err != nil {
+		if strings.Contains(err.Error(), `unexpected "{"`) {
+			return nil, fmt.Errorf("parsing template %q: %w; function arguments are field paths, not nested {{ }}. Use {{ add .Context.data.total .Record.data.amount }}", s, err)
+		}
 		return nil, fmt.Errorf("parsing template %q: %w", s, err)
 	}
 	actual, _ := tmplCache.LoadOrStore(s, tmpl)
@@ -257,7 +294,8 @@ func parseTemplate(s string) (*template.Template, error) {
 }
 
 // pureFieldPath reports whether tmpl is exactly one field selection on the
-// root data — "{{ .Record.data.email }}", "{{ .Record }}", or "{{ . }}" — with no
+// root data — "{{ .Record.data.email }}", "{{ .Context.data.total }}",
+// "{{ .Record }}", or "{{ . }}" — with no
 // surrounding text, function calls, pipelines, or declarations.
 //
 // It inspects the parse tree rather than matching strings so the check stays
@@ -336,8 +374,9 @@ func pureInputIndexPath(tmpl *template.Template) ([]string, bool) {
 // Interfaces and pointers are dereferenced at each step.
 //
 // Missing map keys return (nil, nil) — the zero value — so "{{ .Record.data.missing }}"
-// yields JSON null. Missing struct fields return an error, so typos on env
-// ({{ .Contxt }}) fail the same way Execute would.
+// and "{{ .Context.data.missing }}" yield JSON null. Missing struct fields
+// return an error, so typos on env ({{ .Contxt }}) fail the same way Execute
+// would.
 //
 // An empty path returns data itself (the "{{ . }}" case).
 func lookup(data any, path []string) (any, error) {

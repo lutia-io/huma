@@ -16,6 +16,7 @@ type Property struct {
 	Format   string
 	SchemaID string
 	Enum     []string
+	Default  json.RawMessage
 }
 
 // ForeignField is a property with format "foreign".
@@ -62,6 +63,7 @@ func Properties(definition json.RawMessage) ([]Property, error) {
 			Format   string          `json:"format"`
 			SchemaID string          `json:"schemaId"`
 			Enum     []string        `json:"enum"`
+			Default  json.RawMessage `json:"default"`
 		}
 		if err := dec.Decode(&spec); err != nil {
 			return nil, err
@@ -72,6 +74,7 @@ func Properties(definition json.RawMessage) ([]Property, error) {
 			Format:   spec.Format,
 			SchemaID: strings.TrimSpace(spec.SchemaID),
 			Enum:     spec.Enum,
+			Default:  spec.Default,
 		})
 	}
 	return properties, nil

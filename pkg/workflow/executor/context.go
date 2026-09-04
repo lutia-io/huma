@@ -16,7 +16,8 @@ type ExecutionContext struct {
 	// TriggerData is the snapshotted JSONB document of the trigger record.
 	// Handlers pass it to resolver.Resolve as Trigger.Data, so templates
 	// address fields as {{ .Record.data.<field> }} and the row UUID as
-	// {{ .Record.id }}.
+	// {{ .Record.id }}. UPDATE_RECORD also loads the target row and exposes
+	// it as {{ .Context.data.<field> }} / {{ .Context.id }}.
 	TriggerData        map[string]any
 	OrganizationID     string
 	OrganizationUserID string

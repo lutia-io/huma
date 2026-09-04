@@ -68,18 +68,30 @@ func createRecord(ctx context.Context, records RecordService, execCtx executor.E
 }
 
 // updateRecord is the shared merge-update path for UPDATE_RECORD and the
-// update branch of UPSERT_RECORD. It shallow-merges the resolved action data
-// over the existing record data, validates the merged document against the
+// update branch of UPSERT_RECORD. It resolves action data against the trigger
+// (.Record) and the existing row (.Context), shallow-merges the result over
+// the existing record data, validates the merged document against the
 // record's schema, and writes the full document (set-to-value, idempotent).
 func updateRecord(ctx context.Context, records RecordService, execCtx executor.ExecutionContext, existing *record.Record, data map[string]any) (json.RawMessage, error) {
-	resolved, err := resolver.Resolve(data, trigger(execCtx))
+	var existingData map[string]any
+	if err := json.Unmarshal(existing.Data, &existingData); err != nil {
+		return nil, fmt.Errorf("unmarshaling existing record data: %w", err)
+	}
+	if existingData == nil {
+		existingData = map[string]any{}
+	}
+
+	resolved, err := resolver.ResolveWithTarget(data, trigger(execCtx), resolver.Target{
+		ID:   existing.ID,
+		Data: existingData,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("resolving action data: %w", err)
 	}
 
-	var merged map[string]any
-	if err := json.Unmarshal(existing.Data, &merged); err != nil {
-		return nil, fmt.Errorf("unmarshaling existing record data: %w", err)
+	merged := make(map[string]any, len(existingData)+len(resolved))
+	for k, v := range existingData {
+		merged[k] = v
 	}
 	for k, v := range resolved {
 		merged[k] = v

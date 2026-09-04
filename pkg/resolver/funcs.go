@@ -8,6 +8,8 @@ import (
 	"text/template"
 	"text/template/parse"
 	"time"
+
+	"github.com/lutia-io/huma/pkg/uuid"
 )
 
 // typedFuncs are custom functions whose result should keep its Go type when
@@ -17,10 +19,16 @@ var typedFuncs = map[string]func(...any) (any, error){
 	"add": add,
 }
 
+// uuidFunc returns a UUID v4; a package variable so tests can pin the value.
+var uuidFunc = uuid.New
+
 func templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"now": func() string {
 			return nowFunc().UTC().Format(time.RFC3339)
+		},
+		"uuid": func() (string, error) {
+			return uuidFunc()
 		},
 		"add": add,
 	}
