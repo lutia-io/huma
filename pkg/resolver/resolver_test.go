@@ -96,6 +96,83 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+func TestResolveAdd(t *testing.T) {
+	trigger := Trigger{
+		Data: map[string]any{
+			"count": float64(4),
+			"bonus": float64(1.5),
+		},
+	}
+
+	tests := []struct {
+		name string
+		data map[string]any
+		want map[string]any
+	}{
+		{
+			name: "literals stay a number",
+			data: map[string]any{"total": "{{ add 1 1 }}"},
+			want: map[string]any{"total": int64(2)},
+		},
+		{
+			name: "field plus literal",
+			data: map[string]any{"total": "{{ add .Record.data.count 1 }}"},
+			want: map[string]any{"total": int64(5)},
+		},
+		{
+			name: "two fields",
+			data: map[string]any{"total": "{{ add .Record.data.count .Record.data.bonus }}"},
+			want: map[string]any{"total": float64(5.5)},
+		},
+		{
+			name: "floats stay float",
+			data: map[string]any{"total": "{{ add 1.5 2.25 }}"},
+			want: map[string]any{"total": float64(3.75)},
+		},
+		{
+			name: "more than two arguments",
+			data: map[string]any{"total": "{{ add 1 2 3 }}"},
+			want: map[string]any{"total": int64(6)},
+		},
+		{
+			name: "nested add stays a number",
+			data: map[string]any{"total": "{{ add (add 1 1) 1 }}"},
+			want: map[string]any{"total": int64(3)},
+		},
+		{
+			name: "mixed text interpolates to string",
+			data: map[string]any{"note": "sum {{ add 1 1 }}"},
+			want: map[string]any{"note": "sum 2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Resolve(tt.data, trigger)
+			if err != nil {
+				t.Fatalf("Resolve() error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Resolve() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveAddInputIndex(t *testing.T) {
+	got, err := ResolveInput(map[string]any{
+		"total": "{{ add .Input.1.body.count 2 }}",
+	}, map[string]any{
+		"1": map[string]any{"body": map[string]any{"count": float64(10)}},
+	})
+	if err != nil {
+		t.Fatalf("ResolveInput() error: %v", err)
+	}
+	if got["total"] != int64(12) {
+		t.Errorf("total = %#v, want 12", got["total"])
+	}
+}
+
 func TestResolveDateNow(t *testing.T) {
 	fixed := time.Date(2026, 8, 4, 12, 30, 0, 0, time.UTC)
 	orig := nowFunc
@@ -131,6 +208,18 @@ func TestResolveErrors(t *testing.T) {
 		{
 			name: "unknown function",
 			data: map[string]any{"x": "{{ frobnicate }}"},
+		},
+		{
+			name: "add with one argument",
+			data: map[string]any{"x": "{{ add 1 }}"},
+		},
+		{
+			name: "add with a non-number",
+			data: map[string]any{"x": `{{ add "nope" 1 }}`},
+		},
+		{
+			name: "add missing field",
+			data: map[string]any{"x": "{{ add .Record.data.missing 1 }}"},
 		},
 		{
 			name: "malformed template",

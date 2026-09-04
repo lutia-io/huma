@@ -14,10 +14,13 @@
 // The root data object is env: the trigger record is .Record and pipeline
 // level data is .Input. Numeric pipeline indexes are written as
 // {{ .Input.1.body.name }} and rewritten to index calls because Go templates
-// cannot parse ".1" as a field name. The only custom function today is now,
-// which returns the current UTC time in RFC 3339:
+// cannot parse ".1" as a field name. Custom functions:
 //
-//	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "note": "hi {{ .Record.data.email }}"}
+//	{{ now }}                         current UTC time in RFC 3339
+//	{{ add 1 1 }}                     sum two or more numbers
+//	{{ add .Record.data.count 1 }}    increment a numeric field
+//
+//	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "total": "{{ add .Record.data.count 1 }}"}
 //
 // .Record is the trigger row, not the JSONB document:
 //
@@ -25,7 +28,8 @@
 //	{{ .Record.data.age }}     a field on the JSONB document
 //
 // Built-in template functions such as or work as usual, e.g.
-// {{ or .Record.data.nickname "friend" }}.
+// {{ or .Record.data.nickname "friend" }}. Go templates take space-separated
+// arguments ({{ add 1 1 }}), not math.add(1, 1).
 //
 // # Typed vs string results
 //
@@ -36,8 +40,9 @@
 //
 // So when a string is exactly one field path — "{{ .Record.data.age }}" or even
 // "{{ . }}" — Resolve looks the path up with reflect and returns the native
-// value. Any other template (functions, pipelines, surrounding text) executes
-// normally and yields a string.
+// value. A lone typed function call such as "{{ add 1 1 }}" is evaluated the
+// same way and keeps its numeric type. Any other template (functions,
+// pipelines, surrounding text) executes normally and yields a string.
 //
 // Missing keys inside .Record (a map) resolve to nil rather than erroring;
 // schema validation downstream rejects them where they are required, and or
@@ -201,6 +206,13 @@ func resolveString(s string, e env) (any, error) {
 		}
 		return v, nil
 	}
+	if name, args, ok := pureTypedCall(tmpl); ok {
+		v, err := evalTypedCall(name, args, e)
+		if err != nil {
+			return nil, fmt.Errorf("executing template %q: %w", s, err)
+		}
+		return v, nil
+	}
 	var b strings.Builder
 	if err := tmpl.Execute(&b, e); err != nil {
 		return nil, fmt.Errorf("executing template %q: %w", s, err)
@@ -235,11 +247,7 @@ func parseTemplate(s string) (*template.Template, error) {
 	}
 	tmpl, err := template.New("").
 		Option("missingkey=zero").
-		Funcs(template.FuncMap{
-			"now": func() string {
-				return nowFunc().UTC().Format(time.RFC3339)
-			},
-		}).
+		Funcs(templateFuncs()).
 		Parse(s)
 	if err != nil {
 		return nil, fmt.Errorf("parsing template %q: %w", s, err)
