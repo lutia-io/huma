@@ -11,11 +11,11 @@ import (
 )
 
 const schemaSelectColumns = `
-	id, name, slug, active, internal, definition, network_id, organization_id,
+	id, name, slug, internal, definition, network_id, organization_id,
 	user_id, created_at, updated_at, deleted_at`
 
 const schemaListSelectColumns = `
-	s.id, s.name, s.slug, s.active, s.internal, s.definition, s.network_id, s.organization_id,
+	s.id, s.name, s.slug, s.internal, s.definition, s.network_id, s.organization_id,
 	s.user_id, s.created_at, s.updated_at, s.deleted_at`
 
 type store interface {
@@ -38,7 +38,6 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 		INSERT INTO public.schemas (
 			name,
 			slug,
-			active,
 			internal,
 			definition,
 			network_id,
@@ -47,7 +46,7 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
+			$1, $2, $3, $4, $5, $6, $7,
 			now(), now()
 		)
 		RETURNING id`
@@ -55,7 +54,6 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 	err := store.db.QueryRow(ctx, sql,
 		schema.Name,
 		schema.Slug,
-		schema.Active,
 		schema.Internal,
 		schema.Definition,
 		schema.NetworkID,
@@ -80,14 +78,13 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 func (store *postgresStore) Update(ctx context.Context, schema *schema) error {
 	const sql = `
 		UPDATE public.schemas
-		SET name = $2, slug = $3, active = $4, definition = $5, updated_at = now()
+		SET name = $2, slug = $3, definition = $4, updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	tag, err := store.db.Exec(ctx, sql,
 		schema.ID,
 		schema.Name,
 		schema.Slug,
-		schema.Active,
 		schema.Definition,
 	)
 	if err != nil {
@@ -108,7 +105,6 @@ func scanSchema(row pgx.Row, sch *schema) error {
 		&sch.ID,
 		&sch.Name,
 		&sch.Slug,
-		&sch.Active,
 		&sch.Internal,
 		&sch.Definition,
 		&sch.NetworkID,

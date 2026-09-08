@@ -25,7 +25,7 @@ func TestParseListParams_defaults(t *testing.T) {
 }
 
 func TestParseListParams_paginationAndFilters(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/schema?page=2&pageSize=10&q=invoice&sort=slug&order=desc&scope=network&active=true&name=Inv&nameOp=startsWith&slug=inv&properties=3&propertiesOp=gte", nil)
+	r := httptest.NewRequest(http.MethodGet, "/schema?page=2&pageSize=10&q=invoice&sort=slug&order=desc&scope=network&name=Inv&nameOp=startsWith&slug=inv&properties=3&propertiesOp=gte", nil)
 	params, err := parseListParams(r)
 	if err != nil {
 		t.Fatal(err)
@@ -36,8 +36,8 @@ func TestParseListParams_paginationAndFilters(t *testing.T) {
 	if params.Query != "invoice" || params.Sort != "slug" || params.Order != "desc" {
 		t.Fatalf("got q=%s sort=%s order=%s", params.Query, params.Sort, params.Order)
 	}
-	if params.Scope != "network" || params.Active == nil || !*params.Active {
-		t.Fatalf("got scope=%s active=%v", params.Scope, params.Active)
+	if params.Scope != "network" {
+		t.Fatalf("got scope=%s", params.Scope)
 	}
 	if params.Name != "Inv" || params.NameOp != opStartsWith {
 		t.Fatalf("got name=%s nameOp=%s", params.Name, params.NameOp)

@@ -48,10 +48,6 @@ func (s *Service) ValidateRecordData(ctx context.Context, schemaID string, data 
 		s.logger.ErrorContext(ctx, "Failed to load schema", "schema_id", schemaID, logger.KeyError, err)
 		return err
 	}
-	if !sch.Active {
-		s.logger.WarnContext(ctx, "Inactive schema", "schema_id", schemaID)
-		return apperror.NewBadRequestError("Schema is not active", nil)
-	}
 	if err := validator.ValidateData(sch.Definition, data); err != nil {
 		s.logger.WarnContext(ctx, "Invalid record data", "schema_id", schemaID, logger.KeyError, err)
 		return apperror.NewBadRequestError(err.Error(), err)
@@ -123,7 +119,6 @@ func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 	schema := &schema{
 		Name:           name,
 		Slug:           slug,
-		Active:         req.Active,
 		Internal:       req.Internal,
 		Definition:     req.Definition,
 		NetworkID:      networkID,
@@ -149,7 +144,7 @@ func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRe
 		return apperror.NewBadRequestError("Internal schemas cannot be updated", nil)
 	}
 
-	if req.Name == nil && req.Active == nil && len(req.Definition) == 0 {
+	if req.Name == nil && len(req.Definition) == 0 {
 		return apperror.NewBadRequestError("No fields to update", nil)
 	}
 
@@ -166,10 +161,6 @@ func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRe
 		}
 		existing.Name = name
 		existing.Slug = slug
-	}
-
-	if req.Active != nil {
-		existing.Active = *req.Active
 	}
 
 	if len(req.Definition) > 0 {

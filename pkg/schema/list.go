@@ -29,8 +29,6 @@ const (
 var listSortColumns = map[string]string{
 	"name":       "s.name",
 	"slug":       "s.slug",
-	"status":     "s.active",
-	"active":     "s.active",
 	"scope":      "COALESCE(o.name, 'Network')",
 	"properties": "(" + propertyCountExpr + ")",
 	"createdAt":  "s.created_at",
@@ -84,19 +82,6 @@ func parseListParams(r *http.Request) (listParams, error) {
 		return listParams{}, err
 	}
 	params.SlugOp = slugOp
-
-	if value := strings.TrimSpace(query.Get("active")); value != "" {
-		switch value {
-		case "true":
-			active := true
-			params.Active = &active
-		case "false":
-			active := false
-			params.Active = &active
-		default:
-			return listParams{}, apperror.NewBadRequestError("Invalid active filter", nil)
-		}
-	}
 
 	if params.PropertiesOp == opEmpty {
 		// value is optional for empty
@@ -214,9 +199,6 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	}
 	if params.Scope == "organization" {
 		where = append(where, "s.organization_id IS NOT NULL")
-	}
-	if params.Active != nil {
-		where = append(where, "s.active = "+b.add(*params.Active))
 	}
 	if params.Query != "" {
 		pattern := "%" + escapeLike(params.Query) + "%"

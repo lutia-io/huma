@@ -10,7 +10,6 @@ type schema struct {
 
 	Name     string `json:"name"`
 	Slug     string `json:"slug"`
-	Active   bool   `json:"active"`
 	Internal bool   `json:"internal"`
 
 	Definition json.RawMessage `json:"definition"`
@@ -26,7 +25,6 @@ type schema struct {
 
 type insertSchemaRequest struct {
 	Name           string          `json:"name"`
-	Active         bool            `json:"active"`
 	Internal       bool            `json:"internal"`
 	Definition     json.RawMessage `json:"definition"`
 	NetworkID      string          `json:"networkId"`
@@ -36,7 +34,6 @@ type insertSchemaRequest struct {
 
 type patchSchemaRequest struct {
 	Name       *string         `json:"name"`
-	Active     *bool           `json:"active"`
 	Definition json.RawMessage `json:"definition"`
 }
 
@@ -46,7 +43,6 @@ type listParams struct {
 	NetworkID      string
 	OrganizationID string
 	Scope          string
-	Active         *bool
 	Name           string
 	NameOp         string
 	Slug           string

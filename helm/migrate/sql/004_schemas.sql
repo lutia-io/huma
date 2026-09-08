@@ -2,7 +2,6 @@ CREATE TABLE public.schemas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
-    active BOOLEAN NOT NULL DEFAULT FALSE,
     internal BOOLEAN NOT NULL DEFAULT FALSE,
     -- JSON (not JSONB) preserves object key order for properties and TitleKey.
     definition JSON NOT NULL,
