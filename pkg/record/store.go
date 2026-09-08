@@ -30,6 +30,7 @@ type store interface {
 	GetByID(ctx context.Context, id string) (*Record, error)
 	GetByIDs(ctx context.Context, ids []string) ([]*Record, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
+	ListBySchema(ctx context.Context, networkID, schemaID, afterID string, limit int) ([]*Record, error)
 	UpdateData(ctx context.Context, recordID string, data json.RawMessage) (bool, error)
 }
 
@@ -237,4 +238,81 @@ func (store *postgresStore) UpdateData(ctx context.Context, recordID string, dat
 		return false, err
 	}
 	return tag.RowsAffected() > 0, nil
+}
+
+// SchemaPager pages records of a schema for scheduled workflow fan-out.
+type SchemaPager interface {
+	ListBySchema(ctx context.Context, networkID, schemaID, afterID string, limit int) ([]*Record, error)
+}
+
+func NewSchemaPager(pool *pgxpool.Pool) SchemaPager {
+	return &postgresStore{db: pool}
+}
+
+const schemaPageSelectColumns = `
+	id,
+	data,
+	schema_id,
+	organization_id,
+	organization_user_id,
+	network_id,
+	created_at,
+	updated_at,
+	deleted_at`
+
+func (store *postgresStore) ListBySchema(ctx context.Context, networkID, schemaID, afterID string, limit int) ([]*Record, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var (
+		rows pgx.Rows
+		err  error
+	)
+	if afterID == "" {
+		const sql = `
+			SELECT` + schemaPageSelectColumns + `
+			FROM public.records
+			WHERE network_id = $1
+				AND schema_id = $2
+				AND deleted_at IS NULL
+			ORDER BY id
+			LIMIT $3`
+		rows, err = store.db.Query(ctx, sql, networkID, schemaID, limit)
+	} else {
+		const sql = `
+			SELECT` + schemaPageSelectColumns + `
+			FROM public.records
+			WHERE network_id = $1
+				AND schema_id = $2
+				AND deleted_at IS NULL
+				AND id > $3
+			ORDER BY id
+			LIMIT $4`
+		rows, err = store.db.Query(ctx, sql, networkID, schemaID, afterID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	records := make([]*Record, 0)
+	for rows.Next() {
+		rec := &Record{}
+		if err := rows.Scan(
+			&rec.ID,
+			&rec.Data,
+			&rec.SchemaID,
+			&rec.OrganizationID,
+			&rec.OrganizationUserID,
+			&rec.NetworkID,
+			&rec.CreatedAt,
+			&rec.UpdatedAt,
+			&rec.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, rec)
+	}
+	return records, rows.Err()
 }

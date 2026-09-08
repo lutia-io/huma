@@ -10,8 +10,42 @@ import (
 )
 
 type Definition struct {
+	Trigger  Trigger           `json:"trigger"`
 	Criteria criteria.Criteria `json:"criteria"`
 	Actions  []action.Action   `json:"actions"`
+}
+
+const (
+	TriggerOnCreated  = "created"
+	TriggerOnUpdated  = "updated"
+	TriggerOnSchedule = "schedule"
+)
+
+// Trigger decides when a definition is eligible for intake. Empty On means
+// created, matching definitions that predate this field.
+type Trigger struct {
+	On       []string `json:"on,omitempty"`
+	Changed  []string `json:"changed,omitempty"`
+	Cron     string   `json:"cron,omitempty"`
+	Timezone string   `json:"timezone,omitempty"`
+}
+
+// Events is the trigger's on list, defaulting to created when omitted.
+func (t Trigger) Events() []string {
+	if len(t.On) == 0 {
+		return []string{TriggerOnCreated}
+	}
+	return t.On
+}
+
+// Includes reports whether event is one of the trigger's events.
+func (t Trigger) Includes(event string) bool {
+	for _, on := range t.Events() {
+		if on == event {
+			return true
+		}
+	}
+	return false
 }
 
 type WorkflowDefinition struct {

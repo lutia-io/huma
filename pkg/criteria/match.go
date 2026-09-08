@@ -7,9 +7,14 @@ import (
 
 // Match evaluates the criteria tree against record data.
 // Missing fields fail leaf comparisons. Malformed nodes fail.
+// A zero-value node (no logic, field, or operator) always matches, so a
+// definition can trigger on event shape alone.
 func Match(c Criteria, data map[string]any) bool {
 	if c.Logic != "" {
 		return matchGroup(c, data)
+	}
+	if c.Field == "" && c.Operator == "" {
+		return true
 	}
 	if c.Field == "" || c.Operator == "" {
 		return false

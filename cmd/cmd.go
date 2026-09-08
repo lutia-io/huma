@@ -37,7 +37,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stdout, "Usage: %s <command> [options]\n\n", prog)
 	fmt.Fprintln(os.Stdout, "Commands:")
 	fmt.Fprintln(os.Stdout, "  api                	The api service serves the main public api.")
-	fmt.Fprintln(os.Stdout, "  workflow-evaluator 	Consumes record events, evaluates workflow criteria, and inserts pending workflows.")
+	fmt.Fprintln(os.Stdout, "  workflow-evaluator 	Consumes record created/updated events, ticks scheduled workflows, and inserts pending workflows.")
 	fmt.Fprintln(os.Stdout, "  workflow-executor  	Claims pending workflows and executes their actions.")
 	fmt.Fprintln(os.Stdout, "  pipeline-executor  	Claims pending pipelines and executes their nodes.")
 }

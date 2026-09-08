@@ -8,6 +8,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -23,7 +24,7 @@ import (
 )
 
 // NewEvaluator runs the workflow evaluator service: it consumes record
-// events, evaluates workflow definition criteria against the record data, and
+// created and updated events, ticks scheduled definitions once a minute, and
 // durably inserts one pending workflow per match. No action side effects
 // happen here; after the ack, Postgres is the source of truth for the
 // workflow and the executor service picks it up.
@@ -54,10 +55,11 @@ func NewEvaluator() {
 	definitionStore := wf.NewPostgresStore(pool)
 	workflowStore := executor.NewPostgresWorkflowStore(pool, workerLeaseTimeout)
 	enqueuer := executor.NewEnqueuer(log, definitionStore, workflowStore)
+	recordPager := record.NewSchemaPager(pool)
 
 	consumer, err := js.CreateOrUpdateConsumer(ctx, record.StreamName, jetstream.ConsumerConfig{
 		Durable:        "workflow-evaluator",
-		FilterSubjects: []string{record.SubjectCreated},
+		FilterSubjects: []string{record.SubjectCreated, record.SubjectUpdated},
 		AckPolicy:      jetstream.AckExplicitPolicy,
 	})
 	if err != nil {
@@ -67,32 +69,17 @@ func NewEvaluator() {
 
 	_, err = consumer.Consume(func(msg jetstream.Msg) {
 		msgCtx := context.Background()
-
-		var event record.CreatedEvent
-		if err := json.Unmarshal(msg.Data(), &event); err != nil {
-			// A payload that cannot be parsed never will be; terminate it
-			// instead of letting redelivery retry it forever.
-			log.Error("Failed to unmarshal record created event", logger.KeyError, err)
-			err = msg.Term()
-			if err != nil {
-				log.Error("Failed to terminate message", logger.KeyError, err)
+		if err := evaluateMessage(msgCtx, log, enqueuer, msg); err != nil {
+			if errors.Is(err, errMessageSettled) {
+				return
+			}
+			log.Error("Failed to evaluate workflows for record", logger.KeyError, err)
+			if nakErr := msg.Nak(); nakErr != nil {
+				log.Error("Failed to nack message", logger.KeyError, nakErr)
 			}
 			return
 		}
-
-		if err := enqueuer.EvaluateRecord(msgCtx, event); err != nil {
-			// Intake has no side effects; redelivery retries the enqueue and
-			// the dedupe constraint absorbs any partial insert.
-			log.Error("Failed to evaluate workflows for record", logger.KeyID, event.ID, logger.KeyError, err)
-			err = msg.Nak()
-			if err != nil {
-				log.Error("Failed to nack message", logger.KeyError, err)
-			}
-			return
-		}
-
-		err = msg.Ack()
-		if err != nil {
+		if err := msg.Ack(); err != nil {
 			log.Error("Failed to ack message", logger.KeyError, err)
 		}
 	})
@@ -100,6 +87,8 @@ func NewEvaluator() {
 		log.Error("Unable to start consumer", logger.KeyError, err)
 		os.Exit(1)
 	}
+
+	go runScheduleTicker(ctx, log, pool, definitionStore, recordPager, enqueuer)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -119,5 +108,38 @@ func NewEvaluator() {
 	log.Info("Workflow evaluator is listening and serving", logger.KeyPort, port)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Error("Failed to listen and serve", logger.KeyError, err)
+	}
+}
+
+var errMessageSettled = errors.New("message settled")
+
+func evaluateMessage(ctx context.Context, log *logger.Logger, enqueuer *executor.Enqueuer, msg jetstream.Msg) error {
+	switch msg.Subject() {
+	case record.SubjectCreated:
+		var event record.CreatedEvent
+		if err := json.Unmarshal(msg.Data(), &event); err != nil {
+			log.Error("Failed to unmarshal record created event", logger.KeyError, err)
+			if termErr := msg.Term(); termErr != nil {
+				log.Error("Failed to terminate message", logger.KeyError, termErr)
+			}
+			return errMessageSettled
+		}
+		return enqueuer.EvaluateCreated(ctx, event)
+	case record.SubjectUpdated:
+		var event record.UpdatedEvent
+		if err := json.Unmarshal(msg.Data(), &event); err != nil {
+			log.Error("Failed to unmarshal record updated event", logger.KeyError, err)
+			if termErr := msg.Term(); termErr != nil {
+				log.Error("Failed to terminate message", logger.KeyError, termErr)
+			}
+			return errMessageSettled
+		}
+		return enqueuer.EvaluateUpdated(ctx, event)
+	default:
+		log.Error("Unknown record event subject", "subject", msg.Subject())
+		if termErr := msg.Term(); termErr != nil {
+			log.Error("Failed to terminate message", logger.KeyError, termErr)
+		}
+		return errMessageSettled
 	}
 }

@@ -85,3 +85,12 @@ func TestMatchOperators(t *testing.T) {
 		t.Fatal("not should fail when child matches")
 	}
 }
+
+func TestMatchEmptyCriteria(t *testing.T) {
+	if !Match(Criteria{}, map[string]any{"status": "shipped"}) {
+		t.Fatal("empty criteria should match")
+	}
+	if !Match(Criteria{}, nil) {
+		t.Fatal("empty criteria should match nil data")
+	}
+}

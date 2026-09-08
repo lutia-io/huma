@@ -50,8 +50,9 @@ type Workflow struct {
 	OrganizationID     string
 	OrganizationUserID string
 
-	// DedupeKey makes intake idempotent under event redelivery. Today it is
-	// the trigger record ID; unique with WorkflowDefinitionID.
+	// DedupeKey makes intake idempotent under event redelivery. For create it
+	// is the trigger record ID; for update and schedule it includes the event
+	// or period so the same record can run more than once.
 	DedupeKey string
 
 	// Definition is the frozen criteria+actions list for this execution.

@@ -310,13 +310,66 @@ func (s *Service) authorizeWorkflow(p principal.Principal, wf *Workflow) error {
 }
 
 func validateDefinition(def Definition) error {
+	if err := validateTrigger(def.Trigger); err != nil {
+		return err
+	}
 	if err := validateCriteria(def.Criteria); err != nil {
 		return err
 	}
 	return validateActions(def.Actions)
 }
 
+func validateTrigger(t Trigger) error {
+	var hasCreated, hasUpdated, hasSchedule bool
+	for _, on := range t.Events() {
+		switch on {
+		case TriggerOnCreated:
+			hasCreated = true
+		case TriggerOnUpdated:
+			hasUpdated = true
+		case TriggerOnSchedule:
+			hasSchedule = true
+		default:
+			return apperror.NewBadRequestError("Unknown trigger event", nil)
+		}
+	}
+	if hasSchedule && (hasCreated || hasUpdated) {
+		return apperror.NewBadRequestError("A schedule trigger cannot also run on create or update", nil)
+	}
+
+	cron := strings.TrimSpace(t.Cron)
+	timezone := strings.TrimSpace(t.Timezone)
+	if hasSchedule {
+		if cron == "" {
+			return apperror.NewBadRequestError("A schedule trigger needs a cron expression", nil)
+		}
+		if timezone == "" {
+			return apperror.NewBadRequestError("A schedule trigger needs a timezone", nil)
+		}
+		if _, _, err := ParseSchedule(cron, timezone); err != nil {
+			return apperror.NewBadRequestError(err.Error(), err)
+		}
+	} else {
+		if cron != "" || timezone != "" {
+			return apperror.NewBadRequestError("Cron and timezone are only valid on a schedule trigger", nil)
+		}
+	}
+
+	if len(t.Changed) > 0 && !hasUpdated {
+		return apperror.NewBadRequestError("Changed fields are only valid when the trigger includes update", nil)
+	}
+	for _, field := range t.Changed {
+		if strings.TrimSpace(field) == "" {
+			return apperror.NewBadRequestError("Changed fields cannot be empty", nil)
+		}
+	}
+	return nil
+}
+
 func validateCriteria(c criteria.Criteria) error {
+	if c.Logic == "" && strings.TrimSpace(c.Field) == "" && c.Operator == "" && len(c.Conditions) == 0 {
+		return nil
+	}
 	if c.Logic != "" {
 		switch c.Logic {
 		case criteria.LogicAnd, criteria.LogicOr:

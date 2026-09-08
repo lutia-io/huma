@@ -25,6 +25,7 @@ type store interface {
 	GetByID(ctx context.Context, id string) (*WorkflowDefinition, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error)
+	ListActiveScheduled(ctx context.Context) ([]*WorkflowDefinition, error)
 	SchemaVisibleToOrganization(ctx context.Context, schemaID, networkID, organizationID string) (bool, error)
 
 	GetWorkflowByID(ctx context.Context, id string) (*Workflow, error)
@@ -259,6 +260,23 @@ func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID s
 			AND wd.deleted_at IS NULL`
 
 	rows, err := store.db.Query(ctx, sql, schemaID)
+	if err != nil {
+		return nil, err
+	}
+	return collectWorkflowDefinitions(rows)
+}
+
+// ListActiveScheduled returns published definitions whose trigger includes
+// schedule, for the evaluator's cron ticker.
+func (store *postgresStore) ListActiveScheduled(ctx context.Context) ([]*WorkflowDefinition, error) {
+	sql := `
+		SELECT` + workflowDefinitionSelectColumns + `
+		FROM public.workflow_definitions wd` + user.JoinSQL("wd") + `
+		WHERE wd.active = true
+			AND wd.deleted_at IS NULL
+			AND wd.definition->'trigger'->'on' ? 'schedule'`
+
+	rows, err := store.db.Query(ctx, sql)
 	if err != nil {
 		return nil, err
 	}

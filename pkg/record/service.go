@@ -282,6 +282,8 @@ func (s *Service) GetVisibleWithRelated(ctx context.Context, p principal.Princip
 }
 
 // PatchData validates data against the record's schema and replaces it.
+// Identical documents are a no-op: the row is not written and no event is
+// published. A real change publishes records.updated with before and after.
 func (s *Service) PatchData(ctx context.Context, rec *Record, data json.RawMessage) error {
 	if len(data) == 0 || string(data) == "null" {
 		s.logger.WarnContext(ctx, "Empty data")
@@ -293,6 +295,9 @@ func (s *Service) PatchData(ctx context.Context, rec *Record, data json.RawMessa
 	if err := s.validateForeignRefs(ctx, rec.SchemaID, rec.NetworkID, rec.OrganizationID, data); err != nil {
 		return err
 	}
+	if EqualDocuments(rec.Data, data) {
+		return nil
+	}
 	found, err := s.store.UpdateData(ctx, rec.ID, data)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to update record", logger.KeyID, rec.ID, logger.KeyError, err)
@@ -302,6 +307,25 @@ func (s *Service) PatchData(ctx context.Context, rec *Record, data json.RawMessa
 		return apperror.NewNotFoundError("Record not found", nil)
 	}
 	s.logger.InfoContext(ctx, "Successfully updated record", logger.KeyID, rec.ID)
+
+	eventID := uuid.MustNew()
+	payload, err := json.Marshal(UpdatedEvent{
+		ID:                 rec.ID,
+		Before:             rec.Data,
+		After:              data,
+		EventID:            eventID,
+		SchemaID:           rec.SchemaID,
+		OrganizationID:     rec.OrganizationID,
+		OrganizationUserID: rec.OrganizationUserID,
+		NetworkID:          rec.NetworkID,
+	})
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to marshal record updated event", logger.KeyError, err)
+		return nil
+	}
+	if _, err := s.js.Publish(ctx, SubjectUpdated, payload, jetstream.WithMsgID(eventID)); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to publish record updated event", logger.KeyID, rec.ID, logger.KeyError, err)
+	}
 	return nil
 }
 
