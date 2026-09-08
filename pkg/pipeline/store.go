@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 type store interface {
@@ -43,10 +44,12 @@ func (store *postgresStore) Insert(ctx context.Context, pipeline *pipelineDefini
 			definition,
 			network_id,
 			user_id,
+			created_by,
+			updated_by,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			now(), now()
 		)
 		RETURNING id`
@@ -64,6 +67,8 @@ func (store *postgresStore) Insert(ctx context.Context, pipeline *pipelineDefini
 		defJSON,
 		pipeline.NetworkID,
 		pipeline.UserID,
+		pipeline.CreatedBy.ID,
+		pipeline.UpdatedBy.ID,
 	).Scan(&pipeline.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -87,6 +92,7 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 			slug = $3,
 			active = $4,
 			definition = $5,
+			updated_by = $6,
 			updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL`
 
@@ -96,6 +102,7 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 		pipeline.Slug,
 		pipeline.Active,
 		defJSON,
+		pipeline.UpdatedBy.ID,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -111,12 +118,11 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 }
 
 const pipelineSelectColumns = `
-	id, name, slug, active, internal, definition, network_id, user_id,
-	created_at, updated_at, deleted_at`
-
-const pipelineListSelectColumns = `
 	pd.id, pd.name, pd.slug, pd.active, pd.internal, pd.definition, pd.network_id, pd.user_id,
-	pd.created_at, pd.updated_at, pd.deleted_at`
+	pd.created_at, pd.updated_at, pd.deleted_at,
+	` + user.SelectSQL
+
+var pipelineListSelectColumns = pipelineSelectColumns
 
 func scanPipelineDefinition(row pgx.Row, pipeline *pipelineDefinition) error {
 	var defJSON []byte
@@ -132,6 +138,14 @@ func scanPipelineDefinition(row pgx.Row, pipeline *pipelineDefinition) error {
 		&pipeline.CreatedAt,
 		&pipeline.UpdatedAt,
 		&pipeline.DeletedAt,
+		&pipeline.CreatedBy.ID,
+		&pipeline.CreatedBy.FirstName,
+		&pipeline.CreatedBy.LastName,
+		&pipeline.CreatedBy.Email,
+		&pipeline.UpdatedBy.ID,
+		&pipeline.UpdatedBy.FirstName,
+		&pipeline.UpdatedBy.LastName,
+		&pipeline.UpdatedBy.Email,
 	); err != nil {
 		return err
 	}
@@ -159,10 +173,10 @@ func collectPipelineDefinitions(rows pgx.Rows) ([]*pipelineDefinition, error) {
 }
 
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*pipelineDefinition, error) {
-	const sql = `
+	sql := `
 		SELECT` + pipelineSelectColumns + `
-		FROM public.pipeline_definitions
-		WHERE id = $1 AND deleted_at IS NULL`
+		FROM public.pipeline_definitions pd` + user.JoinSQL("pd") + `
+		WHERE pd.id = $1 AND pd.deleted_at IS NULL`
 
 	pipeline := &pipelineDefinition{}
 	err := scanPipelineDefinition(store.db.QueryRow(ctx, sql, id), pipeline)
@@ -176,10 +190,10 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*pipelineDe
 }
 
 func (store *postgresStore) GetBySlug(ctx context.Context, networkID, slug string) (*pipelineDefinition, error) {
-	const sql = `
+	sql := `
 		SELECT` + pipelineSelectColumns + `
-		FROM public.pipeline_definitions
-		WHERE network_id = $1 AND slug = $2 AND deleted_at IS NULL`
+		FROM public.pipeline_definitions pd` + user.JoinSQL("pd") + `
+		WHERE pd.network_id = $1 AND pd.slug = $2 AND pd.deleted_at IS NULL`
 
 	pipeline := &pipelineDefinition{}
 	err := scanPipelineDefinition(store.db.QueryRow(ctx, sql, networkID, slug), pipeline)

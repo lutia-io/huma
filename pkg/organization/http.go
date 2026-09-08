@@ -113,7 +113,7 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	if err := h.service.Patch(r.Context(), existing, req); err != nil {
+	if err := h.service.Patch(r.Context(), existing, req, p.ID); err != nil {
 		render.WriteError(w, err)
 		return
 	}
@@ -135,7 +135,7 @@ func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	if err := h.service.Delete(r.Context(), existing); err != nil {
+	if err := h.service.Delete(r.Context(), existing, p.ID); err != nil {
 		render.WriteError(w, err)
 		return
 	}

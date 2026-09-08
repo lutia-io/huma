@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -228,7 +229,7 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	whereSQL := strings.Join(where, " AND ")
 	fromSQL := `
 		FROM public.schemas s
-		LEFT JOIN public.organizations o ON o.id = s.organization_id AND o.deleted_at IS NULL
+		LEFT JOIN public.organizations o ON o.id = s.organization_id AND o.deleted_at IS NULL` + user.JoinSQL("s") + `
 		WHERE ` + whereSQL
 
 	countSQL = "SELECT count(*)" + fromSQL

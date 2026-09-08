@@ -9,6 +9,7 @@ import (
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -69,6 +70,8 @@ func (s *Service) Insert(ctx context.Context, req insertNodeDefinitionRequest) (
 		Definition: def,
 		NetworkID:  networkID,
 		UserID:     userID,
+		CreatedBy:  user.Ref{ID: userID},
+		UpdatedBy:  user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, n)
@@ -84,7 +87,7 @@ func (s *Service) Insert(ctx context.Context, req insertNodeDefinitionRequest) (
 	return id, nil
 }
 
-func (s *Service) Patch(ctx context.Context, existing *NodeDefinition, req patchNodeDefinitionRequest) error {
+func (s *Service) Patch(ctx context.Context, existing *NodeDefinition, req patchNodeDefinitionRequest, updatedBy string) error {
 	if existing.Internal {
 		return apperror.NewBadRequestError("Internal node definitions cannot be updated", nil)
 	}
@@ -139,6 +142,8 @@ func (s *Service) Patch(ctx context.Context, existing *NodeDefinition, req patch
 		existing.Type = nextType
 		existing.Definition = def
 	}
+
+	existing.UpdatedBy.ID = updatedBy
 
 	if err := s.store.Update(ctx, existing); err != nil {
 		if apperror.IsConflict(err) || apperror.IsNotFound(err) {

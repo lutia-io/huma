@@ -11,6 +11,7 @@ import (
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -75,6 +76,8 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 		SchemaID:   schemaID,
 		NetworkID:  networkID,
 		UserID:     userID,
+		CreatedBy:  user.Ref{ID: userID},
+		UpdatedBy:  user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, wfd)
@@ -90,7 +93,7 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 	return id, nil
 }
 
-func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req patchWorkflowDefinitionRequest) error {
+func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req patchWorkflowDefinitionRequest, updatedBy string) error {
 	if existing.Internal {
 		return apperror.NewBadRequestError("Internal workflow definitions cannot be updated", nil)
 	}
@@ -138,6 +141,8 @@ func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req p
 		}
 		existing.SchemaID = schemaID
 	}
+
+	existing.UpdatedBy.ID = updatedBy
 
 	if err := s.store.Update(ctx, existing); err != nil {
 		if apperror.IsConflict(err) || apperror.IsBadRequest(err) {

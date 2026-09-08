@@ -1,13 +1,19 @@
 package network
 
-import "time"
+import (
+	"time"
+
+	"github.com/lutia-io/huma/pkg/user"
+)
 
 type network struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Slug string `json:"slug"`
 
-	UserID string `json:"userId"`
+	UserID    string   `json:"userId"`
+	CreatedBy user.Ref `json:"createdBy"`
+	UpdatedBy user.Ref `json:"updatedBy"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`

@@ -3,6 +3,8 @@ package node
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 type NodeDefinition struct {
@@ -16,8 +18,10 @@ type NodeDefinition struct {
 
 	Definition any `json:"definition"`
 
-	NetworkID string `json:"networkId"`
-	UserID    string `json:"userId"`
+	NetworkID string   `json:"networkId"`
+	UserID    string   `json:"userId"`
+	CreatedBy user.Ref `json:"createdBy"`
+	UpdatedBy user.Ref `json:"updatedBy"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`

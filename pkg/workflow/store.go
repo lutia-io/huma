@@ -9,15 +9,15 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 const workflowDefinitionSelectColumns = `
-	id, name, slug, active, internal, definition, schema_id, network_id,
-	user_id, created_at, updated_at, deleted_at`
-
-const workflowDefinitionListSelectColumns = `
 	wd.id, wd.name, wd.slug, wd.active, wd.internal, wd.definition, wd.schema_id, wd.network_id,
-	wd.user_id, wd.created_at, wd.updated_at, wd.deleted_at`
+	wd.user_id, wd.created_at, wd.updated_at, wd.deleted_at,
+	` + user.SelectSQL
+
+var workflowDefinitionListSelectColumns = workflowDefinitionSelectColumns
 
 type store interface {
 	Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error)
@@ -52,10 +52,12 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 			schema_id,
 			network_id,
 			user_id,
+			created_by,
+			updated_by,
 			created_at,
 			updated_at
 		)
-		SELECT $1, $2, $3, $4, $5, $6, $7, $8, now(), now()
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now()
 		FROM public.schemas
 		WHERE id = $6
 			AND network_id = $7
@@ -76,6 +78,8 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 		workflow.SchemaID,
 		workflow.NetworkID,
 		workflow.UserID,
+		workflow.CreatedBy.ID,
+		workflow.UpdatedBy.ID,
 	).Scan(&workflow.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -108,6 +112,7 @@ func (store *postgresStore) Update(ctx context.Context, workflow *WorkflowDefini
 			active = $4,
 			definition = $5,
 			schema_id = $6,
+			updated_by = $8,
 			updated_at = now()
 		WHERE id = $1
 			AND deleted_at IS NULL
@@ -127,6 +132,7 @@ func (store *postgresStore) Update(ctx context.Context, workflow *WorkflowDefini
 		defJSON,
 		workflow.SchemaID,
 		workflow.NetworkID,
+		workflow.UpdatedBy.ID,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -164,6 +170,14 @@ func scanWorkflowDefinition(row pgx.Row, wf *WorkflowDefinition) error {
 		&wf.CreatedAt,
 		&wf.UpdatedAt,
 		&wf.DeletedAt,
+		&wf.CreatedBy.ID,
+		&wf.CreatedBy.FirstName,
+		&wf.CreatedBy.LastName,
+		&wf.CreatedBy.Email,
+		&wf.UpdatedBy.ID,
+		&wf.UpdatedBy.FirstName,
+		&wf.UpdatedBy.LastName,
+		&wf.UpdatedBy.Email,
 	); err != nil {
 		return err
 	}
@@ -188,10 +202,10 @@ func collectWorkflowDefinitions(rows pgx.Rows) ([]*WorkflowDefinition, error) {
 }
 
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*WorkflowDefinition, error) {
-	const sql = `
+	sql := `
 		SELECT` + workflowDefinitionSelectColumns + `
-		FROM public.workflow_definitions
-		WHERE id = $1 AND deleted_at IS NULL`
+		FROM public.workflow_definitions wd` + user.JoinSQL("wd") + `
+		WHERE wd.id = $1 AND wd.deleted_at IS NULL`
 
 	wf := &WorkflowDefinition{}
 	err := scanWorkflowDefinition(store.db.QueryRow(ctx, sql, id), wf)
@@ -237,12 +251,12 @@ func (store *postgresStore) List(ctx context.Context, params listParams) (*listR
 // ListActiveBySchemaID returns the definitions the engine's intake considers
 // for a record event on the given schema.
 func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error) {
-	const sql = `
+	sql := `
 		SELECT` + workflowDefinitionSelectColumns + `
-		FROM public.workflow_definitions
-		WHERE schema_id = $1
-			AND active = true
-			AND deleted_at IS NULL`
+		FROM public.workflow_definitions wd` + user.JoinSQL("wd") + `
+		WHERE wd.schema_id = $1
+			AND wd.active = true
+			AND wd.deleted_at IS NULL`
 
 	rows, err := store.db.Query(ctx, sql, schemaID)
 	if err != nil {

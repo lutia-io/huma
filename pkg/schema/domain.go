@@ -3,6 +3,8 @@ package schema
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 type schema struct {
@@ -14,9 +16,11 @@ type schema struct {
 
 	Definition json.RawMessage `json:"definition"`
 
-	NetworkID      string  `json:"networkId"`
-	OrganizationID *string `json:"organizationId,omitempty"`
-	UserID         string  `json:"userId"`
+	NetworkID      string   `json:"networkId"`
+	OrganizationID *string  `json:"organizationId,omitempty"`
+	UserID         string   `json:"userId"`
+	CreatedBy      user.Ref `json:"createdBy"`
+	UpdatedBy      user.Ref `json:"updatedBy"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`

@@ -8,6 +8,7 @@ import (
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -43,9 +44,11 @@ func (s *service) Insert(ctx context.Context, req insertNetworkRequest) (string,
 	}
 
 	network := &network{
-		Name:   name,
-		Slug:   slug,
-		UserID: userID,
+		Name:      name,
+		Slug:      slug,
+		UserID:    userID,
+		CreatedBy: user.Ref{ID: userID},
+		UpdatedBy: user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, network)
@@ -61,7 +64,7 @@ func (s *service) Insert(ctx context.Context, req insertNetworkRequest) (string,
 	return id, nil
 }
 
-func (s *service) Patch(ctx context.Context, existing *network, req patchNetworkRequest) error {
+func (s *service) Patch(ctx context.Context, existing *network, req patchNetworkRequest, updatedBy string) error {
 	if req.Name == nil {
 		return apperror.NewBadRequestError("No fields to update", nil)
 	}
@@ -80,6 +83,7 @@ func (s *service) Patch(ctx context.Context, existing *network, req patchNetwork
 
 	existing.Name = name
 	existing.Slug = slug
+	existing.UpdatedBy.ID = updatedBy
 
 	if err := s.store.Update(ctx, existing); err != nil {
 		if apperror.IsConflict(err) {
@@ -93,8 +97,8 @@ func (s *service) Patch(ctx context.Context, existing *network, req patchNetwork
 	return nil
 }
 
-func (s *service) Delete(ctx context.Context, existing *network) error {
-	if err := s.store.Delete(ctx, existing.ID); err != nil {
+func (s *service) Delete(ctx context.Context, existing *network, updatedBy string) error {
+	if err := s.store.Delete(ctx, existing.ID, updatedBy); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to delete network", logger.KeyID, existing.ID, logger.KeyError, err)
 		return err
 	}

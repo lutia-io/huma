@@ -8,15 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 const schemaSelectColumns = `
-	id, name, slug, internal, definition, network_id, organization_id,
-	user_id, created_at, updated_at, deleted_at`
-
-const schemaListSelectColumns = `
 	s.id, s.name, s.slug, s.internal, s.definition, s.network_id, s.organization_id,
-	s.user_id, s.created_at, s.updated_at, s.deleted_at`
+	s.user_id, s.created_at, s.updated_at, s.deleted_at,
+	` + user.SelectSQL
+
+var schemaListSelectColumns = schemaSelectColumns
 
 type store interface {
 	Insert(ctx context.Context, schema *schema) (string, error)
@@ -43,10 +43,12 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 			network_id,
 			organization_id,
 			user_id,
+			created_by,
+			updated_by,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			now(), now()
 		)
 		RETURNING id`
@@ -59,6 +61,8 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 		schema.NetworkID,
 		schema.OrganizationID,
 		schema.UserID,
+		schema.CreatedBy.ID,
+		schema.UpdatedBy.ID,
 	).Scan(&schema.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -78,7 +82,7 @@ func (store *postgresStore) Insert(ctx context.Context, schema *schema) (string,
 func (store *postgresStore) Update(ctx context.Context, schema *schema) error {
 	const sql = `
 		UPDATE public.schemas
-		SET name = $2, slug = $3, definition = $4, updated_at = now()
+		SET name = $2, slug = $3, definition = $4, updated_by = $5, updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	tag, err := store.db.Exec(ctx, sql,
@@ -86,6 +90,7 @@ func (store *postgresStore) Update(ctx context.Context, schema *schema) error {
 		schema.Name,
 		schema.Slug,
 		schema.Definition,
+		schema.UpdatedBy.ID,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -113,6 +118,14 @@ func scanSchema(row pgx.Row, sch *schema) error {
 		&sch.CreatedAt,
 		&sch.UpdatedAt,
 		&sch.DeletedAt,
+		&sch.CreatedBy.ID,
+		&sch.CreatedBy.FirstName,
+		&sch.CreatedBy.LastName,
+		&sch.CreatedBy.Email,
+		&sch.UpdatedBy.ID,
+		&sch.UpdatedBy.FirstName,
+		&sch.UpdatedBy.LastName,
+		&sch.UpdatedBy.Email,
 	)
 }
 
@@ -134,10 +147,10 @@ func collectSchemas(rows pgx.Rows) ([]*schema, error) {
 }
 
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*schema, error) {
-	const sql = `
+	sql := `
 		SELECT` + schemaSelectColumns + `
-		FROM public.schemas
-		WHERE id = $1 AND deleted_at IS NULL`
+		FROM public.schemas s` + user.JoinSQL("s") + `
+		WHERE s.id = $1 AND s.deleted_at IS NULL`
 
 	sch := &schema{}
 	err := scanSchema(store.db.QueryRow(ctx, sql, id), sch)

@@ -11,6 +11,7 @@ import (
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/schema/validator"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -124,6 +125,8 @@ func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 		NetworkID:      networkID,
 		OrganizationID: organizationID,
 		UserID:         userID,
+		CreatedBy:      user.Ref{ID: userID},
+		UpdatedBy:      user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, schema)
@@ -139,7 +142,7 @@ func (s *Service) Insert(ctx context.Context, req insertSchemaRequest) (string, 
 	return id, nil
 }
 
-func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRequest) error {
+func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRequest, updatedBy string) error {
 	if existing.Internal {
 		return apperror.NewBadRequestError("Internal schemas cannot be updated", nil)
 	}
@@ -177,6 +180,8 @@ func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRe
 		}
 		existing.Definition = req.Definition
 	}
+
+	existing.UpdatedBy.ID = updatedBy
 
 	if err := s.store.Update(ctx, existing); err != nil {
 		if apperror.IsConflict(err) || apperror.IsBadRequest(err) {

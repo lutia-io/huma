@@ -8,18 +8,19 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 const organizationSelectColumns = `
-	id, name, slug, network_id, user_id, created_at, updated_at, deleted_at`
+	o.id, o.name, o.slug, o.network_id, o.user_id, o.created_at, o.updated_at, o.deleted_at,
+	` + user.SelectSQL
 
-const organizationListSelectColumns = `
-	o.id, o.name, o.slug, o.network_id, o.user_id, o.created_at, o.updated_at, o.deleted_at`
+var organizationListSelectColumns = organizationSelectColumns
 
 type store interface {
 	Insert(ctx context.Context, organization *organization) (string, error)
 	Update(ctx context.Context, organization *organization) error
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, id, updatedBy string) error
 	GetByID(ctx context.Context, id string) (*organization, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 }
@@ -39,10 +40,12 @@ func (store *postgresStore) Insert(ctx context.Context, organization *organizati
 			slug,
 			network_id,
 			user_id,
+			created_by,
+			updated_by,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4,
+			$1, $2, $3, $4, $5, $6,
 			now(), now()
 		)
 		RETURNING id`
@@ -52,6 +55,8 @@ func (store *postgresStore) Insert(ctx context.Context, organization *organizati
 		organization.Slug,
 		organization.NetworkID,
 		organization.UserID,
+		organization.CreatedBy.ID,
+		organization.UpdatedBy.ID,
 	).Scan(&organization.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -66,10 +71,10 @@ func (store *postgresStore) Insert(ctx context.Context, organization *organizati
 func (store *postgresStore) Update(ctx context.Context, organization *organization) error {
 	const sql = `
 		UPDATE public.organizations
-		SET name = $2, slug = $3, updated_at = now()
+		SET name = $2, slug = $3, updated_by = $4, updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL`
 
-	tag, err := store.db.Exec(ctx, sql, organization.ID, organization.Name, organization.Slug)
+	tag, err := store.db.Exec(ctx, sql, organization.ID, organization.Name, organization.Slug, organization.UpdatedBy.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -83,13 +88,13 @@ func (store *postgresStore) Update(ctx context.Context, organization *organizati
 	return nil
 }
 
-func (store *postgresStore) Delete(ctx context.Context, id string) error {
+func (store *postgresStore) Delete(ctx context.Context, id, updatedBy string) error {
 	const sql = `
 		UPDATE public.organizations
-		SET deleted_at = now(), updated_at = now()
+		SET deleted_at = now(), updated_at = now(), updated_by = $2
 		WHERE id = $1 AND deleted_at IS NULL`
 
-	tag, err := store.db.Exec(ctx, sql, id)
+	tag, err := store.db.Exec(ctx, sql, id, updatedBy)
 	if err != nil {
 		return err
 	}
@@ -109,6 +114,14 @@ func scanOrganization(row pgx.Row, o *organization) error {
 		&o.CreatedAt,
 		&o.UpdatedAt,
 		&o.DeletedAt,
+		&o.CreatedBy.ID,
+		&o.CreatedBy.FirstName,
+		&o.CreatedBy.LastName,
+		&o.CreatedBy.Email,
+		&o.UpdatedBy.ID,
+		&o.UpdatedBy.FirstName,
+		&o.UpdatedBy.LastName,
+		&o.UpdatedBy.Email,
 	)
 }
 
@@ -130,10 +143,10 @@ func collectOrganizations(rows pgx.Rows) ([]*organization, error) {
 }
 
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*organization, error) {
-	const sql = `
+	sql := `
 		SELECT` + organizationSelectColumns + `
-		FROM public.organizations
-		WHERE id = $1 AND deleted_at IS NULL`
+		FROM public.organizations o` + user.JoinSQL("o") + `
+		WHERE o.id = $1 AND o.deleted_at IS NULL`
 
 	o := &organization{}
 	err := scanOrganization(store.db.QueryRow(ctx, sql, id), o)

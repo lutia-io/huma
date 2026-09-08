@@ -9,6 +9,7 @@ import (
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -56,6 +57,8 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) (st
 		Slug:      slug,
 		NetworkID: networkID,
 		UserID:    userID,
+		CreatedBy: user.Ref{ID: userID},
+		UpdatedBy: user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, organization)
@@ -71,7 +74,7 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) (st
 	return id, nil
 }
 
-func (s *service) Patch(ctx context.Context, existing *organization, req patchOrganizationRequest) error {
+func (s *service) Patch(ctx context.Context, existing *organization, req patchOrganizationRequest, updatedBy string) error {
 	if req.Name == nil {
 		return apperror.NewBadRequestError("No fields to update", nil)
 	}
@@ -90,6 +93,7 @@ func (s *service) Patch(ctx context.Context, existing *organization, req patchOr
 
 	existing.Name = name
 	existing.Slug = slug
+	existing.UpdatedBy.ID = updatedBy
 
 	if err := s.store.Update(ctx, existing); err != nil {
 		if apperror.IsConflict(err) {
@@ -103,8 +107,8 @@ func (s *service) Patch(ctx context.Context, existing *organization, req patchOr
 	return nil
 }
 
-func (s *service) Delete(ctx context.Context, existing *organization) error {
-	if err := s.store.Delete(ctx, existing.ID); err != nil {
+func (s *service) Delete(ctx context.Context, existing *organization, updatedBy string) error {
+	if err := s.store.Delete(ctx, existing.ID, updatedBy); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to delete organization", logger.KeyID, existing.ID, logger.KeyError, err)
 		return err
 	}

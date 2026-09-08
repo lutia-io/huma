@@ -2,6 +2,8 @@ package organization
 
 import (
 	"time"
+
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 type organization struct {
@@ -10,8 +12,10 @@ type organization struct {
 	Name string `json:"name"`
 	Slug string `json:"slug"`
 
-	NetworkID string `json:"networkId"`
-	UserID    string `json:"userId"`
+	NetworkID string   `json:"networkId"`
+	UserID    string   `json:"userId"`
+	CreatedBy user.Ref `json:"createdBy"`
+	UpdatedBy user.Ref `json:"updatedBy"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`

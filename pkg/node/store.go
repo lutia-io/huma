@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 type store interface {
@@ -40,10 +41,12 @@ func (store *postgresStore) Insert(ctx context.Context, node *NodeDefinition) (s
 			definition,
 			network_id,
 			user_id,
+			created_by,
+			updated_by,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
 			now(), now()
 		)
 		RETURNING id`
@@ -62,6 +65,8 @@ func (store *postgresStore) Insert(ctx context.Context, node *NodeDefinition) (s
 		defJSON,
 		node.NetworkID,
 		node.UserID,
+		node.CreatedBy.ID,
+		node.UpdatedBy.ID,
 	).Scan(&node.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -86,6 +91,7 @@ func (store *postgresStore) Update(ctx context.Context, node *NodeDefinition) er
 			active = $4,
 			type = $5,
 			definition = $6,
+			updated_by = $7,
 			updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL`
 
@@ -96,6 +102,7 @@ func (store *postgresStore) Update(ctx context.Context, node *NodeDefinition) er
 		node.Active,
 		node.Type,
 		defJSON,
+		node.UpdatedBy.ID,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -111,12 +118,11 @@ func (store *postgresStore) Update(ctx context.Context, node *NodeDefinition) er
 }
 
 const nodeSelectColumns = `
-	id, name, slug, active, internal, type, definition, network_id, user_id,
-	created_at, updated_at, deleted_at`
-
-const nodeListSelectColumns = `
 	nd.id, nd.name, nd.slug, nd.active, nd.internal, nd.type, nd.definition, nd.network_id, nd.user_id,
-	nd.created_at, nd.updated_at, nd.deleted_at`
+	nd.created_at, nd.updated_at, nd.deleted_at,
+	` + user.SelectSQL
+
+var nodeListSelectColumns = nodeSelectColumns
 
 func scanNodeDefinition(row pgx.Row, node *NodeDefinition) error {
 	var defJSON []byte
@@ -133,6 +139,14 @@ func scanNodeDefinition(row pgx.Row, node *NodeDefinition) error {
 		&node.CreatedAt,
 		&node.UpdatedAt,
 		&node.DeletedAt,
+		&node.CreatedBy.ID,
+		&node.CreatedBy.FirstName,
+		&node.CreatedBy.LastName,
+		&node.CreatedBy.Email,
+		&node.UpdatedBy.ID,
+		&node.UpdatedBy.FirstName,
+		&node.UpdatedBy.LastName,
+		&node.UpdatedBy.Email,
 	); err != nil {
 		return err
 	}
@@ -162,10 +176,10 @@ func collectNodeDefinitions(rows pgx.Rows) ([]*NodeDefinition, error) {
 }
 
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*NodeDefinition, error) {
-	const sql = `
+	sql := `
 		SELECT` + nodeSelectColumns + `
-		FROM public.node_definitions
-		WHERE id = $1 AND deleted_at IS NULL`
+		FROM public.node_definitions nd` + user.JoinSQL("nd") + `
+		WHERE nd.id = $1 AND nd.deleted_at IS NULL`
 
 	node := &NodeDefinition{}
 	err := scanNodeDefinition(store.db.QueryRow(ctx, sql, id), node)
@@ -190,8 +204,8 @@ func (store *postgresStore) GetByIDs(ctx context.Context, ids []string) ([]*Node
 	}
 	sql := `
 		SELECT` + nodeSelectColumns + `
-		FROM public.node_definitions
-		WHERE deleted_at IS NULL AND id IN (` + strings.Join(placeholders, ", ") + `)`
+		FROM public.node_definitions nd` + user.JoinSQL("nd") + `
+		WHERE nd.deleted_at IS NULL AND nd.id IN (` + strings.Join(placeholders, ", ") + `)`
 
 	rows, err := store.db.Query(ctx, sql, args...)
 	if err != nil {

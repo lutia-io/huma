@@ -9,6 +9,7 @@ import (
 	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
+	"github.com/lutia-io/huma/pkg/user"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -64,6 +65,8 @@ func (s *Service) Insert(ctx context.Context, req insertPipelineDefinitionReques
 		Definition: req.Definition,
 		NetworkID:  networkID,
 		UserID:     userID,
+		CreatedBy:  user.Ref{ID: userID},
+		UpdatedBy:  user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, p)
@@ -79,7 +82,7 @@ func (s *Service) Insert(ctx context.Context, req insertPipelineDefinitionReques
 	return id, nil
 }
 
-func (s *Service) Patch(ctx context.Context, existing *pipelineDefinition, req patchPipelineDefinitionRequest) error {
+func (s *Service) Patch(ctx context.Context, existing *pipelineDefinition, req patchPipelineDefinitionRequest, updatedBy string) error {
 	if existing.Internal {
 		return apperror.NewBadRequestError("Internal pipeline definitions cannot be updated", nil)
 	}
@@ -114,6 +117,8 @@ func (s *Service) Patch(ctx context.Context, existing *pipelineDefinition, req p
 		}
 		existing.Definition = *req.Definition
 	}
+
+	existing.UpdatedBy.ID = updatedBy
 
 	if err := s.store.Update(ctx, existing); err != nil {
 		if apperror.IsConflict(err) || apperror.IsNotFound(err) {

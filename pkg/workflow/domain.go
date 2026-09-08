@@ -6,6 +6,7 @@ import (
 
 	"github.com/lutia-io/huma/pkg/action"
 	"github.com/lutia-io/huma/pkg/criteria"
+	"github.com/lutia-io/huma/pkg/user"
 )
 
 type Definition struct {
@@ -25,9 +26,11 @@ type WorkflowDefinition struct {
 
 	Definition Definition `json:"definition"`
 
-	SchemaID  string `json:"schemaId"`
-	NetworkID string `json:"networkId"`
-	UserID    string `json:"userId"`
+	SchemaID  string   `json:"schemaId"`
+	NetworkID string   `json:"networkId"`
+	UserID    string   `json:"userId"`
+	CreatedBy user.Ref `json:"createdBy"`
+	UpdatedBy user.Ref `json:"updatedBy"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
