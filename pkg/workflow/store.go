@@ -32,6 +32,7 @@ type store interface {
 	ListWorkflows(ctx context.Context, params runListParams) (*runListResult, error)
 	GetWorkflowActionByID(ctx context.Context, id string) (*WorkflowAction, error)
 	ListWorkflowActionsByWorkflowID(ctx context.Context, workflowID string) ([]*WorkflowAction, error)
+	RetryFailed(ctx context.Context, id string, definition Definition) error
 }
 
 type postgresStore struct {

@@ -273,6 +273,44 @@ func (s *Service) ListWorkflowActions(ctx context.Context, p principal.Principal
 	return actions, nil
 }
 
+// Retry reopens a failed workflow for another execution. Trigger data stays
+// the snapshot from intake. The action list is replaced with the live
+// definition when it still exists, so a definition fix (wrong field name,
+// etc.) is what actually runs. Workers skip action indexes that already
+// completed, which keeps continue-on-error from repeating successful side
+// effects such as an additive UPDATE_RECORD.
+func (s *Service) Retry(ctx context.Context, p principal.Principal, id string) error {
+	wf, err := s.GetWorkflow(ctx, p, id)
+	if err != nil {
+		return err
+	}
+	if wf.Status != "failed" {
+		return apperror.NewBadRequestError("Only failed workflows can be retried", nil)
+	}
+
+	definition := wf.Definition
+	live, err := s.store.GetByID(ctx, wf.WorkflowDefinitionID)
+	if err != nil {
+		if !apperror.IsNotFound(err) {
+			s.logger.ErrorContext(ctx, "Failed to load workflow definition for retry", logger.KeyID, wf.WorkflowDefinitionID, logger.KeyError, err)
+			return err
+		}
+	} else {
+		definition = live.Definition
+	}
+
+	if err := s.store.RetryFailed(ctx, wf.ID, definition); err != nil {
+		if apperror.IsBadRequest(err) {
+			s.logger.WarnContext(ctx, "Rejected workflow retry", logger.KeyID, wf.ID, logger.KeyError, err)
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to retry workflow", logger.KeyID, wf.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully retried workflow", logger.KeyID, wf.ID)
+	return nil
+}
+
 func (s *Service) GetWorkflowAction(ctx context.Context, p principal.Principal, id string) (*WorkflowAction, error) {
 	if !uuid.Valid(id) {
 		return nil, apperror.NewBadRequestError("Invalid workflow action ID", nil)

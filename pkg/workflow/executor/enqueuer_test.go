@@ -55,6 +55,10 @@ func (f *fakeWorkflowStore) FailExhausted(context.Context) (int64, error) {
 	return 0, nil
 }
 
+func (f *fakeWorkflowStore) CompletedActionIndexes(context.Context, string) (map[int]struct{}, error) {
+	return map[int]struct{}{}, nil
+}
+
 func testEnqueuer(defs []*workflow.WorkflowDefinition) (*Enqueuer, *fakeWorkflowStore) {
 	workflows := &fakeWorkflowStore{}
 	return NewEnqueuer(logger.NewWithWriter(io.Discard), &fakeDefinitionStore{defs: defs}, workflows), workflows

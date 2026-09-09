@@ -56,6 +56,8 @@ type Workflow struct {
 	DedupeKey string
 
 	// Definition is the frozen criteria+actions list for this execution.
+	// Crash reclaims keep this snapshot; a manual retry replaces it with the
+	// live workflow definition so a fixed action list can run.
 	Definition workflow.Definition
 
 	Status Status

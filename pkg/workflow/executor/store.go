@@ -43,6 +43,11 @@ type WorkflowStore interface {
 	// as failed so they stop being claimable limbo rows. Returns rows
 	// affected.
 	FailExhausted(ctx context.Context) (int64, error)
+
+	// CompletedActionIndexes returns action indexes that already have a
+	// completed journal row. Workers skip those on resume so a manual retry,
+	// which rewinds current_action, does not re-run successful side effects.
+	CompletedActionIndexes(ctx context.Context, workflowID string) (map[int]struct{}, error)
 }
 
 type postgresWorkflowStore struct {
@@ -297,4 +302,27 @@ func (s *postgresWorkflowStore) FailExhausted(ctx context.Context) (int64, error
 		return 0, err
 	}
 	return tag.RowsAffected(), nil
+}
+
+func (s *postgresWorkflowStore) CompletedActionIndexes(ctx context.Context, workflowID string) (map[int]struct{}, error) {
+	const sql = `
+		SELECT DISTINCT action_index
+		FROM public.workflow_actions
+		WHERE workflow_id = $1 AND status = 'completed'`
+
+	rows, err := s.db.Query(ctx, sql, workflowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := map[int]struct{}{}
+	for rows.Next() {
+		var index int
+		if err := rows.Scan(&index); err != nil {
+			return nil, err
+		}
+		out[index] = struct{}{}
+	}
+	return out, rows.Err()
 }

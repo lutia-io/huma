@@ -63,9 +63,11 @@ func (w *worker) sleep(ctx context.Context) {
 }
 
 // execute resumes the workflow from its cursor and executes remaining actions
-// in order. Failure policy is continue-on-error: a failed action is journaled
-// and logged, and execution proceeds with the remaining actions. The workflow
-// is marked failed at the end if any action failed.
+// in order. Indexes that already have a completed journal row are skipped so
+// a retried workflow does not repeat successful side effects. Failure policy
+// is continue-on-error: a failed action is journaled and logged, and
+// execution proceeds with the remaining actions. The workflow is marked
+// failed at the end if any action failed.
 func (w *worker) execute(ctx context.Context, workflow *Workflow) {
 	actions := workflow.Definition.Actions
 
@@ -78,7 +80,16 @@ func (w *worker) execute(ctx context.Context, workflow *Workflow) {
 		logger.KeyCount, len(actions),
 	)
 
+	completed, err := w.service.workflows.CompletedActionIndexes(ctx, workflow.ID)
+	if err != nil {
+		w.service.logger.ErrorContext(ctx, "Failed to load completed workflow actions", logger.KeyID, workflow.ID, logger.KeyError, err)
+		return
+	}
+
 	for i := workflow.CurrentAction; i < len(actions); i++ {
+		if _, ok := completed[i]; ok {
+			continue
+		}
 		act := actions[i]
 		execCtx := ExecutionContext{
 			WorkflowID:           workflow.ID,

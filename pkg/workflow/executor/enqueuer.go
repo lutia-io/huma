@@ -42,9 +42,9 @@ func NewEnqueuer(logger *logger.Logger, workflowDefinitions WorkflowDefinitionSt
 //
 // Criteria are evaluated here, at intake, so the workflows table only ever
 // holds real work. The definition and record data are snapshotted onto the
-// workflow: retries always execute the actions the workflow started with,
-// templated against the data that triggered it, regardless of later edits to
-// either.
+// workflow: crash reclaims execute the actions the workflow started with,
+// templated against the data that triggered it. A manual retry keeps the
+// trigger data and replaces the definition with the live one.
 //
 // Dedupe keys for create stay the record ID so redelivery of an existing
 // create event does not insert a second run.

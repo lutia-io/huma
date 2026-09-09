@@ -30,6 +30,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /workflow", h.ListWorkflows)
 	mux.HandleFunc("GET /workflow/{id}", h.GetWorkflow)
+	mux.HandleFunc("POST /workflow/{id}/retry", h.RetryWorkflow)
 	mux.HandleFunc("GET /workflow/{id}/action", h.ListWorkflowActions)
 	mux.HandleFunc("GET /workflow-action/{id}", h.GetWorkflowAction)
 }
@@ -158,6 +159,20 @@ func (h *httpHandler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusOK, wf)
+}
+
+func (h *httpHandler) RetryWorkflow(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	id := r.PathValue("id")
+	if err := h.service.Retry(r.Context(), p, id); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 
 func (h *httpHandler) ListWorkflowActions(w http.ResponseWriter, r *http.Request) {
