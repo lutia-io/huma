@@ -12,6 +12,7 @@ import (
 var publicExact = map[string]struct{}{
 	"GET /healthz":                       {},
 	"GET /readyz":                        {},
+	"GET /metrics":                       {},
 	"POST /auth/login/user":              {},
 	"POST /auth/login/organization-user": {},
 	"POST /auth/refresh":                 {},

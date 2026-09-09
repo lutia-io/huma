@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/metrics"
 	"github.com/lutia-io/huma/pkg/pipeline/executor"
 	"github.com/lutia-io/huma/pkg/pipeline/executor/handlers"
 )
@@ -47,6 +48,7 @@ func NewExecutor() {
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.Handle("GET /metrics", metrics.Handler())
 
 	port := os.Getenv("HUMA_SERVICE_PORT")
 	srv := &http.Server{

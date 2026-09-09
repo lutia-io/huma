@@ -1,0 +1,6 @@
+apiVersion: v2
+name: s3-init
+description: Create S3 buckets in RustFS before Loki starts
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
