@@ -17,45 +17,104 @@ import (
 // integer/number schema fields validate. Mixed text still stringifies.
 var typedFuncs = map[string]func(...any) (any, error){
 	"add": add,
+	"sub": sub,
+	"mul": mul,
+	"div": div,
+	"mod": mod,
 }
 
 // uuidFunc returns a UUID v4; a package variable so tests can pin the value.
 var uuidFunc = uuid.New
 
 func templateFuncs() template.FuncMap {
-	return template.FuncMap{
+	funcs := template.FuncMap{
 		"now": func() string {
 			return nowFunc().UTC().Format(time.RFC3339)
 		},
 		"uuid": func() (string, error) {
 			return uuidFunc()
 		},
-		"add": add,
 	}
+	for name, fn := range typedFuncs {
+		funcs[name] = fn
+	}
+	return funcs
 }
 
-// add sums two or more numbers. Whole sums return int64 so JSON integer
+// add sums two or more numbers. Whole results return int64 so JSON integer
 // fields accept the value; otherwise the result is float64.
 func add(values ...any) (any, error) {
-	if len(values) < 2 {
-		return nil, fmt.Errorf("add requires at least 2 arguments")
+	return fold("add", values, func(acc, n float64) (float64, error) {
+		return acc + n, nil
+	})
+}
+
+// sub subtracts the remaining numbers from the first. {{ sub 10 3 2 }} is 5.
+func sub(values ...any) (any, error) {
+	return fold("sub", values, func(acc, n float64) (float64, error) {
+		return acc - n, nil
+	})
+}
+
+// mul multiplies two or more numbers. {{ mul 2 3 4 }} is 24.
+func mul(values ...any) (any, error) {
+	return fold("mul", values, func(acc, n float64) (float64, error) {
+		return acc * n, nil
+	})
+}
+
+// div divides the first number by the rest. {{ div 20 2 2 }} is 5.
+func div(values ...any) (any, error) {
+	return fold("div", values, func(acc, n float64) (float64, error) {
+		if n == 0 {
+			return 0, fmt.Errorf("division by zero")
+		}
+		return acc / n, nil
+	})
+}
+
+// mod returns the remainder of two numbers. {{ mod 10 3 }} is 1.
+func mod(values ...any) (any, error) {
+	if len(values) != 2 {
+		return nil, fmt.Errorf("mod requires 2 arguments")
 	}
-	var sum float64
-	allWhole := true
-	for i, v := range values {
+	return fold("mod", values, func(acc, n float64) (float64, error) {
+		if n == 0 {
+			return 0, fmt.Errorf("division by zero")
+		}
+		return math.Mod(acc, n), nil
+	})
+}
+
+func fold(name string, values []any, op func(acc, n float64) (float64, error)) (any, error) {
+	if len(values) < 2 {
+		return nil, fmt.Errorf("%s requires at least 2 arguments", name)
+	}
+	acc, allWhole, err := toFloat(values[0])
+	if err != nil {
+		return nil, fmt.Errorf("%s argument 1: %w", name, err)
+	}
+	for i, v := range values[1:] {
 		n, whole, err := toFloat(v)
 		if err != nil {
-			return nil, fmt.Errorf("add argument %d: %w", i+1, err)
+			return nil, fmt.Errorf("%s argument %d: %w", name, i+2, err)
 		}
 		if !whole {
 			allWhole = false
 		}
-		sum += n
+		acc, err = op(acc, n)
+		if err != nil {
+			return nil, fmt.Errorf("%s argument %d: %w", name, i+2, err)
+		}
 	}
-	if allWhole && sum >= math.MinInt64 && sum <= math.MaxInt64 {
-		return int64(sum), nil
+	return numberResult(acc, allWhole), nil
+}
+
+func numberResult(n float64, inputsWhole bool) any {
+	if inputsWhole && isWhole(n) && n >= math.MinInt64 && n <= math.MaxInt64 {
+		return int64(n)
 	}
-	return sum, nil
+	return n
 }
 
 func toFloat(v any) (float64, bool, error) {

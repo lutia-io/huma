@@ -20,13 +20,17 @@
 //	{{ now }}                         current UTC time in RFC 3339
 //	{{ uuid }}                        a random UUID v4
 //	{{ add 1 1 }}                     sum two or more numbers
+//	{{ sub 5 2 }}                     subtract two or more numbers
+//	{{ mul 3 4 }}                     multiply two or more numbers
+//	{{ div 10 2 }}                    divide two or more numbers
+//	{{ mod 10 3 }}                    remainder of two numbers
 //	{{ add .Record.data.count 1 }}    increment a numeric field
 //	{{ add .Context.data.total .Record.data.amount }}
 //
 //	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "id": "{{ uuid }}", "total": "{{ add .Record.data.count 1 }}"}
 //
 // Schema property default values use the same language, evaluated with an
-// empty trigger so only functions (now, uuid, add on literals) are useful.
+// empty trigger so only functions (now, uuid, arithmetic on literals) are useful.
 //
 // .Record is the trigger row, not the JSONB document:
 //

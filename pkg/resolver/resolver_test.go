@@ -160,6 +160,104 @@ func TestResolveAdd(t *testing.T) {
 	}
 }
 
+func TestResolveArithmetic(t *testing.T) {
+	trigger := Trigger{
+		Data: map[string]any{
+			"count": float64(10),
+			"bonus": float64(2.5),
+		},
+	}
+
+	tests := []struct {
+		name string
+		data map[string]any
+		want map[string]any
+	}{
+		{
+			name: "sub literals stay a number",
+			data: map[string]any{"total": "{{ sub 5 2 }}"},
+			want: map[string]any{"total": int64(3)},
+		},
+		{
+			name: "sub more than two arguments",
+			data: map[string]any{"total": "{{ sub 10 3 2 }}"},
+			want: map[string]any{"total": int64(5)},
+		},
+		{
+			name: "sub field minus literal",
+			data: map[string]any{"total": "{{ sub .Record.data.count 1 }}"},
+			want: map[string]any{"total": int64(9)},
+		},
+		{
+			name: "mul literals stay a number",
+			data: map[string]any{"total": "{{ mul 3 4 }}"},
+			want: map[string]any{"total": int64(12)},
+		},
+		{
+			name: "mul more than two arguments",
+			data: map[string]any{"total": "{{ mul 2 3 4 }}"},
+			want: map[string]any{"total": int64(24)},
+		},
+		{
+			name: "mul floats stay float",
+			data: map[string]any{"total": "{{ mul 1.5 2 }}"},
+			want: map[string]any{"total": float64(3)},
+		},
+		{
+			name: "div whole result stays a number",
+			data: map[string]any{"total": "{{ div 10 2 }}"},
+			want: map[string]any{"total": int64(5)},
+		},
+		{
+			name: "div fractional result stays float",
+			data: map[string]any{"total": "{{ div 10 4 }}"},
+			want: map[string]any{"total": float64(2.5)},
+		},
+		{
+			name: "div more than two arguments",
+			data: map[string]any{"total": "{{ div 20 2 2 }}"},
+			want: map[string]any{"total": int64(5)},
+		},
+		{
+			name: "mod literals stay a number",
+			data: map[string]any{"total": "{{ mod 10 3 }}"},
+			want: map[string]any{"total": int64(1)},
+		},
+		{
+			name: "mod floats stay float",
+			data: map[string]any{"total": "{{ mod 5.5 2 }}"},
+			want: map[string]any{"total": float64(1.5)},
+		},
+		{
+			name: "nested mixed ops stay a number",
+			data: map[string]any{"total": "{{ add (mul 2 3) (div 8 2) }}"},
+			want: map[string]any{"total": int64(10)},
+		},
+		{
+			name: "mixed text interpolates to string",
+			data: map[string]any{"note": "left {{ sub 5 2 }}"},
+			want: map[string]any{"note": "left 3"},
+		},
+		{
+			name: "field minus field with float",
+			data: map[string]any{"total": "{{ sub .Record.data.count .Record.data.bonus }}"},
+			want: map[string]any{"total": float64(7.5)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Resolve(tt.data, trigger)
+			if err != nil {
+				t.Fatalf("Resolve() error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Resolve() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveAddInputIndex(t *testing.T) {
 	got, err := ResolveInput(map[string]any{
 		"total": "{{ add .Input.1.body.count 2 }}",
@@ -242,6 +340,22 @@ func TestResolveErrors(t *testing.T) {
 		{
 			name: "add missing field",
 			data: map[string]any{"x": "{{ add .Record.data.missing 1 }}"},
+		},
+		{
+			name: "sub with one argument",
+			data: map[string]any{"x": "{{ sub 1 }}"},
+		},
+		{
+			name: "div by zero",
+			data: map[string]any{"x": "{{ div 1 0 }}"},
+		},
+		{
+			name: "mod by zero",
+			data: map[string]any{"x": "{{ mod 1 0 }}"},
+		},
+		{
+			name: "mod with three arguments",
+			data: map[string]any{"x": "{{ mod 10 3 1 }}"},
 		},
 		{
 			name: "nested braces in add",
