@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: s3-init
+          image: {{ .Values.image | quote }}
+          command: ["sh", "-ec"]
+          args:
+            - |
+              export AWS_EC2_METADATA_DISABLED=true
+              aws configure set default.s3.addressing_style path
+              endpoint="http://${S3_ENDPOINT}"
+              i=0
+              until aws --endpoint-url "$endpoint" s3 ls >/dev/null 2>&1; do
+                i=$((i + 1))
+                if [ "$i" -ge 30 ]; then
+                  echo "timed out waiting for S3 endpoint $S3_ENDPOINT" >&2
+                  exit 1
+                fi
+                sleep 2
+              done
+              for b in "$BUCKET_CHUNKS" "$BUCKET_RULER" "$BUCKET_ADMIN"; do
+                aws --endpoint-url "$endpoint" s3 mb "s3://${b}" 2>/dev/null || true
+              done
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.accessKey | quote }}
+            - name: AWS_SECRET_ACCESS_KEY
+              value: {{ .Values.secretKey | quote }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.region | quote }}
+            - name: S3_ENDPOINT
+              value: {{ .Values.endpoint | quote }}
+            - name: BUCKET_CHUNKS
+              value: {{ .Values.bucketChunks | quote }}
+            - name: BUCKET_RULER
+              value: {{ .Values.bucketRuler | quote }}
+            - name: BUCKET_ADMIN
+              value: {{ .Values.bucketAdmin | quote }}

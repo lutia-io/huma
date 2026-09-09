@@ -18,6 +18,145 @@ test:
 deploy:
   helm:
     releases:
+      - name: rustfs
+        remoteChart: rustfs
+        repo: https://charts.rustfs.com
+        version: "1.0.0-rc.5"
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          mode.standalone.enabled: "{{.RUSTFS_STANDALONE_ENABLED}}"
+          mode.distributed.enabled: "{{.RUSTFS_DISTRIBUTED_ENABLED}}"
+          storageclass.dataStorageSize: "{{.RUSTFS_DATA_STORAGE_SIZE}}"
+          storageclass.name: "{{.RUSTFS_STORAGE_CLASS}}"
+          secret.rustfs.access_key: "{{.RUSTFS_ACCESS_KEY}}"
+          secret.rustfs.secret_key: "{{.RUSTFS_SECRET_KEY}}"
+
+      - name: s3-init
+        chartPath: ./helm/s3-init
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          endpoint: "{{.RUSTFS_S3_ENDPOINT}}"
+          accessKey: "{{.RUSTFS_ACCESS_KEY}}"
+          secretKey: "{{.RUSTFS_SECRET_KEY}}"
+          region: "{{.LOKI_S3_REGION}}"
+          bucketChunks: "{{.LOKI_BUCKET_CHUNKS}}"
+          bucketRuler: "{{.LOKI_BUCKET_RULER}}"
+          bucketAdmin: "{{.LOKI_BUCKET_ADMIN}}"
+
+      - name: loki
+        remoteChart: loki
+        repo: https://grafana-community.github.io/helm-charts
+        version: "18.11.7"
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          loki.auth_enabled: "{{.LOKI_AUTH_ENABLED}}"
+          loki.commonConfig.replication_factor: "{{.LOKI_REPLICATION_FACTOR}}"
+          loki.commonConfig.ring.kvstore.store: inmemory
+          loki.schemaConfig.configs[0].from: "2024-04-01"
+          loki.schemaConfig.configs[0].object_store: s3
+          loki.schemaConfig.configs[0].store: tsdb
+          loki.schemaConfig.configs[0].schema: v13
+          loki.schemaConfig.configs[0].index.prefix: loki_index_
+          loki.schemaConfig.configs[0].index.period: 24h
+          loki.pattern_ingester.enabled: true
+          loki.limits_config.allow_structured_metadata: true
+          loki.limits_config.volume_enabled: true
+          loki.limits_config.retention_period: "{{.LOKI_RETENTION_PERIOD}}"
+          loki.storage.type: s3
+          loki.storage.bucketNames.chunks: "{{.LOKI_BUCKET_CHUNKS}}"
+          loki.storage.bucketNames.ruler: "{{.LOKI_BUCKET_RULER}}"
+          loki.storage.bucketNames.admin: "{{.LOKI_BUCKET_ADMIN}}"
+          loki.storage.s3.endpoint: "{{.RUSTFS_S3_ENDPOINT}}"
+          loki.storage.s3.region: "{{.LOKI_S3_REGION}}"
+          loki.storage.s3.accessKeyId: "{{.RUSTFS_ACCESS_KEY}}"
+          loki.storage.s3.secretAccessKey: "{{.RUSTFS_SECRET_KEY}}"
+          loki.storage.s3.signatureVersion: "{{.LOKI_S3_SIGNATURE_VERSION}}"
+          loki.storage.s3.s3ForcePathStyle: "{{.LOKI_S3_FORCE_PATH_STYLE}}"
+          loki.storage.s3.insecure: "{{.LOKI_S3_INSECURE}}"
+          minio.enabled: false
+          deploymentMode: Monolithic
+          singleBinary.replicas: 1
+          singleBinary.persistence.size: "{{.LOKI_PERSISTENCE_SIZE}}"
+          lokiCanary.enabled: false
+          gateway.enabled: "{{.LOKI_GATEWAY_ENABLED}}"
+          chunksCache.enabled: false
+          resultsCache.enabled: false
+          ruler.enabled: false
+          test.enabled: false
+          backend.replicas: 0
+          read.replicas: 0
+          write.replicas: 0
+          ingester.replicas: 0
+          querier.replicas: 0
+          queryFrontend.replicas: 0
+          queryScheduler.replicas: 0
+          distributor.replicas: 0
+          compactor.replicas: 0
+          indexGateway.replicas: 0
+          bloomPlanner.replicas: 0
+          bloomBuilder.replicas: 0
+          bloomGateway.replicas: 0
+
+      - name: prometheus
+        remoteChart: prometheus
+        repo: https://prometheus-community.github.io/helm-charts
+        version: "29.27.0"
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          alertmanager.enabled: "{{.PROMETHEUS_ALERTMANAGER_ENABLED}}"
+          kube-state-metrics.enabled: "{{.PROMETHEUS_KUBE_STATE_METRICS_ENABLED}}"
+          prometheus-pushgateway.enabled: "{{.PROMETHEUS_PUSHGATEWAY_ENABLED}}"
+
+      - name: grafana
+        remoteChart: grafana
+        repo: https://grafana-community.github.io/helm-charts
+        version: "13.2.1"
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        valuesFiles:
+          - helm/grafana-datasources.yaml
+        setValueTemplates:
+          adminUser: "{{.GRAFANA_ADMIN_USER}}"
+          adminPassword: "{{.GRAFANA_ADMIN_PASSWORD}}"
+          persistence.enabled: true
+          persistence.size: "{{.GRAFANA_PERSISTENCE_SIZE}}"
+          service.type: "{{.GRAFANA_SERVICE_TYPE}}"
+          service.port: "{{.GRAFANA_SERVICE_PORT}}"
+          datasources.datasources\.yaml.datasources[0].url: "{{.GRAFANA_PROMETHEUS_URL}}"
+          datasources.datasources\.yaml.datasources[1].url: "{{.GRAFANA_LOKI_URL}}"
+
+      - name: alloy-config
+        chartPath: ./helm/alloy-config
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValueTemplates:
+          namespace: "{{.NAMESPACE}}"
+          lokiPushURL: "{{.ALLOY_LOKI_PUSH_URL}}"
+
+      - name: alloy
+        remoteChart: alloy
+        repo: https://grafana.github.io/helm-charts
+        version: "1.12.1"
+        namespace: "{{.NAMESPACE}}"
+        createNamespace: true
+        wait: true
+        setValues:
+          alloy.configMap.create: false
+          alloy.configMap.name: alloy-config
+          alloy.configMap.key: config.alloy
+        setValueTemplates:
+          controller.type: "{{.ALLOY_CONTROLLER_TYPE}}"
+
       - name: cnpg-operator
         remoteChart: cloudnative-pg
         repo: https://cloudnative-pg.github.io/charts

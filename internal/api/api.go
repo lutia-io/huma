@@ -11,6 +11,7 @@ import (
 	"github.com/lutia-io/huma/pkg/auth"
 	"github.com/lutia-io/huma/pkg/file"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/metrics"
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/node"
@@ -87,6 +88,7 @@ func New() {
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.Handle("GET /metrics", metrics.Handler())
 
 	handler := http.Handler(mux)
 	handler = auth.Middleware(authService)(handler)
@@ -100,6 +102,7 @@ func New() {
 	handler = middleware.NewLogger(log, handler)
 	handler = middleware.NewRequestID(handler)
 	handler = middleware.NewRealIP(handler)
+	handler = metrics.NewHTTP(handler)
 
 	port := os.Getenv("HUMA_SERVICE_PORT")
 	srv := &http.Server{

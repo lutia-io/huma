@@ -1,0 +1,8 @@
+image: amazon/aws-cli:2.27.50
+endpoint: ""
+accessKey: ""
+secretKey: ""
+region: us-east-1
+bucketChunks: ""
+bucketRuler: ""
+bucketAdmin: ""
