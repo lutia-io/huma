@@ -50,6 +50,14 @@ func (f *fakeRecords) ListForOrg(_ context.Context, params record.ListForOrgPara
 	return out, len(out), nil
 }
 
+type staticSystemUsers struct {
+	id string
+}
+
+func (s staticSystemUsers) SystemUserID(context.Context, string, string) (string, error) {
+	return s.id, nil
+}
+
 func TestRecordList(t *testing.T) {
 	h := NewRecord(&fakeRecords{items: []*record.Record{{
 		ID:             "inv-1",
@@ -57,7 +65,7 @@ func TestRecordList(t *testing.T) {
 		NetworkID:      "net-1",
 		OrganizationID: "org-1",
 		Data:           json.RawMessage(`{"fundId":"fund-1"}`),
-	}}})
+	}}}, nil)
 	result, err := h.Execute(context.Background(), executor.ExecutionContext{
 		NetworkID:      "net-1",
 		OrganizationID: "org-1",
@@ -89,7 +97,7 @@ func TestRecordList(t *testing.T) {
 
 func TestRecordCreate(t *testing.T) {
 	fake := &fakeRecords{id: "rec-1"}
-	h := NewRecord(fake)
+	h := NewRecord(fake, staticSystemUsers{id: "sys-1"})
 	result, err := h.Execute(context.Background(), executor.ExecutionContext{
 		NetworkID:          "net-1",
 		OrganizationID:     "org-1",
@@ -127,5 +135,8 @@ func TestRecordCreate(t *testing.T) {
 	}
 	if data["propertyId"] != "prop-1" || data["fileId"] != "file-1" {
 		t.Fatalf("created data %#v", data)
+	}
+	if fake.created.OrganizationUserID != "sys-1" {
+		t.Fatalf("organization user id = %s, want sys-1", fake.created.OrganizationUserID)
 	}
 }

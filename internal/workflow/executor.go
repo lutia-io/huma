@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/organizationuser"
 	"github.com/lutia-io/huma/pkg/pipeline"
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/schema"
@@ -64,11 +65,12 @@ func NewExecutor() {
 	schemaService := schema.NewWithPool(log, pool)
 	recordService := record.NewWithPool(log, pool, js, schemaService)
 	pipelineService := pipeline.NewService(log, pipeline.NewPostgresStore(pool))
+	orgUserService := organizationuser.NewWithPool(log, pool)
 
 	registry := executor.NewRegistry(
-		handlers.NewCreateRecord(recordService),
+		handlers.NewCreateRecord(recordService, orgUserService),
 		handlers.NewUpdateRecord(recordService),
-		handlers.NewUpsertRecord(recordService),
+		handlers.NewUpsertRecord(recordService, orgUserService),
 		handlers.NewTriggerPipeline(log, pipelineService),
 	)
 

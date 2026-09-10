@@ -24,6 +24,10 @@ type organizationUser struct {
 	OrganizationID string `json:"organizationId"`
 	NetworkID      string `json:"networkId"`
 
+	// Internal marks the hidden system user for an organization. It is never
+	// returned by list/get and cannot log in.
+	Internal bool `json:"-"`
+
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
@@ -41,6 +45,7 @@ func (u organizationUser) LogValue() slog.Value {
 		slog.String("email", u.Email),
 		slog.String("organizationID", u.OrganizationID),
 		slog.String("networkID", u.NetworkID),
+		slog.Bool("internal", u.Internal),
 		slog.Time("createdAt", u.CreatedAt),
 		slog.Time("updatedAt", u.UpdatedAt),
 	}

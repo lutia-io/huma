@@ -2,6 +2,8 @@ package organizationuser
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"net/mail"
 	"strings"
 
@@ -11,6 +13,15 @@ import (
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
+
+const (
+	systemUserFirstName = "System"
+	systemUserLastName  = "User"
+)
+
+func systemUserEmail(organizationID string) string {
+	return "system+" + organizationID + "@huma.internal"
+}
 
 type Service struct {
 	logger *logger.Logger
@@ -89,6 +100,9 @@ func (s *Service) Insert(ctx context.Context, req insertOrganizationUserRequest)
 }
 
 func (s *Service) Patch(ctx context.Context, existing *organizationUser, req patchOrganizationUserRequest) error {
+	if existing.Internal {
+		return apperror.NewNotFoundError("Organization user not found", nil)
+	}
 	if req.FirstName == nil && req.LastName == nil && req.Email == nil && req.Password == nil {
 		return apperror.NewBadRequestError("No fields to update", nil)
 	}
@@ -151,6 +165,9 @@ func (s *Service) Patch(ctx context.Context, existing *organizationUser, req pat
 }
 
 func (s *Service) UpdatePassword(ctx context.Context, existing *organizationUser, req updatePasswordRequest) error {
+	if existing.Internal {
+		return apperror.NewNotFoundError("Organization user not found", nil)
+	}
 	if req.CurrentPassword == "" {
 		return apperror.NewBadRequestError("Current password is required", nil)
 	}
@@ -229,6 +246,9 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*o
 		s.logger.ErrorContext(ctx, "Failed to get organization user", logger.KeyID, id, logger.KeyError, err)
 		return nil, err
 	}
+	if u.Internal {
+		return nil, apperror.NewNotFoundError("Organization user not found", nil)
+	}
 
 	switch p.Type {
 	case principal.TypeUser:
@@ -259,12 +279,84 @@ func (s *Service) Scope(ctx context.Context, id string) (*Scope, error) {
 		s.logger.ErrorContext(ctx, "Failed to get organization user", logger.KeyID, id, logger.KeyError, err)
 		return nil, err
 	}
+	if u.Internal {
+		return nil, apperror.NewNotFoundError("Organization user not found", nil)
+	}
 	return &Scope{
 		ID:             u.ID,
 		OrganizationID: u.OrganizationID,
 		NetworkID:      u.NetworkID,
 		UserID:         u.UserID,
 	}, nil
+}
+
+// SystemUserID returns the hidden system organization user for the
+// organization, creating it if it does not yet exist.
+func (s *Service) SystemUserID(ctx context.Context, organizationID, networkID string) (string, error) {
+	return s.EnsureSystemUser(ctx, organizationID, networkID)
+}
+
+// EnsureSystemUser inserts the hidden system organization user for an
+// organization if one does not already exist, and returns its ID.
+func (s *Service) EnsureSystemUser(ctx context.Context, organizationID, networkID string) (string, error) {
+	organizationID = strings.TrimSpace(organizationID)
+	if !uuid.Valid(organizationID) {
+		return "", apperror.NewBadRequestError("Invalid organization ID", nil)
+	}
+	networkID = strings.TrimSpace(networkID)
+	if !uuid.Valid(networkID) {
+		return "", apperror.NewBadRequestError("Invalid network ID", nil)
+	}
+
+	id, err := s.store.GetSystemUserID(ctx, organizationID, networkID)
+	if err == nil {
+		return id, nil
+	}
+	if !apperror.IsNotFound(err) {
+		s.logger.ErrorContext(ctx, "Failed to load system organization user", "organization_id", organizationID, logger.KeyError, err)
+		return "", err
+	}
+
+	password, err := randomPassword()
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to generate system user password", logger.KeyError, err)
+		return "", apperror.NewInternalError("Failed to create system organization user", err)
+	}
+	hashedPassword, err := s.hasher.Hash(password)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to hash system user password", logger.KeyError, err)
+		return "", apperror.NewInternalError("Failed to create system organization user", err)
+	}
+
+	id, err = s.store.InsertSystemUser(ctx, &organizationUser{
+		FirstName:      systemUserFirstName,
+		LastName:       systemUserLastName,
+		Email:          systemUserEmail(organizationID),
+		Password:       hashedPassword,
+		OrganizationID: organizationID,
+		NetworkID:      networkID,
+		Internal:       true,
+	})
+	if err != nil {
+		if apperror.IsConflict(err) {
+			existingID, getErr := s.store.GetSystemUserID(ctx, organizationID, networkID)
+			if getErr == nil {
+				return existingID, nil
+			}
+		}
+		s.logger.ErrorContext(ctx, "Failed to insert system organization user", "organization_id", organizationID, logger.KeyError, err)
+		return "", err
+	}
+	s.logger.InfoContext(ctx, "Successfully created system organization user", logger.KeyID, id, "organization_id", organizationID)
+	return id, nil
+}
+
+func randomPassword() (string, error) {
+	var b [32]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
 }
 
 // ResolveCreateActor returns the organization user a record or file should be

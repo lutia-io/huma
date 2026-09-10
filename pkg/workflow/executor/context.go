@@ -10,8 +10,8 @@ type ExecutionContext struct {
 	NetworkID            string
 
 	// Trigger record context. Organization identity comes from the record
-	// that triggered the workflow, so records created by actions belong to
-	// the same organization as the trigger.
+	// that triggered the workflow. Records created by actions are attributed
+	// to the organization's hidden system user rather than the triggering user.
 	TriggerRecordID string
 	// TriggerData is the snapshotted JSONB document of the trigger record.
 	// Handlers pass it to resolver.Resolve as Trigger.Data, so templates

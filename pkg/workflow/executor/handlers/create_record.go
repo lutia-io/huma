@@ -10,13 +10,14 @@ import (
 )
 
 // CreateRecord handles action.TypeCreateRecord: create a record in the
-// schema from the action context, using the trigger's organization identity.
+// schema from the action context, attributed to the organization's system user.
 type CreateRecord struct {
-	records RecordService
+	records     RecordService
+	systemUsers SystemUsers
 }
 
-func NewCreateRecord(records RecordService) *CreateRecord {
-	return &CreateRecord{records: records}
+func NewCreateRecord(records RecordService, systemUsers SystemUsers) *CreateRecord {
+	return &CreateRecord{records: records, systemUsers: systemUsers}
 }
 
 func (h *CreateRecord) Type() action.Type {
@@ -31,5 +32,5 @@ func (h *CreateRecord) Execute(ctx context.Context, execCtx executor.ExecutionCo
 	if c.SchemaID == "" {
 		return nil, fmt.Errorf("CREATE_RECORD requires a schemaId")
 	}
-	return createRecord(ctx, h.records, execCtx, c.SchemaID, c.Data)
+	return createRecord(ctx, h.records, h.systemUsers, execCtx, c.SchemaID, c.Data)
 }

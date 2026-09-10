@@ -14,16 +14,18 @@ import (
 )
 
 type service struct {
-	logger *logger.Logger
-	store  store
-	hasher hasher.Hasher
+	logger      *logger.Logger
+	store       store
+	hasher      hasher.Hasher
+	systemUsers SystemUserSeeder
 }
 
-func newService(logger *logger.Logger, store store, hasher hasher.Hasher) *service {
+func newService(logger *logger.Logger, store store, hasher hasher.Hasher, systemUsers SystemUserSeeder) *service {
 	return &service{
-		logger: logger,
-		store:  store,
-		hasher: hasher,
+		logger:      logger,
+		store:       store,
+		hasher:      hasher,
+		systemUsers: systemUsers,
 	}
 }
 
@@ -71,6 +73,11 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) (st
 		return "", err
 	}
 	s.logger.InfoContext(ctx, "Successfully created organization", logger.KeySlug, slug)
+	if s.systemUsers != nil {
+		if _, err := s.systemUsers.EnsureSystemUser(ctx, id, networkID); err != nil {
+			s.logger.ErrorContext(ctx, "Failed to create system organization user", logger.KeyID, id, logger.KeyError, err)
+		}
+	}
 	return id, nil
 }
 

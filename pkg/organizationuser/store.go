@@ -17,6 +17,7 @@ const organizationUserSelectColumns = `
 	ou.email,
 	ou.organization_id,
 	ou.network_id,
+	ou.internal,
 	ou.created_at,
 	ou.updated_at,
 	ou.deleted_at,
@@ -29,6 +30,8 @@ type store interface {
 	GetByEmail(ctx context.Context, email, networkID, organizationID string) (*organizationUser, error)
 	GetPasswordByID(ctx context.Context, id string) (string, error)
 	UpdatePassword(ctx context.Context, id, hashedPassword string) error
+	GetSystemUserID(ctx context.Context, organizationID, networkID string) (string, error)
+	InsertSystemUser(ctx context.Context, organizationUser *organizationUser) (string, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 }
 
@@ -49,11 +52,12 @@ func (store *postgresStore) Insert(ctx context.Context, organizationUser *organi
 			password,
 			organization_id,
 			network_id,
+			internal,
 			created_at,
 			updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			$6, now(), now()
+			$6, FALSE, now(), now()
 		)
 		RETURNING id`
 
@@ -118,6 +122,7 @@ func scanOrganizationUser(row pgx.Row, u *organizationUser) error {
 		&u.Email,
 		&u.OrganizationID,
 		&u.NetworkID,
+		&u.Internal,
 		&u.CreatedAt,
 		&u.UpdatedAt,
 		&u.DeletedAt,
@@ -224,6 +229,68 @@ func (store *postgresStore) UpdatePassword(ctx context.Context, id, hashedPasswo
 		return apperror.NewNotFoundError("Organization user not found", nil)
 	}
 	return nil
+}
+
+func (store *postgresStore) GetSystemUserID(ctx context.Context, organizationID, networkID string) (string, error) {
+	const sql = `
+		SELECT id
+		FROM public.organization_users
+		WHERE organization_id = $1
+			AND network_id = $2
+			AND internal
+			AND deleted_at IS NULL`
+	var id string
+	err := store.db.QueryRow(ctx, sql, organizationID, networkID).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", apperror.NewNotFoundError("Organization user not found", err)
+		}
+		return "", err
+	}
+	return id, nil
+}
+
+func (store *postgresStore) InsertSystemUser(ctx context.Context, organizationUser *organizationUser) (string, error) {
+	const sql = `
+		INSERT INTO public.organization_users (
+			first_name,
+			last_name,
+			email,
+			password,
+			organization_id,
+			network_id,
+			internal,
+			created_at,
+			updated_at
+		) VALUES (
+			$1, $2, $3, $4, $5,
+			$6, TRUE, now(), now()
+		)
+		ON CONFLICT (organization_id) WHERE internal AND deleted_at IS NULL
+		DO UPDATE SET updated_at = organization_users.updated_at
+		RETURNING id`
+
+	err := store.db.QueryRow(ctx, sql,
+		organizationUser.FirstName,
+		organizationUser.LastName,
+		organizationUser.Email,
+		organizationUser.Password,
+		organizationUser.OrganizationID,
+		organizationUser.NetworkID,
+	).Scan(&organizationUser.ID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "23505":
+				return "", apperror.NewConflictError("Organization user already exists", err)
+			case "23503":
+				return "", apperror.NewBadRequestError("Invalid network or organization", err)
+			}
+		}
+		return "", err
+	}
+	return organizationUser.ID, nil
 }
 
 func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {

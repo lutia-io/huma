@@ -9,11 +9,15 @@ import (
 )
 
 func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux) *Service {
-	service := NewService(
+	service := NewWithPool(logger, pool)
+	newHTTPHandler(service, mux)
+	return service
+}
+
+func NewWithPool(logger *logger.Logger, pool *pgxpool.Pool) *Service {
+	return NewService(
 		logger,
 		newPostgresStore(pool),
 		hasher.NewArgon2IDHasher(),
 	)
-	newHTTPHandler(service, mux)
-	return service
 }

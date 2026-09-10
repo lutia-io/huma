@@ -21,6 +21,12 @@ type RecordService interface {
 	PatchData(ctx context.Context, rec *record.Record, data json.RawMessage) error
 }
 
+// SystemUsers looks up the hidden system organization user that owns records
+// created by workflow actions.
+type SystemUsers interface {
+	SystemUserID(ctx context.Context, organizationID, networkID string) (string, error)
+}
+
 func trigger(execCtx executor.ExecutionContext) resolver.Trigger {
 	return resolver.Trigger{ID: execCtx.TriggerRecordID, Data: execCtx.TriggerData}
 }
@@ -43,7 +49,7 @@ func resolveRecordID(execCtx executor.ExecutionContext, raw string) (string, err
 // createRecord is the shared create path for CREATE_RECORD and the
 // insert branch of UPSERT_RECORD. Schema validation happens inside
 // record.Service.Create.
-func createRecord(ctx context.Context, records RecordService, execCtx executor.ExecutionContext, schemaID string, data map[string]any) (json.RawMessage, error) {
+func createRecord(ctx context.Context, records RecordService, systemUsers SystemUsers, execCtx executor.ExecutionContext, schemaID string, data map[string]any) (json.RawMessage, error) {
 	resolved, err := resolver.Resolve(data, trigger(execCtx))
 	if err != nil {
 		return nil, fmt.Errorf("resolving action data: %w", err)
@@ -53,10 +59,15 @@ func createRecord(ctx context.Context, records RecordService, execCtx executor.E
 		return nil, fmt.Errorf("marshaling action data: %w", err)
 	}
 
+	orgUserID, err := resolveSystemUserID(ctx, systemUsers, execCtx)
+	if err != nil {
+		return nil, err
+	}
+
 	id, err := records.Create(ctx, record.CreateParams{
 		SchemaID:           schemaID,
 		OrganizationID:     execCtx.OrganizationID,
-		OrganizationUserID: execCtx.OrganizationUserID,
+		OrganizationUserID: orgUserID,
 		NetworkID:          execCtx.NetworkID,
 		Data:               raw,
 		IdempotencyKey:     execCtx.IdempotencyKey,
@@ -105,4 +116,18 @@ func updateRecord(ctx context.Context, records RecordService, execCtx executor.E
 		return nil, fmt.Errorf("updating record %q: %w", existing.ID, err)
 	}
 	return json.Marshal(map[string]string{"id": existing.ID})
+}
+
+func resolveSystemUserID(ctx context.Context, systemUsers SystemUsers, execCtx executor.ExecutionContext) (string, error) {
+	if systemUsers == nil {
+		return "", fmt.Errorf("system user lookup is required")
+	}
+	id, err := systemUsers.SystemUserID(ctx, execCtx.OrganizationID, execCtx.NetworkID)
+	if err != nil {
+		return "", fmt.Errorf("loading system organization user: %w", err)
+	}
+	if id == "" {
+		return "", fmt.Errorf("system organization user not found")
+	}
+	return id, nil
 }

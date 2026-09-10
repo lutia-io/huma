@@ -115,6 +115,7 @@ func (s *postgresStore) GetOrganizationUserByEmail(ctx context.Context, email, n
 		WHERE email = $1
 			AND network_id = $2
 			AND organization_id = $3
+			AND internal = FALSE
 			AND deleted_at IS NULL`
 	u := &identityOrganizationUser{}
 	err := s.db.QueryRow(ctx, sql, email, networkID, organizationID).Scan(
@@ -133,7 +134,7 @@ func (s *postgresStore) GetOrganizationUserByID(ctx context.Context, id string) 
 	const sql = `
 		SELECT id, first_name, last_name, email
 		FROM public.organization_users
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1 AND internal = FALSE AND deleted_at IS NULL`
 	p := &identityProfile{}
 	err := s.db.QueryRow(ctx, sql, id).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Email)
 	if err != nil {

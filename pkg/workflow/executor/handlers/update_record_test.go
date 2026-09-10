@@ -14,9 +14,15 @@ type fakeRecords struct {
 	got     *record.Record
 	found   bool
 	patched json.RawMessage
+	created record.CreateParams
+	id      string
 }
 
-func (f *fakeRecords) Create(context.Context, record.CreateParams) (string, error) {
+func (f *fakeRecords) Create(_ context.Context, params record.CreateParams) (string, error) {
+	f.created = params
+	if f.id != "" {
+		return f.id, nil
+	}
 	return "", nil
 }
 

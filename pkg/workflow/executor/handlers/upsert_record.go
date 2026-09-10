@@ -12,11 +12,12 @@ import (
 // UpsertRecord handles action.TypeUpsertRecord: update when recordId exists,
 // otherwise create under schemaId.
 type UpsertRecord struct {
-	records RecordService
+	records     RecordService
+	systemUsers SystemUsers
 }
 
-func NewUpsertRecord(records RecordService) *UpsertRecord {
-	return &UpsertRecord{records: records}
+func NewUpsertRecord(records RecordService, systemUsers SystemUsers) *UpsertRecord {
+	return &UpsertRecord{records: records, systemUsers: systemUsers}
 }
 
 func (h *UpsertRecord) Type() action.Type {
@@ -49,5 +50,5 @@ func (h *UpsertRecord) Execute(ctx context.Context, execCtx executor.ExecutionCo
 	if c.SchemaID == "" {
 		return nil, fmt.Errorf("UPSERT_RECORD requires a schemaId to create a record")
 	}
-	return createRecord(ctx, h.records, execCtx, c.SchemaID, c.Data)
+	return createRecord(ctx, h.records, h.systemUsers, execCtx, c.SchemaID, c.Data)
 }

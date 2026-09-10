@@ -67,6 +67,9 @@ func TestBuildListQuery_searchAndPagination(t *testing.T) {
 	if !strings.Contains(countSQL, "n.user_id = $1") {
 		t.Fatalf("count SQL missing user filter: %s", countSQL)
 	}
+	if !strings.Contains(countSQL, "ou.internal = FALSE") {
+		t.Fatalf("count SQL missing internal filter: %s", countSQL)
+	}
 	if !strings.Contains(countSQL, organizationUserNameExpr) || !strings.Contains(countSQL, "ESCAPE '!'") {
 		t.Fatalf("count SQL missing search: %s", countSQL)
 	}

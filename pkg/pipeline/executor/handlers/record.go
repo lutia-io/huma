@@ -24,12 +24,19 @@ type RecordStore interface {
 	ListForOrg(ctx context.Context, params record.ListForOrgParams) ([]*record.Record, int, error)
 }
 
-type Record struct {
-	records RecordStore
+// SystemUsers looks up the hidden system organization user that owns records
+// created by RECORD nodes.
+type SystemUsers interface {
+	SystemUserID(ctx context.Context, organizationID, networkID string) (string, error)
 }
 
-func NewRecord(records RecordStore) *Record {
-	return &Record{records: records}
+type Record struct {
+	records     RecordStore
+	systemUsers SystemUsers
+}
+
+func NewRecord(records RecordStore, systemUsers SystemUsers) *Record {
+	return &Record{records: records, systemUsers: systemUsers}
 }
 
 func (h *Record) Type() node.Type {
@@ -149,10 +156,14 @@ func (h *Record) create(ctx context.Context, execCtx executor.ExecutionContext, 
 	if err != nil {
 		return executor.Result{}, err
 	}
+	orgUserID, err := resolveSystemUserID(ctx, h.systemUsers, execCtx)
+	if err != nil {
+		return executor.Result{}, err
+	}
 	id, err := h.records.Create(ctx, record.CreateParams{
 		SchemaID:           schemaID,
 		OrganizationID:     execCtx.OrganizationID,
-		OrganizationUserID: execCtx.OrganizationUserID,
+		OrganizationUserID: orgUserID,
 		NetworkID:          execCtx.NetworkID,
 		Data:               raw,
 		IdempotencyKey:     execCtx.IdempotencyKey,
@@ -247,4 +258,18 @@ func (h *Record) loadInScope(ctx context.Context, execCtx executor.ExecutionCont
 
 func inScope(rec *record.Record, execCtx executor.ExecutionContext) bool {
 	return rec != nil && rec.NetworkID == execCtx.NetworkID && rec.OrganizationID == execCtx.OrganizationID
+}
+
+func resolveSystemUserID(ctx context.Context, systemUsers SystemUsers, execCtx executor.ExecutionContext) (string, error) {
+	if systemUsers == nil {
+		return "", fmt.Errorf("system user lookup is required")
+	}
+	id, err := systemUsers.SystemUserID(ctx, execCtx.OrganizationID, execCtx.NetworkID)
+	if err != nil {
+		return "", fmt.Errorf("loading system organization user: %w", err)
+	}
+	if id == "" {
+		return "", fmt.Errorf("system organization user not found")
+	}
+	return id, nil
 }
