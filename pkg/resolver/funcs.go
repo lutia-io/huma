@@ -198,7 +198,7 @@ func pureTypedCall(tmpl *template.Template) (string, []parse.Node, bool) {
 	return ident.Ident, cmd.Args[1:], true
 }
 
-func evalTypedCall(name string, args []parse.Node, e env) (any, error) {
+func evalTypedCall(name string, args []parse.Node, e any) (any, error) {
 	fn, ok := typedFuncs[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown function %q", name)
@@ -210,7 +210,7 @@ func evalTypedCall(name string, args []parse.Node, e env) (any, error) {
 	return fn(values...)
 }
 
-func evalArgs(args []parse.Node, e env) ([]any, error) {
+func evalArgs(args []parse.Node, e any) ([]any, error) {
 	out := make([]any, len(args))
 	for i, arg := range args {
 		v, err := evalArg(arg, e)
@@ -222,7 +222,7 @@ func evalArgs(args []parse.Node, e env) ([]any, error) {
 	return out, nil
 }
 
-func evalArg(n parse.Node, e env) (any, error) {
+func evalArg(n parse.Node, e any) (any, error) {
 	switch n := n.(type) {
 	case *parse.NumberNode:
 		if n.IsInt {
@@ -248,7 +248,7 @@ func evalArg(n parse.Node, e env) (any, error) {
 	}
 }
 
-func evalCmd(cmd *parse.CommandNode, e env) (any, error) {
+func evalCmd(cmd *parse.CommandNode, e any) (any, error) {
 	if cmd == nil || len(cmd.Args) == 0 {
 		return nil, fmt.Errorf("unsupported template argument")
 	}
@@ -268,7 +268,7 @@ func evalCmd(cmd *parse.CommandNode, e env) (any, error) {
 	}
 }
 
-func evalIndex(args []parse.Node, e env) (any, error) {
+func evalIndex(args []parse.Node, e any) (any, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("index requires a collection and a key")
 	}

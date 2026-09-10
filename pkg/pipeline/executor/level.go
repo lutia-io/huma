@@ -19,6 +19,22 @@ func indexedOutput(outputs map[int]json.RawMessage) map[string]any {
 	return out
 }
 
+// mergeLevelInput keeps the pipeline enqueue fields (salePrice, schema ids)
+// available on later levels, then overlays previous-level outputs as "0", "1", …
+func mergeLevelInput(base, outputs map[string]any) map[string]any {
+	if len(outputs) == 0 {
+		return base
+	}
+	out := make(map[string]any, len(base)+len(outputs))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range outputs {
+		out[k] = v
+	}
+	return out
+}
+
 func nodeInputJSON(input map[string]any) []byte {
 	if input == nil {
 		return []byte("{}")

@@ -154,6 +154,7 @@ type PipelineNode struct {
 	Status           string          `json:"status"`
 	Input            json.RawMessage `json:"input,omitempty"`
 	Output           json.RawMessage `json:"output,omitempty"`
+	Payload          json.RawMessage `json:"payload,omitempty"`
 	Error            string          `json:"error,omitempty"`
 	StartedAt        time.Time       `json:"startedAt"`
 	CompletedAt      time.Time       `json:"completedAt"`

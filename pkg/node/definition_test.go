@@ -51,12 +51,51 @@ func TestParseDefinition_mapper(t *testing.T) {
 }
 
 func TestParseDefinition_file(t *testing.T) {
-	got, err := ParseDefinition(TypeFile, []byte(`{"operation":"read","fileId":"{{ .Input.fileId }}"}`))
+	got, err := ParseDefinition(TypeFile, []byte(`{"operation":"write","filename":"notice.txt","contentType":"text/plain","content":"hello"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, ok := got.(FileContext)
-	if !ok || ctx.Operation != "READ" {
+	if !ok || ctx.Operation != FileOpWrite || ctx.Filename != "notice.txt" || ctx.ContentType != "text/plain" || ctx.Content != "hello" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestParseDefinition_listMapper(t *testing.T) {
+	got, err := ParseDefinition(TypeListMapper, []byte(`{"from":"{{ .Input.0.records }}","as":"investor","mapping":{"id":"{{ .investor.id }}"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, ok := got.(ListMapperContext)
+	if !ok || ctx.From == "" || ctx.As != "investor" || ctx.Mapping["id"] != "{{ .investor.id }}" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestParseDefinition_listMapperDefaultsAs(t *testing.T) {
+	got, err := ParseDefinition(TypeListMapper, []byte(`{"from":"{{ .Input.0.records }}"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, ok := got.(ListMapperContext)
+	if !ok || ctx.As != "item" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestParseDefinition_listMapperRejectsReservedAs(t *testing.T) {
+	if _, err := ParseDefinition(TypeListMapper, []byte(`{"from":"{{ .Input.0 }}","as":"Input"}`)); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestParseDefinition_record(t *testing.T) {
+	got, err := ParseDefinition(TypeRecord, []byte(`{"operation":"list","schemaId":"{{ .Input.schemaId }}","filters":[{"field":"fundId","op":"eq","value":"{{ .Input.fundId }}"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, ok := got.(RecordContext)
+	if !ok || ctx.Operation != RecordOpList || len(ctx.Filters) != 1 {
 		t.Fatalf("got %#v", got)
 	}
 }

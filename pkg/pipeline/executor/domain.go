@@ -51,6 +51,7 @@ type PipelineNode struct {
 	Status           NodeStatus
 	Input            []byte
 	Output           []byte
+	Payload          []byte
 	Error            string
 	StartedAt        time.Time
 	CompletedAt      time.Time

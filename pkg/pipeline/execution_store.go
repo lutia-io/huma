@@ -28,7 +28,7 @@ const pipelineRunSelectColumns = `
 
 const pipelineNodeSelectColumns = `
 	id, pipeline_id, level_index, node_index, attempt, node_definition_id,
-	node_slug, node_type, status, input, output, error, started_at, completed_at`
+	node_slug, node_type, status, input, output, payload, error, started_at, completed_at`
 
 func (store *postgresStore) InsertPending(ctx context.Context, p *Pipeline) (string, error) {
 	const insertSQL = `
@@ -186,7 +186,7 @@ func optionalJSON(raw []byte) json.RawMessage {
 }
 
 func scanPipelineNode(row pgx.Row, n *PipelineNode) error {
-	var input, output []byte
+	var input, output, payload []byte
 	var errMsg *string
 	if err := row.Scan(
 		&n.ID,
@@ -200,6 +200,7 @@ func scanPipelineNode(row pgx.Row, n *PipelineNode) error {
 		&n.Status,
 		&input,
 		&output,
+		&payload,
 		&errMsg,
 		&n.StartedAt,
 		&n.CompletedAt,
@@ -208,6 +209,7 @@ func scanPipelineNode(row pgx.Row, n *PipelineNode) error {
 	}
 	n.Input = optionalJSON(input)
 	n.Output = optionalJSON(output)
+	n.Payload = optionalJSON(payload)
 	if errMsg != nil {
 		n.Error = *errMsg
 	}

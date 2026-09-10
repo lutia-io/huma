@@ -21,9 +21,37 @@ type ExecutionContext struct {
 	IdempotencyKey       string
 }
 
+// FileRef is metadata for a file a node stored in the file service.
+type FileRef struct {
+	FileID      string `json:"fileId"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+	SizeBytes   int64  `json:"sizeBytes"`
+}
+
+// Payload is the journal sidecar for a node attempt. Level merge uses Output
+// only; payload is for the API and run UI.
+type Payload struct {
+	Files []FileRef `json:"files,omitempty"`
+}
+
+// Result is a node handler's output plus optional payload artifacts.
+type Result struct {
+	Output  json.RawMessage
+	Payload Payload
+}
+
+func MarshalOutput(v any) (Result, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Output: raw}, nil
+}
+
 type Handler interface {
 	Type() node.Type
-	Execute(ctx context.Context, execCtx ExecutionContext, n pipeline.SnapshotNode) (json.RawMessage, error)
+	Execute(ctx context.Context, execCtx ExecutionContext, n pipeline.SnapshotNode) (Result, error)
 }
 
 type Registry struct {
@@ -38,10 +66,10 @@ func NewRegistry(handlers ...Handler) *Registry {
 	return r
 }
 
-func (r *Registry) Execute(ctx context.Context, execCtx ExecutionContext, n pipeline.SnapshotNode) (json.RawMessage, error) {
+func (r *Registry) Execute(ctx context.Context, execCtx ExecutionContext, n pipeline.SnapshotNode) (Result, error) {
 	h, ok := r.handlers[n.Type]
 	if !ok {
-		return nil, fmt.Errorf("node type %q is not implemented", n.Type)
+		return Result{}, fmt.Errorf("node type %q is not implemented", n.Type)
 	}
 	return h.Execute(ctx, execCtx, n)
 }

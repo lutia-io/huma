@@ -63,6 +63,23 @@ type schemaField struct {
 	TitleKey string
 }
 
+// ListFieldFilter is an in-process record field filter for pipeline nodes.
+type ListFieldFilter struct {
+	Name  string
+	Value string
+	Op    string
+}
+
+// ListForOrgParams lists records for a pipeline running as an organization.
+type ListForOrgParams struct {
+	SchemaID       string
+	NetworkID      string
+	OrganizationID string
+	Fields         []ListFieldFilter
+	Page           int
+	PageSize       int
+}
+
 type listParams struct {
 	UserID         string
 	Query          string

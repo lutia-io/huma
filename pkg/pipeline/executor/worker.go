@@ -67,8 +67,8 @@ func (w *worker) execute(ctx context.Context, p *Pipeline) {
 
 	input := p.Input
 	if p.CurrentLevel > 0 {
-		// Rebuild input from the previous level's completed outputs so a
-		// reclaim mid-pipeline still sees the same next-level payload.
+		// Rebuild input from enqueue data plus the previous level's outputs
+		// so later nodes still see salePrice/schema ids and .Input.0, .Input.1.
 		prev, err := w.service.pipelines.ListTerminalNodes(ctx, p.ID, p.CurrentLevel-1)
 		if err != nil {
 			w.service.logger.ErrorContext(ctx, "Failed to load previous level outputs", logger.KeyID, p.ID, logger.KeyError, err)
@@ -80,7 +80,7 @@ func (w *worker) execute(ctx context.Context, p *Pipeline) {
 				outputs[n.NodeIndex] = n.Output
 			}
 		}
-		input = indexedOutput(outputs)
+		input = mergeLevelInput(p.Input, indexedOutput(outputs))
 	}
 
 	for level := p.CurrentLevel; level < len(levels); level++ {
@@ -135,7 +135,7 @@ func (w *worker) execute(ctx context.Context, p *Pipeline) {
 			w.service.logger.ErrorContext(ctx, "Failed to advance pipeline level", logger.KeyID, p.ID, logger.KeyError, err)
 			return
 		}
-		input = indexedOutput(outputs)
+		input = mergeLevelInput(p.Input, indexedOutput(outputs))
 	}
 
 	if err := w.service.pipelines.Finish(ctx, p.ID, false, ""); err != nil {
@@ -169,7 +169,7 @@ func (w *worker) executeNode(ctx context.Context, p *Pipeline, level, index int,
 		StartedAt:        time.Now().UTC(),
 	}
 
-	output, err := w.service.registry.Execute(ctx, execCtx, n)
+	result, err := w.service.registry.Execute(ctx, execCtx, n)
 	if err != nil {
 		entry.Error = err.Error()
 		w.service.logger.ErrorContext(ctx, "Pipeline node failed",
@@ -186,10 +186,17 @@ func (w *worker) executeNode(ctx context.Context, p *Pipeline, level, index int,
 		return nil, err
 	}
 
-	entry.Output = output
+	entry.Output = result.Output
+	if len(result.Payload.Files) > 0 {
+		payload, marshalErr := json.Marshal(result.Payload)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		entry.Payload = payload
+	}
 	if err := w.service.pipelines.CompleteNode(ctx, entry); err != nil {
 		w.service.logger.ErrorContext(ctx, "Failed to persist pipeline node completion", logger.KeyID, p.ID, logger.KeyError, err)
 		return nil, err
 	}
-	return output, nil
+	return result.Output, nil
 }

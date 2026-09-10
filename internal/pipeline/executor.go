@@ -9,9 +9,14 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/file"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/pipeline/executor"
 	"github.com/lutia-io/huma/pkg/pipeline/executor/handlers"
+	"github.com/lutia-io/huma/pkg/record"
+	"github.com/lutia-io/huma/pkg/schema"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const (
@@ -31,10 +36,42 @@ func NewExecutor() {
 	}
 	defer pool.Close()
 
+	nc, err := nats.Connect(os.Getenv("HUMA_SERVICE_NATS_URI"))
+	if err != nil {
+		log.Error("Unable to create NATS connection", logger.KeyError, err)
+		os.Exit(1)
+	}
+	defer nc.Drain()
+
+	js, err := jetstream.New(nc)
+	if err != nil {
+		log.Error("Unable to create JetStream", logger.KeyError, err)
+		os.Exit(1)
+	}
+
+	objCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	objs, err := js.CreateOrUpdateObjectStore(objCtx, jetstream.ObjectStoreConfig{
+		Bucket:  file.ObjectStoreBucket,
+		Storage: jetstream.FileStorage,
+	})
+	if err != nil {
+		log.Error("Unable to create files object store", logger.KeyError, err)
+		os.Exit(1)
+	}
+
+	schemaService := schema.NewWithPool(log, pool)
+	recordService := record.NewWithPool(log, pool, js, schemaService)
+	fileService := file.NewWithPool(log, pool, objs)
+
 	pipelineStore := executor.NewPostgresPipelineStore(pool, workerLeaseTimeout)
 	registry := executor.NewRegistry(
 		handlers.NewNoop(),
 		handlers.NewHTTP(nil),
+		handlers.NewMapper(),
+		handlers.NewListMapper(),
+		handlers.NewFile(fileService),
+		handlers.NewRecord(recordService),
 	)
 
 	service := executor.NewService(log, pipelineStore, registry)
@@ -49,7 +86,7 @@ func NewExecutor() {
 	})
 
 	port := os.Getenv("HUMA_SERVICE_PORT")
-	srv := &http.Server{
+	srv := http.Server{
 		Addr:              fmt.Sprintf(":%s", port),
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,

@@ -105,11 +105,12 @@ const insertNodeSQL = `
 		status,
 		input,
 		output,
+		payload,
 		error,
 		started_at,
 		completed_at
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, ''), $12, now()
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, ''), $13, now()
 	)`
 
 func (s *postgresPipelineStore) journalNode(ctx context.Context, entry PipelineNode, status NodeStatus) error {
@@ -124,6 +125,7 @@ func (s *postgresPipelineStore) journalNode(ctx context.Context, entry PipelineN
 		status,
 		entry.Input,
 		entry.Output,
+		entry.Payload,
 		entry.Error,
 		entry.StartedAt,
 	)

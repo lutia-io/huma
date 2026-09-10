@@ -258,6 +258,27 @@ func TestResolveArithmetic(t *testing.T) {
 	}
 }
 
+func TestResolveInputWithListItem(t *testing.T) {
+	got, err := ResolveInputWith(map[string]any{
+		"investorId": "{{ .investor.id }}",
+		"amount":     "{{ mul .Input.salePrice (div .investor.data.ownershipPercent 100) }}",
+	}, map[string]any{"salePrice": float64(200)}, map[string]any{
+		"investor": map[string]any{
+			"id":   "inv-1",
+			"data": map[string]any{"ownershipPercent": float64(25)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResolveInputWith() error: %v", err)
+	}
+	if got["investorId"] != "inv-1" {
+		t.Errorf("investorId = %#v", got["investorId"])
+	}
+	if got["amount"] != float64(50) {
+		t.Errorf("amount = %#v, want 50", got["amount"])
+	}
+}
+
 func TestResolveAddInputIndex(t *testing.T) {
 	got, err := ResolveInput(map[string]any{
 		"total": "{{ add .Input.1.body.count 2 }}",
@@ -418,7 +439,7 @@ func TestResolveWithTarget(t *testing.T) {
 		ID: "contrib-1",
 		Data: map[string]any{
 			"amountCents": float64(50),
-			"fundId":     "fund-1",
+			"fundId":      "fund-1",
 		},
 	}
 	target := Target{
@@ -501,6 +522,11 @@ func TestResolveInputIndex(t *testing.T) {
 			name: "dotted numeric index",
 			data: map[string]any{"org": "{{ .Input.1.body.name }}"},
 			want: map[string]any{"org": "Beta"},
+		},
+		{
+			name: "numeric index keeps array type",
+			data: map[string]any{"users": "{{ .Input.0.body.users }}"},
+			want: map[string]any{"users": []any{map[string]any{"id": "u1"}}},
 		},
 		{
 			name: "mixed text interpolates numeric index",

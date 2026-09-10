@@ -22,3 +22,16 @@ func TestIndexedOutput(t *testing.T) {
 		t.Fatal("missing index 0")
 	}
 }
+
+func TestMergeLevelInput(t *testing.T) {
+	got := mergeLevelInput(
+		map[string]any{"salePrice": float64(100), "propertyId": "p1"},
+		map[string]any{"0": map[string]any{"records": []any{}}},
+	)
+	if got["salePrice"] != float64(100) || got["propertyId"] != "p1" {
+		t.Fatalf("lost enqueue input: %#v", got)
+	}
+	if _, ok := got["0"].(map[string]any); !ok {
+		t.Fatalf("missing previous output: %#v", got)
+	}
+}

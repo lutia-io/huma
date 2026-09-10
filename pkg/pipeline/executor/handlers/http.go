@@ -31,18 +31,10 @@ func (h *HTTP) Type() node.Type {
 	return node.TypeHTTP
 }
 
-func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n pipeline.SnapshotNode) (json.RawMessage, error) {
-	raw, err := json.Marshal(n.Definition)
+func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n pipeline.SnapshotNode) (executor.Result, error) {
+	httpDef, err := parseDefinition[node.HTTPContext](n, node.TypeHTTP)
 	if err != nil {
-		return nil, err
-	}
-	def, err := node.ParseDefinition(node.TypeHTTP, raw)
-	if err != nil {
-		return nil, err
-	}
-	httpDef, ok := def.(node.HTTPContext)
-	if !ok {
-		return nil, fmt.Errorf("invalid HTTP definition type %T", def)
+		return executor.Result{}, err
 	}
 
 	payload := map[string]any{
@@ -52,19 +44,19 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 	if len(httpDef.Body) > 0 {
 		var body any
 		if err := json.Unmarshal(httpDef.Body, &body); err != nil {
-			return nil, fmt.Errorf("invalid HTTP body: %w", err)
+			return executor.Result{}, fmt.Errorf("invalid HTTP body: %w", err)
 		}
 		payload["body"] = body
 	}
 
 	resolved, err := resolver.ResolveInput(payload, execCtx.Input)
 	if err != nil {
-		return nil, fmt.Errorf("resolving HTTP definition: %w", err)
+		return executor.Result{}, fmt.Errorf("resolving HTTP definition: %w", err)
 	}
 
 	urlValue, _ := resolved["url"].(string)
 	if urlValue == "" {
-		return nil, fmt.Errorf("HTTP url resolved empty")
+		return executor.Result{}, fmt.Errorf("HTTP url resolved empty")
 	}
 
 	var bodyReader io.Reader
@@ -75,7 +67,7 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 		default:
 			encoded, err := json.Marshal(v)
 			if err != nil {
-				return nil, err
+				return executor.Result{}, err
 			}
 			bodyReader = bytes.NewReader(encoded)
 		}
@@ -83,7 +75,7 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 
 	req, err := http.NewRequestWithContext(ctx, httpDef.Method, urlValue, bodyReader)
 	if err != nil {
-		return nil, err
+		return executor.Result{}, err
 	}
 	if headers, ok := resolved["headers"].(map[string]any); ok {
 		for key, value := range headers {
@@ -100,13 +92,13 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		return nil, err
+		return executor.Result{}, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, err
+		return executor.Result{}, err
 	}
 
 	out := map[string]any{
@@ -114,7 +106,7 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 		"headers": flattenHeaders(resp.Header),
 		"body":    decodeBody(respBody, resp.Header.Get("Content-Type")),
 	}
-	return json.Marshal(out)
+	return executor.MarshalOutput(out)
 }
 
 func headersToAny(headers map[string]string) map[string]any {

@@ -172,6 +172,59 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 	return result, nil
 }
 
+// ListForOrg lists records in a network organization without an HTTP principal.
+// Pipeline RECORD LIST uses this so it does not round-trip through /record.
+func (s *Service) ListForOrg(ctx context.Context, params ListForOrgParams) ([]*Record, int, error) {
+	schemaID := strings.TrimSpace(params.SchemaID)
+	networkID := strings.TrimSpace(params.NetworkID)
+	organizationID := strings.TrimSpace(params.OrganizationID)
+	if schemaID == "" {
+		return nil, 0, apperror.NewBadRequestError("Schema ID is required", nil)
+	}
+	if networkID == "" {
+		return nil, 0, apperror.NewBadRequestError("Network ID is required", nil)
+	}
+	if organizationID == "" {
+		return nil, 0, apperror.NewBadRequestError("Organization ID is required", nil)
+	}
+
+	lp := listParams{
+		SchemaID:       schemaID,
+		NetworkID:      networkID,
+		OrganizationID: organizationID,
+		Sort:           "createdAt",
+		Order:          "asc",
+		Page:           params.Page,
+		PageSize:       params.PageSize,
+		Fields:         make([]fieldFilter, 0, len(params.Fields)),
+	}
+	if lp.Page < 1 {
+		lp.Page = 1
+	}
+	for _, field := range params.Fields {
+		name := strings.TrimSpace(field.Name)
+		if name == "" {
+			continue
+		}
+		lp.Fields = append(lp.Fields, fieldFilter{
+			Name:  name,
+			Value: strings.TrimSpace(field.Value),
+			Op:    strings.TrimSpace(field.Op),
+		})
+	}
+
+	if err := s.resolveListParams(ctx, &lp); err != nil {
+		return nil, 0, err
+	}
+
+	result, err := s.store.List(ctx, lp)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list records for organization", logger.KeyError, err)
+		return nil, 0, err
+	}
+	return result.Items, result.Total, nil
+}
+
 func (s *Service) resolveListParams(ctx context.Context, params *listParams) error {
 	if params.SchemaID != "" {
 		definition, err := s.schemaService.Definition(ctx, params.SchemaID)

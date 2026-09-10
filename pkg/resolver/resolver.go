@@ -166,10 +166,24 @@ func ResolveOne(s string, trigger Trigger) (any, error) {
 // ResolveInput is like Resolve but templates read from .Input (pipeline level
 // data) instead of .Record.
 func ResolveInput(data map[string]any, input map[string]any) (map[string]any, error) {
-	if input == nil {
-		input = map[string]any{}
+	return ResolveInputWith(data, input, nil)
+}
+
+// ResolveInputWith is ResolveInput plus extra root names for list mapping
+// ({{ .investor.id }} when extras["investor"] is set). Extra keys must not
+// shadow Record, Context, or Input.
+func ResolveInputWith(data map[string]any, input map[string]any, extras map[string]any) (map[string]any, error) {
+	resolved, err := resolveValue(data, pipelineEnv(input, extras, Target{}))
+	if err != nil {
+		return nil, err
 	}
-	resolved, err := resolveValue(data, env{Record: map[string]any{}, Context: map[string]any{}, Input: input})
+	return resolved.(map[string]any), nil
+}
+
+// ResolveInputWithTarget is ResolveInput plus .Context, the existing record a
+// RECORD UPDATE/UPSERT is writing to.
+func ResolveInputWithTarget(data map[string]any, input map[string]any, target Target) (map[string]any, error) {
+	resolved, err := resolveValue(data, pipelineEnv(input, nil, target))
 	if err != nil {
 		return nil, err
 	}
@@ -178,17 +192,39 @@ func ResolveInput(data map[string]any, input map[string]any) (map[string]any, er
 
 // ResolveString interpolates a single templated string against .Input.
 func ResolveString(s string, input map[string]any) (any, error) {
+	return ResolveStringWith(s, input, nil)
+}
+
+// ResolveStringWith is ResolveString plus extra root names, matching
+// ResolveInputWith.
+func ResolveStringWith(s string, input map[string]any, extras map[string]any) (any, error) {
+	return resolveString(s, pipelineEnv(input, extras, Target{}))
+}
+
+func pipelineEnv(input map[string]any, extras map[string]any, target Target) any {
 	if input == nil {
 		input = map[string]any{}
 	}
-	return resolveString(s, env{Record: map[string]any{}, Context: map[string]any{}, Input: input})
+	context := recordMap(target.ID, target.Data)
+	if len(extras) == 0 {
+		return env{Record: map[string]any{}, Context: context, Input: input}
+	}
+	data := map[string]any{
+		"Record":  map[string]any{},
+		"Context": context,
+		"Input":   input,
+	}
+	for k, v := range extras {
+		data[k] = v
+	}
+	return data
 }
 
 // resolveValue dispatches on the JSON-shaped types that appear in action
 // context after encoding/json unmarshal: string, map[string]any, []any, plus
 // scalars that need no work. Errors are wrapped with the map key or slice
 // index so callers can see which field failed.
-func resolveValue(v any, e env) (any, error) {
+func resolveValue(v any, e any) (any, error) {
 	switch v := v.(type) {
 	case string:
 		return resolveString(v, e)
@@ -220,7 +256,7 @@ func resolveValue(v any, e env) (any, error) {
 // resolveString evaluates one string field. Fast path: no "{{" means the
 // string is a literal. Otherwise parse (or reuse a cached parse), then either
 // typed field lookup or full template execution — see package docs.
-func resolveString(s string, e env) (any, error) {
+func resolveString(s string, e any) (any, error) {
 	if !strings.Contains(s, "{{") {
 		return s, nil
 	}
@@ -351,6 +387,11 @@ func pureInputIndexPath(tmpl *template.Template) ([]string, bool) {
 		return nil, false
 	}
 	cmd := action.Pipe.Cmds[0]
+	if len(cmd.Args) == 1 {
+		if nested, ok := cmd.Args[0].(*parse.PipeNode); ok && nested != nil && len(nested.Decl) == 0 && len(nested.Cmds) == 1 {
+			cmd = nested.Cmds[0]
+		}
+	}
 	if len(cmd.Args) < 3 {
 		return nil, false
 	}
