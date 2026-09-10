@@ -16,7 +16,7 @@ type store interface {
 	Insert(ctx context.Context, pipeline *pipelineDefinition) (string, error)
 	Update(ctx context.Context, pipeline *pipelineDefinition) error
 	GetByID(ctx context.Context, id string) (*pipelineDefinition, error)
-	GetBySlug(ctx context.Context, networkID, slug string) (*pipelineDefinition, error)
+	GetBySlug(ctx context.Context, networkID, slug, organizationID string) (*pipelineDefinition, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 
 	InsertPending(ctx context.Context, p *Pipeline) (string, error)
@@ -39,17 +39,19 @@ func (store *postgresStore) Insert(ctx context.Context, pipeline *pipelineDefini
 		INSERT INTO public.pipeline_definitions (
 			name,
 			slug,
+			description,
 			active,
 			internal,
 			definition,
 			network_id,
+			organization_id,
 			user_id,
 			created_by,
 			updated_by,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
 			now(), now()
 		)
 		RETURNING id`
@@ -62,18 +64,25 @@ func (store *postgresStore) Insert(ctx context.Context, pipeline *pipelineDefini
 	err = store.db.QueryRow(ctx, sql,
 		pipeline.Name,
 		pipeline.Slug,
+		pipeline.Description,
 		pipeline.Active,
 		pipeline.Internal,
 		defJSON,
 		pipeline.NetworkID,
+		pipeline.OrganizationID,
 		pipeline.UserID,
 		pipeline.CreatedBy.ID,
 		pipeline.UpdatedBy.ID,
 	).Scan(&pipeline.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", apperror.NewConflictError("Pipeline definition already exists", err)
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "23505":
+				return "", apperror.NewConflictError("Pipeline definition already exists", err)
+			case "23503":
+				return "", apperror.NewBadRequestError("Invalid network or organization", err)
+			}
 		}
 		return "", err
 	}
@@ -90,9 +99,10 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 		UPDATE public.pipeline_definitions
 		SET name = $2,
 			slug = $3,
-			active = $4,
-			definition = $5,
-			updated_by = $6,
+			description = $4,
+			active = $5,
+			definition = $6,
+			updated_by = $7,
 			updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL`
 
@@ -100,6 +110,7 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 		pipeline.ID,
 		pipeline.Name,
 		pipeline.Slug,
+		pipeline.Description,
 		pipeline.Active,
 		defJSON,
 		pipeline.UpdatedBy.ID,
@@ -118,7 +129,7 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 }
 
 const pipelineSelectColumns = `
-	pd.id, pd.name, pd.slug, pd.active, pd.internal, pd.definition, pd.network_id, pd.user_id,
+	pd.id, pd.name, pd.slug, pd.description, pd.active, pd.internal, pd.definition, pd.network_id, pd.organization_id, pd.user_id,
 	pd.created_at, pd.updated_at, pd.deleted_at,
 	` + user.SelectSQL
 
@@ -130,10 +141,12 @@ func scanPipelineDefinition(row pgx.Row, pipeline *pipelineDefinition) error {
 		&pipeline.ID,
 		&pipeline.Name,
 		&pipeline.Slug,
+		&pipeline.Description,
 		&pipeline.Active,
 		&pipeline.Internal,
 		&defJSON,
 		&pipeline.NetworkID,
+		&pipeline.OrganizationID,
 		&pipeline.UserID,
 		&pipeline.CreatedAt,
 		&pipeline.UpdatedAt,
@@ -189,14 +202,19 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*pipelineDe
 	return pipeline, nil
 }
 
-func (store *postgresStore) GetBySlug(ctx context.Context, networkID, slug string) (*pipelineDefinition, error) {
+func (store *postgresStore) GetBySlug(ctx context.Context, networkID, slug, organizationID string) (*pipelineDefinition, error) {
 	sql := `
 		SELECT` + pipelineSelectColumns + `
 		FROM public.pipeline_definitions pd` + user.JoinSQL("pd") + `
-		WHERE pd.network_id = $1 AND pd.slug = $2 AND pd.deleted_at IS NULL`
+		WHERE pd.network_id = $1
+			AND pd.slug = $2
+			AND pd.deleted_at IS NULL
+			AND (pd.organization_id IS NULL OR pd.organization_id = NULLIF($3, '')::uuid)
+		ORDER BY pd.organization_id NULLS LAST
+		LIMIT 1`
 
 	pipeline := &pipelineDefinition{}
-	err := scanPipelineDefinition(store.db.QueryRow(ctx, sql, networkID, slug), pipeline)
+	err := scanPipelineDefinition(store.db.QueryRow(ctx, sql, networkID, slug, organizationID), pipeline)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperror.NewNotFoundError("Pipeline definition not found", err)

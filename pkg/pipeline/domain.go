@@ -11,36 +11,48 @@ import (
 type pipelineDefinition struct {
 	ID string `json:"id"`
 
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	Active   bool   `json:"active"`
-	Internal bool   `json:"internal"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	Active      bool   `json:"active"`
+	Internal    bool   `json:"internal"`
 
 	Definition definition `json:"definition"`
 
-	NetworkID string   `json:"networkId"`
-	UserID    string   `json:"userId"`
-	CreatedBy user.Ref `json:"createdBy"`
-	UpdatedBy user.Ref `json:"updatedBy"`
+	NetworkID      string   `json:"networkId"`
+	OrganizationID *string  `json:"organizationId,omitempty"`
+	UserID         string   `json:"userId"`
+	CreatedBy      user.Ref `json:"createdBy"`
+	UpdatedBy      user.Ref `json:"updatedBy"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
+func (p pipelineDefinition) MatchesOrganization(organizationID string) bool {
+	if p.OrganizationID == nil {
+		return true
+	}
+	return *p.OrganizationID == organizationID
+}
+
 type insertPipelineDefinitionRequest struct {
-	Name       string     `json:"name"`
-	Active     bool       `json:"active"`
-	Internal   bool       `json:"internal"`
-	Definition definition `json:"definition"`
-	NetworkID  string     `json:"networkId"`
-	UserID     string     `json:"-"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	Active         bool       `json:"active"`
+	Internal       bool       `json:"internal"`
+	Definition     definition `json:"definition"`
+	NetworkID      string     `json:"networkId"`
+	OrganizationID string     `json:"organizationId"`
+	UserID         string     `json:"-"`
 }
 
 type patchPipelineDefinitionRequest struct {
-	Name       *string     `json:"name"`
-	Active     *bool       `json:"active"`
-	Definition *definition `json:"definition"`
+	Name        *string     `json:"name"`
+	Description *string     `json:"description"`
+	Active      *bool       `json:"active"`
+	Definition  *definition `json:"definition"`
 }
 
 type insertPipelineRequest struct {
@@ -50,24 +62,26 @@ type insertPipelineRequest struct {
 }
 
 type listParams struct {
-	UserID    string
-	Query     string
-	NetworkID string
-	Active    *bool
-	Name      string
-	NameOp    string
-	Slug      string
-	SlugOp    string
-	Network   string
-	NetworkOp string
-	Source    string
-	SourceOp  string
-	Stages    *int
-	StagesOp  string
-	Sort      string
-	Order     string
-	Page      int
-	PageSize  int
+	UserID         string
+	Query          string
+	NetworkID      string
+	OrganizationID string
+	Scope          string
+	Active         *bool
+	Name           string
+	NameOp         string
+	Slug           string
+	SlugOp         string
+	Network        string
+	NetworkOp      string
+	Source         string
+	SourceOp       string
+	Stages         *int
+	StagesOp       string
+	Sort           string
+	Order          string
+	Page           int
+	PageSize       int
 }
 
 type listResult struct {
@@ -102,9 +116,8 @@ type runListResult struct {
 	PageSize int         `json:"pageSize"`
 }
 
-// SnapshotNode is a node definition frozen onto a pipeline run.
+// SnapshotNode is a node frozen onto a pipeline run.
 type SnapshotNode struct {
-	ID         string    `json:"id"`
 	Name       string    `json:"name"`
 	Slug       string    `json:"slug"`
 	Type       node.Type `json:"type"`
@@ -143,21 +156,20 @@ type Pipeline struct {
 
 // PipelineNode is one journaled attempt of a single node in a pipeline level.
 type PipelineNode struct {
-	ID               string          `json:"id"`
-	PipelineID       string          `json:"pipelineId"`
-	LevelIndex       int             `json:"levelIndex"`
-	NodeIndex        int             `json:"nodeIndex"`
-	Attempt          int             `json:"attempt"`
-	NodeDefinitionID string          `json:"nodeDefinitionId"`
-	NodeSlug         string          `json:"nodeSlug"`
-	NodeType         string          `json:"nodeType"`
-	Status           string          `json:"status"`
-	Input            json.RawMessage `json:"input,omitempty"`
-	Output           json.RawMessage `json:"output,omitempty"`
-	Payload          json.RawMessage `json:"payload,omitempty"`
-	Error            string          `json:"error,omitempty"`
-	StartedAt        time.Time       `json:"startedAt"`
-	CompletedAt      time.Time       `json:"completedAt"`
+	ID          string          `json:"id"`
+	PipelineID  string          `json:"pipelineId"`
+	LevelIndex  int             `json:"levelIndex"`
+	NodeIndex   int             `json:"nodeIndex"`
+	Attempt     int             `json:"attempt"`
+	NodeSlug    string          `json:"nodeSlug"`
+	NodeType    string          `json:"nodeType"`
+	Status      string          `json:"status"`
+	Input       json.RawMessage `json:"input,omitempty"`
+	Output      json.RawMessage `json:"output,omitempty"`
+	Payload     json.RawMessage `json:"payload,omitempty"`
+	Error       string          `json:"error,omitempty"`
+	StartedAt   time.Time       `json:"startedAt"`
+	CompletedAt time.Time       `json:"completedAt"`
 }
 
 type EnqueueRequest struct {

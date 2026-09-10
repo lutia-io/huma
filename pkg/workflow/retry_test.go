@@ -31,9 +31,6 @@ func (s *retryStore) ListActiveBySchemaID(context.Context, string) ([]*WorkflowD
 func (s *retryStore) ListActiveScheduled(context.Context) ([]*WorkflowDefinition, error) {
 	panic("unused")
 }
-func (s *retryStore) SchemaVisibleToOrganization(context.Context, string, string, string) (bool, error) {
-	panic("unused")
-}
 func (s *retryStore) ListWorkflows(context.Context, runListParams) (*runListResult, error) {
 	panic("unused")
 }

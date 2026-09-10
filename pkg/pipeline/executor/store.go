@@ -99,7 +99,6 @@ const insertNodeSQL = `
 		level_index,
 		node_index,
 		attempt,
-		node_definition_id,
 		node_slug,
 		node_type,
 		status,
@@ -110,7 +109,7 @@ const insertNodeSQL = `
 		started_at,
 		completed_at
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, ''), $13, now()
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, ''), $12, now()
 	)`
 
 func (s *postgresPipelineStore) journalNode(ctx context.Context, entry PipelineNode, status NodeStatus) error {
@@ -119,7 +118,6 @@ func (s *postgresPipelineStore) journalNode(ctx context.Context, entry PipelineN
 		entry.LevelIndex,
 		entry.NodeIndex,
 		entry.Attempt,
-		entry.NodeDefinitionID,
 		entry.NodeSlug,
 		entry.NodeType,
 		status,

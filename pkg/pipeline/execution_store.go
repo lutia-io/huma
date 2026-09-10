@@ -27,7 +27,7 @@ const pipelineRunSelectColumns = `
 	n.user_id`
 
 const pipelineNodeSelectColumns = `
-	id, pipeline_id, level_index, node_index, attempt, node_definition_id,
+	id, pipeline_id, level_index, node_index, attempt,
 	node_slug, node_type, status, input, output, payload, error, started_at, completed_at`
 
 func (store *postgresStore) InsertPending(ctx context.Context, p *Pipeline) (string, error) {
@@ -194,7 +194,6 @@ func scanPipelineNode(row pgx.Row, n *PipelineNode) error {
 		&n.LevelIndex,
 		&n.NodeIndex,
 		&n.Attempt,
-		&n.NodeDefinitionID,
 		&n.NodeSlug,
 		&n.NodeType,
 		&n.Status,

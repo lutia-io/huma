@@ -97,6 +97,25 @@ func TestEvaluateCreated_defaultTrigger(t *testing.T) {
 	}
 }
 
+func TestEvaluateCreated_skipsOtherOrganization(t *testing.T) {
+	orgA := "org-a"
+	def := sampleDef("def-1", workflow.Trigger{}, "pending")
+	def.OrganizationID = &orgA
+	enqueuer, store := testEnqueuer([]*workflow.WorkflowDefinition{def})
+	err := enqueuer.EvaluateCreated(context.Background(), record.CreatedEvent{
+		ID:             "rec-1",
+		Data:           json.RawMessage(`{"status":"pending"}`),
+		SchemaID:       "schema-1",
+		OrganizationID: "org-b",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.inserted) != 0 {
+		t.Fatalf("inserted %d", len(store.inserted))
+	}
+}
+
 func TestEvaluateCreated_skipsUpdateOnly(t *testing.T) {
 	def := sampleDef("def-1", workflow.Trigger{On: []string{workflow.TriggerOnUpdated}}, "pending")
 	enqueuer, store := testEnqueuer([]*workflow.WorkflowDefinition{def})

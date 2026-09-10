@@ -158,15 +158,14 @@ func (w *worker) executeNode(ctx context.Context, p *Pipeline, level, index int,
 		IdempotencyKey:       fmt.Sprintf("%s:%d:%d", p.ID, level, index),
 	}
 	entry := PipelineNode{
-		PipelineID:       p.ID,
-		LevelIndex:       level,
-		NodeIndex:        index,
-		Attempt:          p.Attempts,
-		NodeDefinitionID: n.ID,
-		NodeSlug:         n.Slug,
-		NodeType:         string(n.Type),
-		Input:            nodeInputJSON(input),
-		StartedAt:        time.Now().UTC(),
+		PipelineID: p.ID,
+		LevelIndex: level,
+		NodeIndex:  index,
+		Attempt:    p.Attempts,
+		NodeSlug:   n.Slug,
+		NodeType:   string(n.Type),
+		Input:      nodeInputJSON(input),
+		StartedAt:  time.Now().UTC(),
 	}
 
 	result, err := w.service.registry.Execute(ctx, execCtx, n)

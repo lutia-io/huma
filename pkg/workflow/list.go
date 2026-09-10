@@ -34,6 +34,7 @@ var listSortColumns = map[string]string{
 	"active":    "wd.active",
 	"schema":    "s.name",
 	"network":   "COALESCE(n.name, '')",
+	"scope":     "COALESCE(o.name, 'Network')",
 	"actions":   "(" + actionCountExpr + ")",
 	"createdAt": "wd.created_at",
 	"updatedAt": "wd.updated_at",
@@ -56,6 +57,7 @@ func parseListParams(r *http.Request) (listParams, error) {
 		ActionsOp:      strings.TrimSpace(query.Get("actionsOp")),
 		NetworkID:      strings.TrimSpace(query.Get("networkId")),
 		OrganizationID: strings.TrimSpace(query.Get("organizationId")),
+		Scope:          strings.TrimSpace(query.Get("scope")),
 		Page:           defaultPage,
 	}
 
@@ -72,6 +74,10 @@ func parseListParams(r *http.Request) (listParams, error) {
 	}
 	if params.Order != "asc" && params.Order != "desc" {
 		return listParams{}, apperror.NewBadRequestError("Invalid sort order", nil)
+	}
+
+	if params.Scope != "" && params.Scope != "network" && params.Scope != "organization" {
+		return listParams{}, apperror.NewBadRequestError("Invalid scope", nil)
 	}
 
 	nameOp, err := normalizeStringOp(params.NameOp)
@@ -220,7 +226,13 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		where = append(where, "wd.network_id = "+b.add(params.NetworkID))
 	}
 	if params.OrganizationID != "" {
-		where = append(where, fmt.Sprintf("(s.organization_id IS NULL OR s.organization_id = %s)", b.add(params.OrganizationID)))
+		where = append(where, fmt.Sprintf("(wd.organization_id IS NULL OR wd.organization_id = %s)", b.add(params.OrganizationID)))
+	}
+	if params.Scope == "network" {
+		where = append(where, "wd.organization_id IS NULL")
+	}
+	if params.Scope == "organization" {
+		where = append(where, "wd.organization_id IS NOT NULL")
 	}
 	if params.Active != nil {
 		where = append(where, "wd.active = "+b.add(*params.Active))
@@ -229,12 +241,14 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		pattern := "%" + escapeLike(params.Query) + "%"
 		namePlaceholder := b.add(pattern)
 		slugPlaceholder := b.add(pattern)
+		descriptionPlaceholder := b.add(pattern)
 		schemaPlaceholder := b.add(pattern)
 		networkPlaceholder := b.add(pattern)
 		where = append(where, fmt.Sprintf(
-			"(wd.name ILIKE %s ESCAPE '%s' OR wd.slug ILIKE %s ESCAPE '%s' OR s.name ILIKE %s ESCAPE '%s' OR n.name ILIKE %s ESCAPE '%s')",
+			"(wd.name ILIKE %s ESCAPE '%s' OR wd.slug ILIKE %s ESCAPE '%s' OR wd.description ILIKE %s ESCAPE '%s' OR s.name ILIKE %s ESCAPE '%s' OR n.name ILIKE %s ESCAPE '%s')",
 			namePlaceholder, likeEscapeChar,
 			slugPlaceholder, likeEscapeChar,
+			descriptionPlaceholder, likeEscapeChar,
 			schemaPlaceholder, likeEscapeChar,
 			networkPlaceholder, likeEscapeChar,
 		))
@@ -268,7 +282,8 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	fromSQL := `
 		FROM public.workflow_definitions wd
 		JOIN public.schemas s ON s.id = wd.schema_id
-		LEFT JOIN public.networks n ON n.id = wd.network_id AND n.deleted_at IS NULL` + user.JoinSQL("wd") + `
+		LEFT JOIN public.networks n ON n.id = wd.network_id AND n.deleted_at IS NULL
+		LEFT JOIN public.organizations o ON o.id = wd.organization_id AND o.deleted_at IS NULL` + user.JoinSQL("wd") + `
 		WHERE ` + whereSQL
 
 	countSQL = "SELECT count(*)" + fromSQL

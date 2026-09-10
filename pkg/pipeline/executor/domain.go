@@ -40,21 +40,20 @@ type Pipeline struct {
 }
 
 type PipelineNode struct {
-	ID               string
-	PipelineID       string
-	LevelIndex       int
-	NodeIndex        int
-	Attempt          int
-	NodeDefinitionID string
-	NodeSlug         string
-	NodeType         string
-	Status           NodeStatus
-	Input            []byte
-	Output           []byte
-	Payload          []byte
-	Error            string
-	StartedAt        time.Time
-	CompletedAt      time.Time
+	ID          string
+	PipelineID  string
+	LevelIndex  int
+	NodeIndex   int
+	Attempt     int
+	NodeSlug    string
+	NodeType    string
+	Status      NodeStatus
+	Input       []byte
+	Output      []byte
+	Payload     []byte
+	Error       string
+	StartedAt   time.Time
+	CompletedAt time.Time
 }
 
 type TerminalNode struct {

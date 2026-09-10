@@ -3,9 +3,11 @@ package pipeline
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/network"
+	"github.com/lutia-io/huma/pkg/organization"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
 )
@@ -85,6 +87,15 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.NetworkID = networkID
+	bodyOrganizationID := strings.TrimSpace(req.OrganizationID)
+	if organizationID, ok := organization.ResolveID(r, p, req.OrganizationID); ok {
+		req.OrganizationID = organizationID
+	} else if bodyOrganizationID != "" {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid organization ID", nil))
+		return
+	} else {
+		req.OrganizationID = ""
+	}
 	req.UserID = p.ID
 	if err := principal.RequireUser(p, req.NetworkID); err != nil {
 		render.WriteError(w, err)

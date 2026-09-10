@@ -51,41 +51,53 @@ func (t Trigger) Includes(event string) bool {
 type WorkflowDefinition struct {
 	ID string `json:"id"`
 
-	Name   string `json:"name"`
-	Slug   string `json:"slug"`
-	Active bool   `json:"active"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	Active      bool   `json:"active"`
 	// Internal marks system-defined definitions that are inserted
 	// automatically on network creation, as opposed to user-authored ones.
 	Internal bool `json:"internal"`
 
 	Definition Definition `json:"definition"`
 
-	SchemaID  string   `json:"schemaId"`
-	NetworkID string   `json:"networkId"`
-	UserID    string   `json:"userId"`
-	CreatedBy user.Ref `json:"createdBy"`
-	UpdatedBy user.Ref `json:"updatedBy"`
+	SchemaID       string   `json:"schemaId"`
+	NetworkID      string   `json:"networkId"`
+	OrganizationID *string  `json:"organizationId,omitempty"`
+	UserID         string   `json:"userId"`
+	CreatedBy      user.Ref `json:"createdBy"`
+	UpdatedBy      user.Ref `json:"updatedBy"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
+func (w WorkflowDefinition) MatchesOrganization(organizationID string) bool {
+	if w.OrganizationID == nil {
+		return true
+	}
+	return *w.OrganizationID == organizationID
+}
+
 type insertWorkflowDefinitionRequest struct {
-	Name       string     `json:"name"`
-	Active     bool       `json:"active"`
-	Internal   bool       `json:"internal"`
-	Definition Definition `json:"definition"`
-	SchemaID   string     `json:"schemaId"`
-	NetworkID  string     `json:"networkId"`
-	UserID     string     `json:"-"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	Active         bool       `json:"active"`
+	Internal       bool       `json:"internal"`
+	Definition     Definition `json:"definition"`
+	SchemaID       string     `json:"schemaId"`
+	NetworkID      string     `json:"networkId"`
+	OrganizationID string     `json:"organizationId"`
+	UserID         string     `json:"-"`
 }
 
 type patchWorkflowDefinitionRequest struct {
-	Name       *string     `json:"name"`
-	Active     *bool       `json:"active"`
-	Definition *Definition `json:"definition"`
-	SchemaID   *string     `json:"schemaId"`
+	Name        *string     `json:"name"`
+	Description *string     `json:"description"`
+	Active      *bool       `json:"active"`
+	Definition  *Definition `json:"definition"`
+	SchemaID    *string     `json:"schemaId"`
 }
 
 type listParams struct {
@@ -93,6 +105,7 @@ type listParams struct {
 	Query          string
 	NetworkID      string
 	OrganizationID string
+	Scope          string
 	Active         *bool
 	Name           string
 	NameOp         string

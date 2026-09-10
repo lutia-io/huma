@@ -73,7 +73,7 @@ func TestBuildListQuery_searchAndPagination(t *testing.T) {
 	if !strings.Contains(countSQL, "wd.user_id = $1") {
 		t.Fatalf("count SQL missing user filter: %s", countSQL)
 	}
-	if !strings.Contains(countSQL, "wd.name ILIKE") || !strings.Contains(countSQL, "ESCAPE '!'") {
+	if !strings.Contains(countSQL, "wd.name ILIKE") || !strings.Contains(countSQL, "wd.description ILIKE") || !strings.Contains(countSQL, "ESCAPE '!'") {
 		t.Fatalf("count SQL missing search: %s", countSQL)
 	}
 	if got, want := countArgs[1], "%int!_ake%"; got != want {
@@ -105,8 +105,26 @@ func TestBuildListQuery_networkAndOrganization(t *testing.T) {
 	if !strings.Contains(countSQL, "wd.network_id = $2") {
 		t.Fatalf("missing network filter: %s", countSQL)
 	}
-	if !strings.Contains(countSQL, "(s.organization_id IS NULL OR s.organization_id = $3)") {
+	if !strings.Contains(countSQL, "(wd.organization_id IS NULL OR wd.organization_id = $3)") {
 		t.Fatalf("missing organization visibility filter: %s", countSQL)
+	}
+}
+
+func TestBuildListQuery_organizationAndScope(t *testing.T) {
+	params := listParams{
+		UserID:         "user-1",
+		NetworkID:      "net-1",
+		OrganizationID: "org-1",
+		Scope:          "organization",
+		Sort:           "name",
+		Order:          "asc",
+	}
+	countSQL, _, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "(wd.organization_id IS NULL OR wd.organization_id = $3)") {
+		t.Fatalf("missing organization visibility filter: %s", countSQL)
+	}
+	if !strings.Contains(countSQL, "wd.organization_id IS NOT NULL") {
+		t.Fatalf("missing scope filter: %s", countSQL)
 	}
 }
 

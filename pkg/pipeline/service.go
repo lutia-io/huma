@@ -6,7 +6,6 @@ import (
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
-	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
 	"github.com/lutia-io/huma/pkg/user"
@@ -16,15 +15,31 @@ import (
 type Service struct {
 	logger *logger.Logger
 	store  store
-	nodes  *node.Service
 }
 
-func NewService(logger *logger.Logger, store store, nodes *node.Service) *Service {
+func NewService(logger *logger.Logger, store store) *Service {
 	return &Service{
 		logger: logger,
 		store:  store,
-		nodes:  nodes,
 	}
+}
+
+func optionalID(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func visibleToOrganization(networkID string, organizationID *string, principalNetworkID, principalOrganizationID string) bool {
+	if networkID != principalNetworkID {
+		return false
+	}
+	if organizationID == nil {
+		return true
+	}
+	return *organizationID == principalOrganizationID
 }
 
 func (s *Service) Insert(ctx context.Context, req insertPipelineDefinitionRequest) (string, error) {
@@ -52,21 +67,29 @@ func (s *Service) Insert(ctx context.Context, req insertPipelineDefinitionReques
 		return "", apperror.NewBadRequestError("User ID is required", nil)
 	}
 
-	if err := s.validateDefinition(ctx, networkID, req.Definition); err != nil {
+	organizationID := optionalID(req.OrganizationID)
+	if organizationID != nil && !uuid.Valid(*organizationID) {
+		s.logger.WarnContext(ctx, "Invalid organization ID")
+		return "", apperror.NewBadRequestError("Invalid organization ID", nil)
+	}
+
+	if err := validateDefinition(req.Definition); err != nil {
 		s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
 		return "", err
 	}
 
 	p := &pipelineDefinition{
-		Name:       name,
-		Slug:       slug,
-		Active:     req.Active,
-		Internal:   req.Internal,
-		Definition: req.Definition,
-		NetworkID:  networkID,
-		UserID:     userID,
-		CreatedBy:  user.Ref{ID: userID},
-		UpdatedBy:  user.Ref{ID: userID},
+		Name:           name,
+		Slug:           slug,
+		Description:    strings.TrimSpace(req.Description),
+		Active:         req.Active,
+		Internal:       req.Internal,
+		Definition:     req.Definition,
+		NetworkID:      networkID,
+		OrganizationID: organizationID,
+		UserID:         userID,
+		CreatedBy:      user.Ref{ID: userID},
+		UpdatedBy:      user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, p)
@@ -87,7 +110,7 @@ func (s *Service) Patch(ctx context.Context, existing *pipelineDefinition, req p
 		return apperror.NewBadRequestError("Internal pipeline definitions cannot be updated", nil)
 	}
 
-	if req.Name == nil && req.Active == nil && req.Definition == nil {
+	if req.Name == nil && req.Description == nil && req.Active == nil && req.Definition == nil {
 		return apperror.NewBadRequestError("No fields to update", nil)
 	}
 
@@ -106,12 +129,16 @@ func (s *Service) Patch(ctx context.Context, existing *pipelineDefinition, req p
 		existing.Slug = slug
 	}
 
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
+	}
+
 	if req.Active != nil {
 		existing.Active = *req.Active
 	}
 
 	if req.Definition != nil {
-		if err := s.validateDefinition(ctx, existing.NetworkID, *req.Definition); err != nil {
+		if err := validateDefinition(*req.Definition); err != nil {
 			s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
 			return err
 		}
@@ -137,11 +164,12 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 	case principal.TypeUser:
 		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
-		if p.NetworkID == "" {
-			return nil, apperror.NewForbiddenError("Organization user token missing network", nil)
+		if p.NetworkID == "" || p.OrganizationID == "" {
+			return nil, apperror.NewForbiddenError("Organization user token missing network or organization", nil)
 		}
 		params.UserID = ""
 		params.NetworkID = p.NetworkID
+		params.OrganizationID = p.OrganizationID
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
 	}
@@ -174,7 +202,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*p
 			return nil, apperror.NewNotFoundError("Pipeline definition not found", nil)
 		}
 	case principal.TypeOrganizationUser:
-		if pipeline.NetworkID != p.NetworkID {
+		if !visibleToOrganization(pipeline.NetworkID, pipeline.OrganizationID, p.NetworkID, p.OrganizationID) {
 			return nil, apperror.NewNotFoundError("Pipeline definition not found", nil)
 		}
 	default:
@@ -182,31 +210,6 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*p
 	}
 
 	return pipeline, nil
-}
-
-func validateDefinitionShape(def definition) error {
-	if len(def.Nodes) == 0 {
-		return apperror.NewBadRequestError("Pipeline definition requires at least one level", nil)
-	}
-	for _, level := range def.Nodes {
-		if len(level) == 0 {
-			return apperror.NewBadRequestError("Pipeline definition levels cannot be empty", nil)
-		}
-		for _, n := range level {
-			if !uuid.Valid(n.ID) {
-				return apperror.NewBadRequestError("Invalid node definition ID", nil)
-			}
-		}
-	}
-	return nil
-}
-
-func (s *Service) validateDefinition(ctx context.Context, networkID string, def definition) error {
-	if err := validateDefinitionShape(def); err != nil {
-		return err
-	}
-	_, err := s.nodes.ResolveActive(ctx, networkID, collectNodeIDs(def))
-	return err
 }
 
 func (s *Service) Enqueue(ctx context.Context, req EnqueueRequest) (string, error) {
@@ -221,7 +224,7 @@ func (s *Service) Enqueue(ctx context.Context, req EnqueueRequest) (string, erro
 		}
 		def, err = s.store.GetByID(ctx, req.PipelineDefinitionID)
 	case strings.TrimSpace(req.PipelineSlug) != "":
-		def, err = s.store.GetBySlug(ctx, req.NetworkID, req.PipelineSlug)
+		def, err = s.store.GetBySlug(ctx, req.NetworkID, req.PipelineSlug, req.OrganizationID)
 	default:
 		return "", apperror.NewBadRequestError("Pipeline definition is required", nil)
 	}
@@ -231,12 +234,13 @@ func (s *Service) Enqueue(ctx context.Context, req EnqueueRequest) (string, erro
 	if def.NetworkID != req.NetworkID {
 		return "", apperror.NewNotFoundError("Pipeline definition not found", nil)
 	}
+	if !def.MatchesOrganization(req.OrganizationID) {
+		return "", apperror.NewNotFoundError("Pipeline definition not found", nil)
+	}
 	if !def.Active {
 		return "", apperror.NewBadRequestError("Pipeline definition is not active", nil)
 	}
-
-	byID, err := s.nodes.ResolveActive(ctx, def.NetworkID, collectNodeIDs(def.Definition))
-	if err != nil {
+	if err := validateDefinition(def.Definition); err != nil {
 		return "", err
 	}
 
@@ -256,7 +260,7 @@ func (s *Service) Enqueue(ctx context.Context, req EnqueueRequest) (string, erro
 		OrganizationUserID:   req.OrganizationUserID,
 		DedupeKey:            dedupeKey,
 		Input:                input,
-		Definition:           snapshotDefinition(def.Definition, byID),
+		Definition:           snapshotDefinition(def.Definition),
 	}
 	id, err := s.store.InsertPending(ctx, run)
 	if err != nil {
@@ -353,22 +357,4 @@ func (s *Service) authorizePipeline(p principal.Principal, run *Pipeline) error 
 		return apperror.NewUnauthorizedError("Authentication required", nil)
 	}
 	return nil
-}
-
-func snapshotDefinition(def definition, byID map[string]*node.NodeDefinition) SnapshotDefinition {
-	out := SnapshotDefinition{Nodes: make([][]SnapshotNode, len(def.Nodes))}
-	for i, level := range def.Nodes {
-		out.Nodes[i] = make([]SnapshotNode, len(level))
-		for j, ref := range level {
-			n := byID[ref.ID]
-			out.Nodes[i][j] = SnapshotNode{
-				ID:         n.ID,
-				Name:       n.Name,
-				Slug:       n.Slug,
-				Type:       n.Type,
-				Definition: n.Definition,
-			}
-		}
-	}
-	return out
 }

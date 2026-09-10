@@ -34,6 +34,7 @@ var listSortColumns = map[string]string{
 	"status":    "pd.active",
 	"active":    "pd.active",
 	"network":   "COALESCE(n.name, '')",
+	"scope":     "COALESCE(o.name, 'Network')",
 	"source":    "(" + sourceExpr + ")",
 	"stages":    "(" + stageCountExpr + ")",
 	"createdAt": "pd.created_at",
@@ -43,20 +44,22 @@ var listSortColumns = map[string]string{
 func parseListParams(r *http.Request) (listParams, error) {
 	query := r.URL.Query()
 	params := listParams{
-		Query:     strings.TrimSpace(query.Get("q")),
-		Sort:      strings.TrimSpace(query.Get("sort")),
-		Order:     strings.ToLower(strings.TrimSpace(query.Get("order"))),
-		Name:      strings.TrimSpace(query.Get("name")),
-		NameOp:    strings.TrimSpace(query.Get("nameOp")),
-		Slug:      strings.TrimSpace(query.Get("slug")),
-		SlugOp:    strings.TrimSpace(query.Get("slugOp")),
-		Network:   strings.TrimSpace(query.Get("network")),
-		NetworkOp: strings.TrimSpace(query.Get("networkOp")),
-		Source:    strings.TrimSpace(query.Get("source")),
-		SourceOp:  strings.TrimSpace(query.Get("sourceOp")),
-		StagesOp:  strings.TrimSpace(query.Get("stagesOp")),
-		NetworkID: strings.TrimSpace(query.Get("networkId")),
-		Page:      defaultPage,
+		Query:          strings.TrimSpace(query.Get("q")),
+		Sort:           strings.TrimSpace(query.Get("sort")),
+		Order:          strings.ToLower(strings.TrimSpace(query.Get("order"))),
+		Name:           strings.TrimSpace(query.Get("name")),
+		NameOp:         strings.TrimSpace(query.Get("nameOp")),
+		Slug:           strings.TrimSpace(query.Get("slug")),
+		SlugOp:         strings.TrimSpace(query.Get("slugOp")),
+		Network:        strings.TrimSpace(query.Get("network")),
+		NetworkOp:      strings.TrimSpace(query.Get("networkOp")),
+		Source:         strings.TrimSpace(query.Get("source")),
+		SourceOp:       strings.TrimSpace(query.Get("sourceOp")),
+		StagesOp:       strings.TrimSpace(query.Get("stagesOp")),
+		NetworkID:      strings.TrimSpace(query.Get("networkId")),
+		OrganizationID: strings.TrimSpace(query.Get("organizationId")),
+		Scope:          strings.TrimSpace(query.Get("scope")),
+		Page:           defaultPage,
 	}
 
 	if params.Sort == "" {
@@ -72,6 +75,10 @@ func parseListParams(r *http.Request) (listParams, error) {
 	}
 	if params.Order != "asc" && params.Order != "desc" {
 		return listParams{}, apperror.NewBadRequestError("Invalid sort order", nil)
+	}
+
+	if params.Scope != "" && params.Scope != "network" && params.Scope != "organization" {
+		return listParams{}, apperror.NewBadRequestError("Invalid scope", nil)
 	}
 
 	nameOp, err := normalizeStringOp(params.NameOp)
@@ -131,6 +138,9 @@ func parseListParams(r *http.Request) (listParams, error) {
 
 	if params.NetworkID != "" && !uuid.Valid(params.NetworkID) {
 		return listParams{}, apperror.NewBadRequestError("Invalid network ID", nil)
+	}
+	if params.OrganizationID != "" && !uuid.Valid(params.OrganizationID) {
+		return listParams{}, apperror.NewBadRequestError("Invalid organization ID", nil)
 	}
 
 	if value := strings.TrimSpace(query.Get("page")); value != "" {
@@ -216,6 +226,15 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	if params.NetworkID != "" {
 		where = append(where, "pd.network_id = "+b.add(params.NetworkID))
 	}
+	if params.OrganizationID != "" {
+		where = append(where, fmt.Sprintf("(pd.organization_id IS NULL OR pd.organization_id = %s)", b.add(params.OrganizationID)))
+	}
+	if params.Scope == "network" {
+		where = append(where, "pd.organization_id IS NULL")
+	}
+	if params.Scope == "organization" {
+		where = append(where, "pd.organization_id IS NOT NULL")
+	}
 	if params.Active != nil {
 		where = append(where, "pd.active = "+b.add(*params.Active))
 	}
@@ -223,12 +242,14 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		pattern := "%" + escapeLike(params.Query) + "%"
 		namePlaceholder := b.add(pattern)
 		slugPlaceholder := b.add(pattern)
+		descriptionPlaceholder := b.add(pattern)
 		sourcePlaceholder := b.add(pattern)
 		networkPlaceholder := b.add(pattern)
 		where = append(where, fmt.Sprintf(
-			"(pd.name ILIKE %s ESCAPE '%s' OR pd.slug ILIKE %s ESCAPE '%s' OR (%s) ILIKE %s ESCAPE '%s' OR n.name ILIKE %s ESCAPE '%s')",
+			"(pd.name ILIKE %s ESCAPE '%s' OR pd.slug ILIKE %s ESCAPE '%s' OR pd.description ILIKE %s ESCAPE '%s' OR (%s) ILIKE %s ESCAPE '%s' OR n.name ILIKE %s ESCAPE '%s')",
 			namePlaceholder, likeEscapeChar,
 			slugPlaceholder, likeEscapeChar,
+			descriptionPlaceholder, likeEscapeChar,
 			sourceExpr, sourcePlaceholder, likeEscapeChar,
 			networkPlaceholder, likeEscapeChar,
 		))
@@ -261,7 +282,8 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	whereSQL := strings.Join(where, " AND ")
 	fromSQL := `
 		FROM public.pipeline_definitions pd
-		JOIN public.networks n ON n.id = pd.network_id` + user.JoinSQL("pd") + `
+		JOIN public.networks n ON n.id = pd.network_id
+		LEFT JOIN public.organizations o ON o.id = pd.organization_id AND o.deleted_at IS NULL` + user.JoinSQL("pd") + `
 		WHERE ` + whereSQL
 
 	countSQL = "SELECT count(*)" + fromSQL

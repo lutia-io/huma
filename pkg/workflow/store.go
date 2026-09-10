@@ -13,7 +13,7 @@ import (
 )
 
 const workflowDefinitionSelectColumns = `
-	wd.id, wd.name, wd.slug, wd.active, wd.internal, wd.definition, wd.schema_id, wd.network_id,
+	wd.id, wd.name, wd.slug, wd.description, wd.active, wd.internal, wd.definition, wd.schema_id, wd.network_id, wd.organization_id,
 	wd.user_id, wd.created_at, wd.updated_at, wd.deleted_at,
 	` + user.SelectSQL
 
@@ -26,7 +26,6 @@ type store interface {
 	List(ctx context.Context, params listParams) (*listResult, error)
 	ListActiveBySchemaID(ctx context.Context, schemaID string) ([]*WorkflowDefinition, error)
 	ListActiveScheduled(ctx context.Context) ([]*WorkflowDefinition, error)
-	SchemaVisibleToOrganization(ctx context.Context, schemaID, networkID, organizationID string) (bool, error)
 
 	GetWorkflowByID(ctx context.Context, id string) (*Workflow, error)
 	ListWorkflows(ctx context.Context, params runListParams) (*runListResult, error)
@@ -48,22 +47,28 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 		INSERT INTO public.workflow_definitions (
 			name,
 			slug,
+			description,
 			active,
 			internal,
 			definition,
 			schema_id,
 			network_id,
+			organization_id,
 			user_id,
 			created_by,
 			updated_by,
 			created_at,
 			updated_at
 		)
-		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now()
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), now()
 		FROM public.schemas
-		WHERE id = $6
-			AND network_id = $7
+		WHERE id = $7
+			AND network_id = $8
 			AND deleted_at IS NULL
+			AND (
+				($9::uuid IS NULL AND organization_id IS NULL)
+				OR ($9::uuid IS NOT NULL AND (organization_id IS NULL OR organization_id = $9))
+			)
 		RETURNING id`
 
 	defJSON, err := json.Marshal(workflow.Definition)
@@ -74,11 +79,13 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 	err = store.db.QueryRow(ctx, sql,
 		workflow.Name,
 		workflow.Slug,
+		workflow.Description,
 		workflow.Active,
 		workflow.Internal,
 		defJSON,
 		workflow.SchemaID,
 		workflow.NetworkID,
+		workflow.OrganizationID,
 		workflow.UserID,
 		workflow.CreatedBy.ID,
 		workflow.UpdatedBy.ID,
@@ -93,7 +100,7 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 			case "23505":
 				return "", apperror.NewConflictError("Workflow definition already exists", err)
 			case "23503":
-				return "", apperror.NewBadRequestError("Invalid network, schema, or user", err)
+				return "", apperror.NewBadRequestError("Invalid network, organization, schema, or user", err)
 			}
 		}
 		return "", err
@@ -111,30 +118,37 @@ func (store *postgresStore) Update(ctx context.Context, workflow *WorkflowDefini
 		UPDATE public.workflow_definitions
 		SET name = $2,
 			slug = $3,
-			active = $4,
-			definition = $5,
-			schema_id = $6,
-			updated_by = $8,
+			description = $4,
+			active = $5,
+			definition = $6,
+			schema_id = $7,
+			updated_by = $9,
 			updated_at = now()
 		WHERE id = $1
 			AND deleted_at IS NULL
 			AND EXISTS (
 				SELECT 1
 				FROM public.schemas
-				WHERE id = $6
-					AND network_id = $7
+				WHERE id = $7
+					AND network_id = $8
 					AND deleted_at IS NULL
+					AND (
+						($10::uuid IS NULL AND organization_id IS NULL)
+						OR ($10::uuid IS NOT NULL AND (organization_id IS NULL OR organization_id = $10))
+					)
 			)`
 
 	tag, err := store.db.Exec(ctx, sql,
 		workflow.ID,
 		workflow.Name,
 		workflow.Slug,
+		workflow.Description,
 		workflow.Active,
 		defJSON,
 		workflow.SchemaID,
 		workflow.NetworkID,
 		workflow.UpdatedBy.ID,
+		workflow.OrganizationID,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -143,7 +157,7 @@ func (store *postgresStore) Update(ctx context.Context, workflow *WorkflowDefini
 			case "23505":
 				return apperror.NewConflictError("Workflow definition already exists", err)
 			case "23503":
-				return apperror.NewBadRequestError("Invalid network, schema, or user", err)
+				return apperror.NewBadRequestError("Invalid network, organization, schema, or user", err)
 			}
 		}
 		return err
@@ -163,11 +177,13 @@ func scanWorkflowDefinition(row pgx.Row, wf *WorkflowDefinition) error {
 		&wf.ID,
 		&wf.Name,
 		&wf.Slug,
+		&wf.Description,
 		&wf.Active,
 		&wf.Internal,
 		&defJSON,
 		&wf.SchemaID,
 		&wf.NetworkID,
+		&wf.OrganizationID,
 		&wf.UserID,
 		&wf.CreatedAt,
 		&wf.UpdatedAt,
@@ -282,24 +298,4 @@ func (store *postgresStore) ListActiveScheduled(ctx context.Context) ([]*Workflo
 		return nil, err
 	}
 	return collectWorkflowDefinitions(rows)
-}
-
-func (store *postgresStore) SchemaVisibleToOrganization(ctx context.Context, schemaID, networkID, organizationID string) (bool, error) {
-	const sql = `
-		SELECT 1
-		FROM public.schemas
-		WHERE id = $1
-			AND network_id = $2
-			AND deleted_at IS NULL
-			AND (organization_id IS NULL OR organization_id = $3)`
-
-	var present int
-	err := store.db.QueryRow(ctx, sql, schemaID, networkID, organizationID).Scan(&present)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
 }

@@ -27,6 +27,24 @@ func NewService(logger *logger.Logger, store store) *Service {
 	}
 }
 
+func optionalID(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func visibleToOrganization(networkID string, organizationID *string, principalNetworkID, principalOrganizationID string) bool {
+	if networkID != principalNetworkID {
+		return false
+	}
+	if organizationID == nil {
+		return true
+	}
+	return *organizationID == principalOrganizationID
+}
+
 func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionRequest) (string, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -62,22 +80,30 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 		return "", apperror.NewBadRequestError("Invalid schema ID", nil)
 	}
 
+	organizationID := optionalID(req.OrganizationID)
+	if organizationID != nil && !uuid.Valid(*organizationID) {
+		s.logger.WarnContext(ctx, "Invalid organization ID")
+		return "", apperror.NewBadRequestError("Invalid organization ID", nil)
+	}
+
 	if err := validateDefinition(req.Definition); err != nil {
 		s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
 		return "", err
 	}
 
 	wfd := &WorkflowDefinition{
-		Name:       name,
-		Slug:       slug,
-		Active:     req.Active,
-		Internal:   req.Internal,
-		Definition: req.Definition,
-		SchemaID:   schemaID,
-		NetworkID:  networkID,
-		UserID:     userID,
-		CreatedBy:  user.Ref{ID: userID},
-		UpdatedBy:  user.Ref{ID: userID},
+		Name:           name,
+		Slug:           slug,
+		Description:    strings.TrimSpace(req.Description),
+		Active:         req.Active,
+		Internal:       req.Internal,
+		Definition:     req.Definition,
+		SchemaID:       schemaID,
+		NetworkID:      networkID,
+		OrganizationID: organizationID,
+		UserID:         userID,
+		CreatedBy:      user.Ref{ID: userID},
+		UpdatedBy:      user.Ref{ID: userID},
 	}
 
 	id, err := s.store.Insert(ctx, wfd)
@@ -98,7 +124,7 @@ func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req p
 		return apperror.NewBadRequestError("Internal workflow definitions cannot be updated", nil)
 	}
 
-	if req.Name == nil && req.Active == nil && req.Definition == nil && req.SchemaID == nil {
+	if req.Name == nil && req.Description == nil && req.Active == nil && req.Definition == nil && req.SchemaID == nil {
 		return apperror.NewBadRequestError("No fields to update", nil)
 	}
 
@@ -115,6 +141,10 @@ func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req p
 		}
 		existing.Name = name
 		existing.Slug = slug
+	}
+
+	if req.Description != nil {
+		existing.Description = strings.TrimSpace(*req.Description)
 	}
 
 	if req.Active != nil {
@@ -202,12 +232,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*W
 		if wf.NetworkID != p.NetworkID {
 			return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
 		}
-		visible, err := s.store.SchemaVisibleToOrganization(ctx, wf.SchemaID, p.NetworkID, p.OrganizationID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to authorize workflow definition", logger.KeyID, id, logger.KeyError, err)
-			return nil, err
-		}
-		if !visible {
+		if !visibleToOrganization(wf.NetworkID, wf.OrganizationID, p.NetworkID, p.OrganizationID) {
 			return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
 		}
 	default:

@@ -70,6 +70,9 @@ func (e *Enqueuer) EvaluateCreated(ctx context.Context, event record.CreatedEven
 		if !def.Definition.Trigger.Includes(workflow.TriggerOnCreated) {
 			continue
 		}
+		if !def.MatchesOrganization(event.OrganizationID) {
+			continue
+		}
 		if !criteria.Match(def.Definition.Criteria, recordData) {
 			e.logger.InfoContext(ctx, "Workflow criteria not met", logger.KeyID, def.ID, "record_id", event.ID)
 			continue
@@ -111,6 +114,9 @@ func (e *Enqueuer) EvaluateUpdated(ctx context.Context, event record.UpdatedEven
 		if !def.Definition.Trigger.Includes(workflow.TriggerOnUpdated) {
 			continue
 		}
+		if !def.MatchesOrganization(event.OrganizationID) {
+			continue
+		}
 		if !changedFieldsMatch(def.Definition.Trigger.Changed, changed) {
 			e.logger.InfoContext(ctx, "Workflow changed fields not met", logger.KeyID, def.ID, "record_id", event.ID)
 			continue
@@ -138,6 +144,9 @@ func (e *Enqueuer) EvaluateSchedule(ctx context.Context, def *workflow.WorkflowD
 		if err != nil {
 			e.logger.ErrorContext(ctx, "Failed to unmarshal record data for scheduled workflow intake", logger.KeyID, rec.ID, logger.KeyError, err)
 			return err
+		}
+		if !def.MatchesOrganization(rec.OrganizationID) {
+			continue
 		}
 		if !criteria.Match(def.Definition.Criteria, data) {
 			e.logger.InfoContext(ctx, "Workflow criteria not met", logger.KeyID, def.ID, "record_id", rec.ID)

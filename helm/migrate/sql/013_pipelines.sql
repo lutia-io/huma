@@ -1,6 +1,6 @@
 -- pipelines: one execution instance per (definition, trigger).
--- The definition (resolved node snapshots) and input are frozen at enqueue
--- time so a run always executes against the state it started with.
+-- The definition (node configs) and input are frozen at enqueue time so a
+-- run always executes against the state it started with.
 CREATE TABLE public.pipelines (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     pipeline_definition_id UUID NOT NULL REFERENCES public.pipeline_definitions(id),

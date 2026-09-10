@@ -70,7 +70,7 @@ func TestBuildListQuery_searchAndPagination(t *testing.T) {
 	if !strings.Contains(countSQL, "pd.user_id = $1") {
 		t.Fatalf("count SQL missing user filter: %s", countSQL)
 	}
-	if !strings.Contains(countSQL, "pd.name ILIKE") || !strings.Contains(countSQL, "ESCAPE '!'") {
+	if !strings.Contains(countSQL, "pd.name ILIKE") || !strings.Contains(countSQL, "pd.description ILIKE") || !strings.Contains(countSQL, "ESCAPE '!'") {
 		t.Fatalf("count SQL missing search: %s", countSQL)
 	}
 	if got, want := countArgs[1], "%man!_ifest%"; got != want {
@@ -111,5 +111,23 @@ func TestBuildListQuery_networkSourceAndStages(t *testing.T) {
 	}
 	if !strings.Contains(listSQL, "ORDER BY ("+stageCountExpr+") DESC") {
 		t.Fatalf("missing stages sort: %s", listSQL)
+	}
+}
+
+func TestBuildListQuery_organizationAndScope(t *testing.T) {
+	params := listParams{
+		UserID:         "user-1",
+		NetworkID:      "net-1",
+		OrganizationID: "org-1",
+		Scope:          "organization",
+		Sort:           "name",
+		Order:          "asc",
+	}
+	countSQL, _, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "(pd.organization_id IS NULL OR pd.organization_id = $3)") {
+		t.Fatalf("missing organization visibility filter: %s", countSQL)
+	}
+	if !strings.Contains(countSQL, "pd.organization_id IS NOT NULL") {
+		t.Fatalf("missing scope filter: %s", countSQL)
 	}
 }
