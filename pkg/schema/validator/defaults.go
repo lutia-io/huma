@@ -10,7 +10,7 @@ import (
 
 // ApplyDefaults copies schema property defaults into data for keys that are
 // absent. String defaults that contain "{{" are evaluated with the resolver
-// against an empty trigger ({{ now }}, {{ uuid }}, {{ add 1 1 }}, {{ sub 5 2 }}). Existing
+// against an empty trigger ({{ now }}, {{ uuid }}, {{ mockText }}, {{ add 1 1 }}). Existing
 // keys, including explicit null, are left unchanged. The input is not mutated.
 func ApplyDefaults(definition json.RawMessage, data json.RawMessage) (json.RawMessage, error) {
 	if len(bytes.TrimSpace(data)) == 0 {

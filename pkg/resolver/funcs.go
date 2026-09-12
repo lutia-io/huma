@@ -16,11 +16,21 @@ import (
 // the template is exactly one call — "{{ add 1 1 }}" must stay a number so
 // integer/number schema fields validate. Mixed text still stringifies.
 var typedFuncs = map[string]func(...any) (any, error){
-	"add": add,
-	"sub": sub,
-	"mul": mul,
-	"div": div,
-	"mod": mod,
+	"add":          add,
+	"sub":          sub,
+	"mul":          mul,
+	"div":          div,
+	"mod":          mod,
+	"mockText":     mockText,
+	"mockNumber":   mockNumber,
+	"mockInteger":  mockInteger,
+	"mockBoolean":  mockBoolean,
+	"mockDate":     mockDate,
+	"mockDateTime": mockDateTime,
+	"mockEmail":    mockEmail,
+	"mockURL":      mockURL,
+	"mockPhone":    mockPhone,
+	"mockChoice":   mockChoice,
 }
 
 // uuidFunc returns a UUID v4; a package variable so tests can pin the value.

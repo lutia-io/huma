@@ -80,6 +80,10 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 		Name:     AddressFormat,
 		Validate: validateAddressFormat,
 	})
+	c.RegisterFormat(&jsonschema.Format{
+		Name:     PhoneFormat,
+		Validate: validatePhoneFormat,
+	})
 	c.UseLoader(deniedLoader{})
 
 	if err := c.AddResource(schemaURL, doc); err != nil {
@@ -104,6 +108,9 @@ func ValidateDefinition(definition json.RawMessage) error {
 		return err
 	}
 	if err := ValidateFileKeywords(definition); err != nil {
+		return err
+	}
+	if err := ValidatePhoneKeywords(definition); err != nil {
 		return err
 	}
 	return ValidateDefaultKeywords(definition)

@@ -26,11 +26,22 @@
 //	{{ mod 10 3 }}                    remainder of two numbers
 //	{{ add .Record.data.count 1 }}    increment a numeric field
 //	{{ add .Context.data.total .Record.data.amount }}
+//	{{ mockText }}                    a short sample phrase
+//	{{ mockNumber }}                  a random number
+//	{{ mockInteger }}                 a random whole number
+//	{{ mockBoolean }}                 true or false
+//	{{ mockDate }}                    a random YYYY-MM-DD date
+//	{{ mockDateTime }}                a random RFC 3339 timestamp
+//	{{ mockEmail }}                   a sample email address
+//	{{ mockURL }}                     a sample https URL
+//	{{ mockPhone }}                   a sample phone number
+//	{{ mockChoice "a" "b" }}          one of the given values
 //
 //	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "id": "{{ uuid }}", "total": "{{ add .Record.data.count 1 }}"}
 //
 // Schema property default values use the same language, evaluated with an
-// empty trigger so only functions (now, uuid, arithmetic on literals) are useful.
+// empty trigger so only functions (now, uuid, arithmetic on literals, mock*)
+// are useful.
 //
 // .Record is the trigger row, not the JSONB document:
 //

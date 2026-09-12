@@ -442,3 +442,83 @@ func TestValidateDataFileFormatArray(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDataPhoneFormat(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"phone": { "type": "string", "format": "phone" }
+		},
+		"required": ["phone"]
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{name: "e164", data: `{"phone":"+14155552671"}`},
+		{name: "formatted", data: `{"phone":"(415) 555-2671"}`},
+		{name: "dashed", data: `{"phone":"415-555-2671"}`},
+		{name: "international", data: `{"phone":"+44 20 7946 0958"}`},
+		{name: "empty", data: `{"phone":""}`, wantErr: true},
+		{name: "too short", data: `{"phone":"123"}`, wantErr: true},
+		{name: "letters", data: `{"phone":"call-me"}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateDefinition_phoneFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		def     string
+		wantErr string
+	}{
+		{
+			name: "string",
+			def:  `{"type":"object","properties":{"phone":{"type":"string","format":"phone"}}}`,
+		},
+		{
+			name:    "non-string type",
+			def:     `{"type":"object","properties":{"phone":{"type":"integer","format":"phone"}}}`,
+			wantErr: "format phone requires type string",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDefinition(json.RawMessage(tt.def))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestTitleKeySkipsPhone(t *testing.T) {
+	def := json.RawMessage(`{
+		"properties": {
+			"phone": { "type": "string", "format": "phone" },
+			"legalName": { "type": "string" }
+		}
+	}`)
+	if got := TitleKey(def); got != "legalName" {
+		t.Fatalf("title key=%q", got)
+	}
+}

@@ -106,6 +106,33 @@ func TestApplyDefaultsThenValidate(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsMockFunctionsThenValidate(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"name": { "type": "string", "default": "{{ mockText }}" },
+			"email": { "type": "string", "format": "email", "default": "{{ mockEmail }}" },
+			"website": { "type": "string", "format": "uri", "default": "{{ mockURL }}" },
+			"phone": { "type": "string", "format": "phone", "default": "{{ mockPhone }}" },
+			"born": { "type": "string", "format": "date", "default": "{{ mockDate }}" },
+			"seenAt": { "type": "string", "format": "date-time", "default": "{{ mockDateTime }}" },
+			"age": { "type": "integer", "default": "{{ mockInteger }}" },
+			"score": { "type": "number", "default": "{{ mockNumber }}" },
+			"active": { "type": "boolean", "default": "{{ mockBoolean }}" },
+			"status": { "type": "string", "enum": ["draft", "active"], "default": "{{ mockChoice \"draft\" \"active\" }}" }
+		},
+		"required": ["name", "email", "website", "phone", "born", "seenAt", "age", "score", "active", "status"],
+		"additionalProperties": false
+	}`)
+	filled, err := ApplyDefaults(def, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateData(def, filled); err != nil {
+		t.Fatalf("ValidateData: %v\nfilled: %s", err, filled)
+	}
+}
+
 func TestValidateDefinition_defaultTemplate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -123,6 +150,10 @@ func TestValidateDefinition_defaultTemplate(t *testing.T) {
 		{
 			name: "uuid default",
 			def:  `{"type":"object","properties":{"externalId":{"type":"string","default":"{{ uuid }}"}}}`,
+		},
+		{
+			name: "mock text default",
+			def:  `{"type":"object","properties":{"name":{"type":"string","default":"{{ mockText }}"}}}`,
 		},
 		{
 			name:    "unknown function",
