@@ -9,6 +9,7 @@ import (
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/pipeline"
 	"github.com/lutia-io/huma/pkg/resolver"
+	"github.com/lutia-io/huma/pkg/uuid"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
 )
 
@@ -43,14 +44,20 @@ func (h *TriggerPipeline) Execute(ctx context.Context, execCtx executor.Executio
 		return nil, fmt.Errorf("resolving pipeline input: %w", err)
 	}
 
-	id, err := h.enqueuer.Enqueue(ctx, pipeline.EnqueueRequest{
-		PipelineSlug:       c.Pipeline,
+	req := pipeline.EnqueueRequest{
 		NetworkID:          execCtx.NetworkID,
 		OrganizationID:     execCtx.OrganizationID,
 		OrganizationUserID: execCtx.OrganizationUserID,
 		Input:              input,
 		DedupeKey:          execCtx.IdempotencyKey,
-	})
+	}
+	if uuid.Valid(c.Pipeline) {
+		req.PipelineDefinitionID = c.Pipeline
+	} else {
+		req.PipelineSlug = c.Pipeline
+	}
+
+	id, err := h.enqueuer.Enqueue(ctx, req)
 	if err != nil {
 		return nil, err
 	}

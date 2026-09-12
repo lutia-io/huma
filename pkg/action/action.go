@@ -32,6 +32,7 @@ type UpsertRecordContext struct {
 }
 
 type TriggerPipelineContext struct {
+	// Pipeline is the pipeline definition ID.
 	Pipeline string         `json:"pipeline"`
 	Input    map[string]any `json:"input"`
 }

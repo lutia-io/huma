@@ -27,10 +27,14 @@ func parseDefinition[T any](n pipeline.SnapshotNode, t node.Type) (T, error) {
 }
 
 func resolveString(s string, input map[string]any) (string, error) {
+	return resolveStringWith(s, input, nil)
+}
+
+func resolveStringWith(s string, input map[string]any, extras map[string]any) (string, error) {
 	if s == "" {
 		return "", nil
 	}
-	v, err := resolver.ResolveString(s, input)
+	v, err := resolver.ResolveStringWith(s, input, extras)
 	if err != nil {
 		return "", err
 	}

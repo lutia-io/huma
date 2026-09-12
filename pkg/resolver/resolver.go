@@ -183,7 +183,12 @@ func ResolveInputWith(data map[string]any, input map[string]any, extras map[stri
 // ResolveInputWithTarget is ResolveInput plus .Context, the existing record a
 // RECORD UPDATE/UPSERT is writing to.
 func ResolveInputWithTarget(data map[string]any, input map[string]any, target Target) (map[string]any, error) {
-	resolved, err := resolveValue(data, pipelineEnv(input, nil, target))
+	return ResolveInputWithAndTarget(data, input, nil, target)
+}
+
+// ResolveInputWithAndTarget is ResolveInputWith plus .Context for bulk upsert updates.
+func ResolveInputWithAndTarget(data map[string]any, input map[string]any, extras map[string]any, target Target) (map[string]any, error) {
+	resolved, err := resolveValue(data, pipelineEnv(input, extras, target))
 	if err != nil {
 		return nil, err
 	}

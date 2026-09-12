@@ -17,6 +17,7 @@ const (
 	TypeListMapper Type = "LIST_MAPPER"
 	TypeFile       Type = "FILE"
 	TypeRecord     Type = "RECORD"
+	TypeBulk       Type = "BULK"
 )
 
 const (
@@ -28,6 +29,9 @@ const (
 	RecordOpCreate = "CREATE"
 	RecordOpUpdate = "UPDATE"
 	RecordOpUpsert = "UPSERT"
+
+	BulkOpCreate = "CREATE"
+	BulkOpUpsert = "UPSERT"
 )
 
 var listMapperAliasPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -73,6 +77,21 @@ type RecordContext struct {
 	RecordID  string         `json:"recordId,omitempty"`
 	Filters   []RecordFilter `json:"filters,omitempty"`
 	Data      map[string]any `json:"data,omitempty"`
+}
+
+// BulkRecord writes many records of one schema from a list.
+type BulkRecord struct {
+	SchemaID string         `json:"schemaId"`
+	From     string         `json:"from"`
+	As       string         `json:"as,omitempty"`
+	RecordID string         `json:"recordId,omitempty"`
+	Data     map[string]any `json:"data,omitempty"`
+}
+
+// BulkContext inserts or upserts multiple records for one or more record types.
+type BulkContext struct {
+	Operation string       `json:"operation,omitempty"`
+	Records   []BulkRecord `json:"records"`
 }
 
 func ParseDefinition(t Type, data json.RawMessage) (any, error) {
@@ -126,17 +145,11 @@ func ParseDefinition(t Type, data json.RawMessage) (any, error) {
 		if ctx.From == "" {
 			return nil, fmt.Errorf("invalid LIST_MAPPER definition: from is required")
 		}
-		ctx.As = strings.TrimSpace(ctx.As)
-		if ctx.As == "" {
-			ctx.As = "item"
+		as, err := normalizeListAlias(ctx.As)
+		if err != nil {
+			return nil, fmt.Errorf("invalid LIST_MAPPER definition: %w", err)
 		}
-		if !listMapperAliasPattern.MatchString(ctx.As) {
-			return nil, fmt.Errorf("invalid LIST_MAPPER definition: as must be an identifier")
-		}
-		switch ctx.As {
-		case "Record", "Context", "Input":
-			return nil, fmt.Errorf("invalid LIST_MAPPER definition: as %q is reserved", ctx.As)
-		}
+		ctx.As = as
 		if ctx.Mapping == nil {
 			ctx.Mapping = map[string]any{}
 		}
@@ -166,7 +179,60 @@ func ParseDefinition(t Type, data json.RawMessage) (any, error) {
 			ctx.Data = map[string]any{}
 		}
 		return ctx, nil
+	case TypeBulk:
+		var ctx BulkContext
+		if err := json.Unmarshal(data, &ctx); err != nil {
+			return nil, fmt.Errorf("invalid BULK definition: %w", err)
+		}
+		ctx.Operation = strings.ToUpper(strings.TrimSpace(ctx.Operation))
+		if ctx.Operation == "" {
+			ctx.Operation = BulkOpCreate
+		}
+		switch ctx.Operation {
+		case BulkOpCreate, BulkOpUpsert:
+		default:
+			return nil, fmt.Errorf("invalid BULK definition: operation must be CREATE or UPSERT")
+		}
+		if len(ctx.Records) == 0 {
+			return nil, fmt.Errorf("invalid BULK definition: at least one record type is required")
+		}
+		for i := range ctx.Records {
+			item := &ctx.Records[i]
+			item.SchemaID = strings.TrimSpace(item.SchemaID)
+			if item.SchemaID == "" {
+				return nil, fmt.Errorf("invalid BULK definition: records[%d].schemaId is required", i)
+			}
+			item.From = strings.TrimSpace(item.From)
+			if item.From == "" {
+				return nil, fmt.Errorf("invalid BULK definition: records[%d].from is required", i)
+			}
+			as, err := normalizeListAlias(item.As)
+			if err != nil {
+				return nil, fmt.Errorf("invalid BULK definition: records[%d]: %w", i, err)
+			}
+			item.As = as
+			item.RecordID = strings.TrimSpace(item.RecordID)
+			if item.Data == nil {
+				item.Data = map[string]any{}
+			}
+		}
+		return ctx, nil
 	default:
 		return nil, fmt.Errorf("unknown node type %q", t)
 	}
+}
+
+func normalizeListAlias(as string) (string, error) {
+	as = strings.TrimSpace(as)
+	if as == "" {
+		as = "item"
+	}
+	if !listMapperAliasPattern.MatchString(as) {
+		return "", fmt.Errorf("as must be an identifier")
+	}
+	switch as {
+	case "Record", "Context", "Input":
+		return "", fmt.Errorf("as %q is reserved", as)
+	}
+	return as, nil
 }

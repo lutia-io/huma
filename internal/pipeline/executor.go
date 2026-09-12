@@ -74,6 +74,7 @@ func NewExecutor() {
 		handlers.NewListMapper(),
 		handlers.NewFile(fileService),
 		handlers.NewRecord(recordService, orgUserService),
+		handlers.NewBulk(recordService, orgUserService),
 	)
 
 	service := executor.NewService(log, pipelineStore, registry)

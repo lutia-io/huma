@@ -12,7 +12,13 @@ import (
 const schemaURL = "schema.json"
 
 // FileFormat is the JSON Schema format name for a file ID reference.
-// Schema authors use: {"type":"string","format":"file"}
+// Schema authors use either a single ID:
+//
+//	{"type":"string","format":"file"}
+//
+// or an array of IDs:
+//
+//	{"type":"array","format":"file","items":{"type":"string","format":"file"}}
 const FileFormat = "file"
 
 // ForeignFormat is the JSON Schema format name for a related record ID.
@@ -95,6 +101,9 @@ func ValidateDefinition(definition json.RawMessage) error {
 		return err
 	}
 	if err := ValidateAddressKeywords(definition); err != nil {
+		return err
+	}
+	if err := ValidateFileKeywords(definition); err != nil {
 		return err
 	}
 	return ValidateDefaultKeywords(definition)

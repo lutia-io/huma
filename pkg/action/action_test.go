@@ -71,3 +71,28 @@ func TestUnmarshalUpdateRecord_schemaIDOptional(t *testing.T) {
 		t.Fatalf("recordId=%q", ctx.RecordID)
 	}
 }
+
+func TestUnmarshalTriggerPipeline_pipelineID(t *testing.T) {
+	raw := []byte(`{
+		"type": "TRIGGER_PIPELINE",
+		"context": {
+			"pipeline": "11111111-1111-1111-1111-111111111111",
+			"input": { "source": "{{ .Record.id }}" }
+		}
+	}`)
+
+	var act Action
+	if err := json.Unmarshal(raw, &act); err != nil {
+		t.Fatal(err)
+	}
+	ctx, ok := act.Context.(TriggerPipelineContext)
+	if !ok {
+		t.Fatalf("context type %T", act.Context)
+	}
+	if ctx.Pipeline != "11111111-1111-1111-1111-111111111111" {
+		t.Fatalf("pipeline=%q", ctx.Pipeline)
+	}
+	if ctx.Input["source"] != "{{ .Record.id }}" {
+		t.Fatalf("input=%#v", ctx.Input)
+	}
+}

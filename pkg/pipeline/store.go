@@ -21,6 +21,7 @@ type store interface {
 
 	InsertPending(ctx context.Context, p *Pipeline) (string, error)
 	GetPipelineByID(ctx context.Context, id string) (*Pipeline, error)
+	RetryFailed(ctx context.Context, id string, definition SnapshotDefinition) error
 	ListPipelines(ctx context.Context, params runListParams) (*runListResult, error)
 	GetPipelineNodeByID(ctx context.Context, id string) (*PipelineNode, error)
 	ListPipelineNodesByPipelineID(ctx context.Context, pipelineID string) ([]*PipelineNode, error)

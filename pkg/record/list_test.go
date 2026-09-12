@@ -72,6 +72,7 @@ func TestParseSchemaFields(t *testing.T) {
 			"declaredValue": { "type": "number" },
 			"signatureCaptured": { "type": "boolean" },
 			"proofFileId": { "type": "string", "format": "file" },
+			"attachments": { "type": "array", "format": "file", "items": { "type": "string", "format": "file" } },
 			"investorId": { "type": "string", "format": "foreign", "schemaId": "11111111-1111-1111-1111-111111111111" },
 			"mailingAddress": { "type": "object", "format": "address" }
 		}
@@ -90,6 +91,9 @@ func TestParseSchemaFields(t *testing.T) {
 	}
 	if fields["proofFileId"].Kind != fieldKindFile {
 		t.Fatalf("proofFileId kind=%s", fields["proofFileId"].Kind)
+	}
+	if fields["attachments"].Kind != fieldKindFile {
+		t.Fatalf("attachments kind=%s", fields["attachments"].Kind)
 	}
 	if fields["investorId"].Kind != fieldKindForeign {
 		t.Fatalf("investorId kind=%s", fields["investorId"].Kind)
@@ -188,7 +192,7 @@ func TestBuildListQuery_dynamicFields(t *testing.T) {
 	if !strings.Contains(countSQL, "r.data ->> $10 ILIKE") {
 		t.Fatalf("missing string filter: %s", countSQL)
 	}
-	if !strings.Contains(countSQL, "SELECT f.filename FROM public.files") {
+	if !strings.Contains(countSQL, "string_agg(f.filename") {
 		t.Fatalf("missing file filter: %s", countSQL)
 	}
 	if !strings.Contains(countSQL, "SELECT COALESCE(NULLIF(related.data ->>") {

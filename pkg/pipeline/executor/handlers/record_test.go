@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/lutia-io/huma/pkg/node"
@@ -13,13 +14,16 @@ import (
 
 type fakeRecords struct {
 	items   []*record.Record
-	created record.CreateParams
+	created []record.CreateParams
 	id      string
 }
 
 func (f *fakeRecords) Create(_ context.Context, params record.CreateParams) (string, error) {
-	f.created = params
-	return f.id, nil
+	f.created = append(f.created, params)
+	if f.id != "" {
+		return fmt.Sprintf("%s-%d", f.id, len(f.created)), nil
+	}
+	return fmt.Sprintf("rec-%d", len(f.created)), nil
 }
 
 func (f *fakeRecords) Get(_ context.Context, recordID string) (*record.Record, bool, error) {
@@ -126,17 +130,20 @@ func TestRecordCreate(t *testing.T) {
 	if err := json.Unmarshal(result.Output, &out); err != nil {
 		t.Fatal(err)
 	}
-	if out["id"] != "rec-1" {
+	if out["id"] != "rec-1-1" {
 		t.Fatalf("got %#v", out)
 	}
+	if len(fake.created) != 1 {
+		t.Fatalf("created %d records", len(fake.created))
+	}
 	var data map[string]any
-	if err := json.Unmarshal(fake.created.Data, &data); err != nil {
+	if err := json.Unmarshal(fake.created[0].Data, &data); err != nil {
 		t.Fatal(err)
 	}
 	if data["propertyId"] != "prop-1" || data["fileId"] != "file-1" {
 		t.Fatalf("created data %#v", data)
 	}
-	if fake.created.OrganizationUserID != "sys-1" {
-		t.Fatalf("organization user id = %s, want sys-1", fake.created.OrganizationUserID)
+	if fake.created[0].OrganizationUserID != "sys-1" {
+		t.Fatalf("organization user id = %s, want sys-1", fake.created[0].OrganizationUserID)
 	}
 }

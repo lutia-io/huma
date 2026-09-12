@@ -187,14 +187,9 @@ func (h *Record) update(ctx context.Context, execCtx executor.ExecutionContext, 
 		return executor.Result{}, err
 	}
 
-	var existingData map[string]any
-	if len(existing.Data) > 0 {
-		if err := json.Unmarshal(existing.Data, &existingData); err != nil {
-			return executor.Result{}, fmt.Errorf("unmarshaling existing record data: %w", err)
-		}
-	}
-	if existingData == nil {
-		existingData = map[string]any{}
+	existingData, err := existingDataMap(existing.Data)
+	if err != nil {
+		return executor.Result{}, err
 	}
 
 	resolved, err := resolver.ResolveInputWithTarget(def.Data, execCtx.Input, resolver.Target{
@@ -205,14 +200,7 @@ func (h *Record) update(ctx context.Context, execCtx executor.ExecutionContext, 
 		return executor.Result{}, fmt.Errorf("resolving RECORD data: %w", err)
 	}
 
-	merged := make(map[string]any, len(existingData)+len(resolved))
-	for k, v := range existingData {
-		merged[k] = v
-	}
-	for k, v := range resolved {
-		merged[k] = v
-	}
-	raw, err := json.Marshal(merged)
+	raw, err := mergeRecordData(existingData, resolved)
 	if err != nil {
 		return executor.Result{}, err
 	}
@@ -258,6 +246,30 @@ func (h *Record) loadInScope(ctx context.Context, execCtx executor.ExecutionCont
 
 func inScope(rec *record.Record, execCtx executor.ExecutionContext) bool {
 	return rec != nil && rec.NetworkID == execCtx.NetworkID && rec.OrganizationID == execCtx.OrganizationID
+}
+
+func mergeRecordData(existingData, resolved map[string]any) (json.RawMessage, error) {
+	merged := make(map[string]any, len(existingData)+len(resolved))
+	for k, v := range existingData {
+		merged[k] = v
+	}
+	for k, v := range resolved {
+		merged[k] = v
+	}
+	return json.Marshal(merged)
+}
+
+func existingDataMap(raw json.RawMessage) (map[string]any, error) {
+	var existingData map[string]any
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &existingData); err != nil {
+			return nil, fmt.Errorf("unmarshaling existing record data: %w", err)
+		}
+	}
+	if existingData == nil {
+		existingData = map[string]any{}
+	}
+	return existingData, nil
 }
 
 func resolveSystemUserID(ctx context.Context, systemUsers SystemUsers, execCtx executor.ExecutionContext) (string, error) {

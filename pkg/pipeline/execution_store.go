@@ -148,6 +148,40 @@ func (store *postgresStore) GetPipelineByID(ctx context.Context, id string) (*Pi
 	return p, nil
 }
 
+// RetryFailed reopens a failed pipeline so a worker will claim it again.
+// current_level is rewound to 0; workers skip nodes that already completed.
+// attempts is left as-is so the next journal row does not collide on
+// (pipeline_id, level_index, node_index, attempt); max_attempts grows by 5
+// so exhausted rows become claimable. definition is the live (or still
+// snapshotted) node graph to execute.
+func (store *postgresStore) RetryFailed(ctx context.Context, id string, definition SnapshotDefinition) error {
+	defJSON, err := json.Marshal(definition)
+	if err != nil {
+		return err
+	}
+	const sql = `
+		UPDATE public.pipelines
+		SET status = 'pending',
+			current_level = 0,
+			max_attempts = attempts + 5,
+			error = NULL,
+			completed_at = NULL,
+			locked_by = NULL,
+			locked_at = NULL,
+			next_attempt_at = now(),
+			definition = $2
+		WHERE id = $1 AND status = 'failed'`
+
+	tag, err := store.db.Exec(ctx, sql, id, defJSON)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewBadRequestError("Only failed pipelines can be retried", nil)
+	}
+	return nil
+}
+
 func (store *postgresStore) ListPipelines(ctx context.Context, params runListParams) (*runListResult, error) {
 	countSQL, listSQL, countArgs, listArgs := buildRunListQuery(params)
 

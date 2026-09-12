@@ -31,9 +31,9 @@ func (h *ListMapper) Execute(_ context.Context, execCtx executor.ExecutionContex
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving LIST_MAPPER from: %w", err)
 	}
-	items, err := toSlice(from)
+		items, err := toSlice(from)
 	if err != nil {
-		return executor.Result{}, err
+		return executor.Result{}, fmt.Errorf("LIST_MAPPER from: %w", err)
 	}
 
 	out := make([]any, 0, len(items))
@@ -65,7 +65,7 @@ func toSlice(v any) ([]any, error) {
 	}
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		return nil, fmt.Errorf("LIST_MAPPER from must resolve to a list, got %T", v)
+		return nil, fmt.Errorf("expected a list, got %T", v)
 	}
 	out := make([]any, rv.Len())
 	for i := 0; i < rv.Len(); i++ {

@@ -488,6 +488,9 @@ func validateActions(actions []action.Action) error {
 			if strings.TrimSpace(ctx.Pipeline) == "" {
 				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a pipeline to run", n), nil)
 			}
+			if !uuid.Valid(ctx.Pipeline) {
+				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a pipeline definition ID", n), nil)
+			}
 		default:
 			return apperror.NewBadRequestError(fmt.Sprintf("Action %d has an invalid type", n), nil)
 		}

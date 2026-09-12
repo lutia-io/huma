@@ -368,3 +368,77 @@ func TestValidateDataFileFormat(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDefinition_fileFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		def     string
+		wantErr string
+	}{
+		{
+			name: "string",
+			def:  `{"type":"object","properties":{"attachment":{"type":"string","format":"file"}}}`,
+		},
+		{
+			name: "array",
+			def:  `{"type":"object","properties":{"attachments":{"type":"array","format":"file","items":{"type":"string","format":"file"}}}}`,
+		},
+		{
+			name:    "non-string non-array type",
+			def:     `{"type":"object","properties":{"attachment":{"type":"integer","format":"file"}}}`,
+			wantErr: "format file requires type string or array",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDefinition(json.RawMessage(tt.def))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateDataFileFormatArray(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"attachments": {
+				"type": "array",
+				"format": "file",
+				"items": { "type": "string", "format": "file" }
+			}
+		},
+		"required": ["attachments"]
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{name: "valid file ids", data: `{"attachments":["550e8400-e29b-41d4-a716-446655440000","6ba7b810-9dad-11d1-80b4-00c04fd430c8"]}`},
+		{name: "empty array", data: `{"attachments":[]}`},
+		{name: "not a uuid", data: `{"attachments":["not-a-file-id"]}`, wantErr: true},
+		{name: "string instead of array", data: `{"attachments":"550e8400-e29b-41d4-a716-446655440000"}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}

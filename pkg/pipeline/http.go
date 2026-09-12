@@ -33,6 +33,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /pipeline", h.InsertPipeline)
 	mux.HandleFunc("GET /pipeline", h.ListPipelines)
 	mux.HandleFunc("GET /pipeline/{id}", h.GetPipeline)
+	mux.HandleFunc("POST /pipeline/{id}/retry", h.RetryPipeline)
 	mux.HandleFunc("GET /pipeline/{id}/node", h.ListPipelineNodes)
 	mux.HandleFunc("GET /pipeline-node/{id}", h.GetPipelineNode)
 }
@@ -199,6 +200,20 @@ func (h *httpHandler) GetPipeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusOK, run)
+}
+
+func (h *httpHandler) RetryPipeline(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	id := r.PathValue("id")
+	if err := h.service.Retry(r.Context(), p, id); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 
 func (h *httpHandler) ListPipelineNodes(w http.ResponseWriter, r *http.Request) {

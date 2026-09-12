@@ -388,10 +388,7 @@ func applyFieldFilter(b *queryBuilder, where *[]string, field fieldFilter) {
 		}
 		*where = append(*where, fmt.Sprintf("r.data -> %s = '%s'::jsonb", key, literal))
 	case fieldKindFile:
-		applyStringFilter(b, where, fmt.Sprintf(
-			"(SELECT f.filename FROM public.files f WHERE f.id::text = r.data ->> %s AND f.deleted_at IS NULL)",
-			key,
-		), field.Value, field.Op)
+		applyStringFilter(b, where, fileFilenamesExpr(key), field.Value, field.Op)
 	case fieldKindForeign:
 		applyStringFilter(b, where, relatedTitleExpr(b, key, field.TitleKey), field.Value, field.Op)
 	case fieldKindAddress:
@@ -416,7 +413,7 @@ func sortExpression(params listParams, b *queryBuilder) string {
 	case fieldKindBoolean:
 		return fmt.Sprintf("(CASE WHEN jsonb_typeof(r.data -> %s) = 'boolean' THEN (r.data ->> %s)::boolean END)", key, key)
 	case fieldKindFile:
-		return fmt.Sprintf("(SELECT f.filename FROM public.files f WHERE f.id::text = r.data ->> %s AND f.deleted_at IS NULL)", key)
+		return fileFilenamesExpr(key)
 	case fieldKindForeign:
 		return relatedTitleExpr(b, key, meta.TitleKey)
 	case fieldKindAddress:
@@ -424,6 +421,23 @@ func sortExpression(params listParams, b *queryBuilder) string {
 	default:
 		return fmt.Sprintf("r.data ->> %s", key)
 	}
+}
+
+func fileIDsArrayExpr(jsonExpr string) string {
+	return fmt.Sprintf(`(
+		CASE
+			WHEN jsonb_typeof(%[1]s) = 'array' THEN ARRAY(SELECT jsonb_array_elements_text(%[1]s))
+			WHEN jsonb_typeof(%[1]s) = 'string' THEN ARRAY[%[1]s #>> '{}']
+			ELSE ARRAY[]::text[]
+		END
+	)`, jsonExpr)
+}
+
+func fileFilenamesExpr(key string) string {
+	return fmt.Sprintf(
+		"(SELECT string_agg(f.filename, ' ' ORDER BY f.filename) FROM public.files f WHERE f.deleted_at IS NULL AND f.id::text = ANY (%s))",
+		fileIDsArrayExpr(fmt.Sprintf("r.data -> %s", key)),
+	)
 }
 
 func addressTextExpr(key string) string {
@@ -470,13 +484,15 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		where = append(where, fmt.Sprintf(
 			`(r.id::text ILIKE %s ESCAPE '%s' OR o.name ILIKE %s ESCAPE '%s' OR r.data::text ILIKE %s ESCAPE '%s' OR EXISTS (
 				SELECT 1
-				FROM jsonb_each_text(r.data) kv
-				JOIN public.files f ON f.id::text = kv.value AND f.deleted_at IS NULL
+				FROM jsonb_each(r.data) kv
+				JOIN public.files f ON f.deleted_at IS NULL
+					AND f.id::text = ANY (%s)
 				WHERE f.filename ILIKE %s ESCAPE '%s'
 			))`,
 			idPlaceholder, likeEscapeChar,
 			orgPlaceholder, likeEscapeChar,
 			dataPlaceholder, likeEscapeChar,
+			fileIDsArrayExpr("kv.value"),
 			filePlaceholder, likeEscapeChar,
 		))
 	}

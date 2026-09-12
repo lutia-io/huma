@@ -313,6 +313,44 @@ func (s *Service) GetPipeline(ctx context.Context, p principal.Principal, id str
 	return run, nil
 }
 
+// Retry reopens a failed pipeline for another execution. Input stays the
+// snapshot from enqueue. The node graph is replaced with the live
+// definition when it still exists, so a definition fix (wrong field name,
+// etc.) is what actually runs. Workers skip nodes that already completed,
+// which keeps a retried pipeline from repeating successful side effects
+// such as a RECORD CREATE.
+func (s *Service) Retry(ctx context.Context, p principal.Principal, id string) error {
+	run, err := s.GetPipeline(ctx, p, id)
+	if err != nil {
+		return err
+	}
+	if run.Status != "failed" {
+		return apperror.NewBadRequestError("Only failed pipelines can be retried", nil)
+	}
+
+	definition := run.Definition
+	live, err := s.store.GetByID(ctx, run.PipelineDefinitionID)
+	if err != nil {
+		if !apperror.IsNotFound(err) {
+			s.logger.ErrorContext(ctx, "Failed to load pipeline definition for retry", logger.KeyID, run.PipelineDefinitionID, logger.KeyError, err)
+			return err
+		}
+	} else {
+		definition = snapshotDefinition(live.Definition)
+	}
+
+	if err := s.store.RetryFailed(ctx, run.ID, definition); err != nil {
+		if apperror.IsBadRequest(err) {
+			s.logger.WarnContext(ctx, "Rejected pipeline retry", logger.KeyID, run.ID, logger.KeyError, err)
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to retry pipeline", logger.KeyID, run.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully retried pipeline", logger.KeyID, run.ID)
+	return nil
+}
+
 func (s *Service) ListPipelineNodes(ctx context.Context, p principal.Principal, pipelineID string) ([]*PipelineNode, error) {
 	if _, err := s.GetPipeline(ctx, p, pipelineID); err != nil {
 		return nil, err

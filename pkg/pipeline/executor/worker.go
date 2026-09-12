@@ -55,6 +55,10 @@ func (w *worker) sleep(ctx context.Context) {
 	}
 }
 
+// execute resumes the pipeline from its cursor and runs remaining levels.
+// Nodes that already completed are skipped so a retried pipeline does not
+// repeat successful side effects. Failed journal rows are not skipped: the
+// failing node is executed again instead of immediately failing the level.
 func (w *worker) execute(ctx context.Context, p *Pipeline) {
 	levels := p.Definition.Nodes
 	w.service.logger.InfoContext(ctx, "Executing pipeline",
@@ -101,10 +105,7 @@ func (w *worker) execute(ctx context.Context, p *Pipeline) {
 
 		var wg sync.WaitGroup
 		for i, n := range nodes {
-			if t, ok := done[i]; ok {
-				if t.Status == NodeStatusFailed {
-					levelFailed = true
-				}
+			if t, ok := done[i]; ok && t.Status == NodeStatusCompleted {
 				outputs[i] = t.Output
 				continue
 			}

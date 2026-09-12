@@ -100,6 +100,53 @@ func TestParseDefinition_record(t *testing.T) {
 	}
 }
 
+func TestParseDefinition_bulk(t *testing.T) {
+	got, err := ParseDefinition(TypeBulk, []byte(`{
+		"records": [
+			{"schemaId":"{{ .Input.investorSchemaId }}","from":"{{ .Input.0.investors }}","as":"investor","data":{"name":"{{ .investor.name }}"}},
+			{"schemaId":"schema-prop","from":"{{ .Input.0.properties }}"}
+		]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, ok := got.(BulkContext)
+	if !ok || len(ctx.Records) != 2 {
+		t.Fatalf("got %#v", got)
+	}
+	if ctx.Records[0].As != "investor" || ctx.Records[0].Data["name"] != "{{ .investor.name }}" {
+		t.Fatalf("got first %#v", ctx.Records[0])
+	}
+	if ctx.Records[1].As != "item" || ctx.Records[1].SchemaID != "schema-prop" {
+		t.Fatalf("got second %#v", ctx.Records[1])
+	}
+	if ctx.Operation != BulkOpCreate {
+		t.Fatalf("operation=%s", ctx.Operation)
+	}
+}
+
+func TestParseDefinition_bulkUpsert(t *testing.T) {
+	got, err := ParseDefinition(TypeBulk, []byte(`{
+		"operation":"upsert",
+		"records": [
+			{"schemaId":"schema-inv","from":"{{ .Input.0.items }}","recordId":"{{ .item.id }}"}
+		]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, ok := got.(BulkContext)
+	if !ok || ctx.Operation != BulkOpUpsert || ctx.Records[0].RecordID != "{{ .item.id }}" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestParseDefinition_bulkRequiresRecords(t *testing.T) {
+	if _, err := ParseDefinition(TypeBulk, []byte(`{"records":[]}`)); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestParseDefinition_unknownType(t *testing.T) {
 	if _, err := ParseDefinition(Type("SQL"), json.RawMessage(`{}`)); err == nil {
 		t.Fatal("expected error")
