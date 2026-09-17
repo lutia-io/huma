@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
@@ -85,6 +86,10 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionCreate, authz.ResourceOrganization, "", req.NetworkID, ""); err != nil {
+		render.WriteError(w, err)
+		return
+	}
 	id, err := h.service.Insert(r.Context(), req)
 	if err != nil {
 		render.WriteError(w, err)
@@ -104,7 +109,11 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	if err := principal.RequireCreator(p, existing.UserID, existing.NetworkID); err != nil {
+	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionUpdate, authz.ResourceOrganization, existing.ID, existing.NetworkID, existing.ID); err != nil {
 		render.WriteError(w, err)
 		return
 	}
@@ -131,7 +140,11 @@ func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	if err := principal.RequireCreator(p, existing.UserID, existing.NetworkID); err != nil {
+	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionDelete, authz.ResourceOrganization, existing.ID, existing.NetworkID, existing.ID); err != nil {
 		render.WriteError(w, err)
 		return
 	}

@@ -24,6 +24,8 @@ func TestResolveCreateActor(t *testing.T) {
 		}
 		return nil, apperror.NewNotFoundError("Organization user not found", nil)
 	}
+	member := func(_ context.Context, _, _ string) (bool, error) { return true, nil }
+	notMember := func(_ context.Context, _, _ string) (bool, error) { return false, nil }
 
 	t.Run("organization user creates as self", func(t *testing.T) {
 		scope, err := ResolveCreateActor(ctx, principal.Principal{
@@ -31,7 +33,7 @@ func TestResolveCreateActor(t *testing.T) {
 			ID:             "ou-1",
 			NetworkID:      "net-1",
 			OrganizationID: "org-1",
-		}, "", lookup)
+		}, "", lookup, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +48,7 @@ func TestResolveCreateActor(t *testing.T) {
 			ID:             "ou-1",
 			NetworkID:      "net-1",
 			OrganizationID: "org-1",
-		}, "ou-1", lookup)
+		}, "ou-1", lookup, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +60,7 @@ func TestResolveCreateActor(t *testing.T) {
 			ID:             "ou-1",
 			NetworkID:      "net-1",
 			OrganizationID: "org-1",
-		}, "ou-2", lookup)
+		}, "ou-2", lookup, nil)
 		if !apperror.IsForbidden(err) {
 			t.Fatalf("got %v", err)
 		}
@@ -68,7 +70,7 @@ func TestResolveCreateActor(t *testing.T) {
 		_, err := ResolveCreateActor(ctx, principal.Principal{
 			Type: principal.TypeOrganizationUser,
 			ID:   "ou-1",
-		}, "", lookup)
+		}, "", lookup, nil)
 		if !apperror.IsForbidden(err) {
 			t.Fatalf("got %v", err)
 		}
@@ -78,7 +80,7 @@ func TestResolveCreateActor(t *testing.T) {
 		_, err := ResolveCreateActor(ctx, principal.Principal{
 			Type: principal.TypeUser,
 			ID:   "user-1",
-		}, "", lookup)
+		}, "", lookup, member)
 		if !apperror.IsBadRequest(err) {
 			t.Fatalf("got %v", err)
 		}
@@ -88,17 +90,17 @@ func TestResolveCreateActor(t *testing.T) {
 		_, err := ResolveCreateActor(ctx, principal.Principal{
 			Type: principal.TypeUser,
 			ID:   "user-1",
-		}, "missing", lookup)
+		}, "missing", lookup, member)
 		if !apperror.IsNotFound(err) {
 			t.Fatalf("got %v", err)
 		}
 	})
 
-	t.Run("platform user other owner", func(t *testing.T) {
+	t.Run("platform user not a member", func(t *testing.T) {
 		_, err := ResolveCreateActor(ctx, principal.Principal{
 			Type: principal.TypeUser,
 			ID:   "user-2",
-		}, "ou-1", lookup)
+		}, "ou-1", lookup, notMember)
 		if !apperror.IsNotFound(err) {
 			t.Fatalf("got %v", err)
 		}
@@ -109,17 +111,17 @@ func TestResolveCreateActor(t *testing.T) {
 			Type:      principal.TypeUser,
 			ID:        "user-1",
 			NetworkID: "net-other",
-		}, "ou-1", lookup)
+		}, "ou-1", lookup, member)
 		if !apperror.IsForbidden(err) {
 			t.Fatalf("got %v", err)
 		}
 	})
 
-	t.Run("platform user creates as administered user", func(t *testing.T) {
+	t.Run("platform user member creates", func(t *testing.T) {
 		scope, err := ResolveCreateActor(ctx, principal.Principal{
 			Type: principal.TypeUser,
-			ID:   "user-1",
-		}, "ou-1", lookup)
+			ID:   "user-2",
+		}, "ou-1", lookup, member)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,7 +131,7 @@ func TestResolveCreateActor(t *testing.T) {
 	})
 
 	t.Run("unauthenticated", func(t *testing.T) {
-		_, err := ResolveCreateActor(ctx, principal.Principal{}, "ou-1", lookup)
+		_, err := ResolveCreateActor(ctx, principal.Principal{}, "ou-1", lookup, nil)
 		if !apperror.IsUnauthorized(err) {
 			t.Fatalf("got %v", err)
 		}
@@ -178,7 +180,7 @@ func TestEnsureSystemUser(t *testing.T) {
 
 	t.Run("returns existing", func(t *testing.T) {
 		store := &memoryStore{systemID: "sys-existing"}
-		s := NewService(logger.NewWithWriter(io.Discard), store, stubHasher{})
+		s := NewService(logger.NewWithWriter(io.Discard), store, stubHasher{}, nil)
 		id, err := s.EnsureSystemUser(context.Background(), orgID, netID)
 		if err != nil {
 			t.Fatal(err)
@@ -193,7 +195,7 @@ func TestEnsureSystemUser(t *testing.T) {
 
 	t.Run("inserts when missing", func(t *testing.T) {
 		store := &memoryStore{}
-		s := NewService(logger.NewWithWriter(io.Discard), store, stubHasher{})
+		s := NewService(logger.NewWithWriter(io.Discard), store, stubHasher{}, nil)
 		id, err := s.EnsureSystemUser(context.Background(), orgID, netID)
 		if err != nil {
 			t.Fatal(err)
@@ -213,7 +215,7 @@ func TestEnsureSystemUser(t *testing.T) {
 	})
 
 	t.Run("rejects invalid ids", func(t *testing.T) {
-		s := NewService(logger.NewWithWriter(io.Discard), &memoryStore{}, stubHasher{})
+		s := NewService(logger.NewWithWriter(io.Discard), &memoryStore{}, stubHasher{}, nil)
 		if _, err := s.EnsureSystemUser(context.Background(), "bad", netID); !apperror.IsBadRequest(err) {
 			t.Fatalf("got %v", err)
 		}

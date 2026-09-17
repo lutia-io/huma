@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
@@ -15,12 +16,14 @@ import (
 type Service struct {
 	logger *logger.Logger
 	store  store
+	authz  *authz.Engine
 }
 
-func NewService(logger *logger.Logger, store store) *Service {
+func NewService(logger *logger.Logger, store store, engine *authz.Engine) *Service {
 	return &Service{
 		logger: logger,
 		store:  store,
+		authz:  engine,
 	}
 }
 
@@ -198,8 +201,14 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*p
 
 	switch p.Type {
 	case principal.TypeUser:
-		if pipeline.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Pipeline definition not found", nil)
+		if s.authz == nil {
+			if pipeline.UserID != p.ID {
+				return nil, apperror.NewNotFoundError("Pipeline definition not found", nil)
+			}
+			break
+		}
+		if err := s.authz.VisibleFor(ctx, p, pipeline.NetworkID, apperror.NewNotFoundError("Pipeline definition not found", nil)); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if !visibleToOrganization(pipeline.NetworkID, pipeline.OrganizationID, p.NetworkID, p.OrganizationID) {
@@ -307,7 +316,7 @@ func (s *Service) GetPipeline(ctx context.Context, p principal.Principal, id str
 		s.logger.ErrorContext(ctx, "Failed to get pipeline", logger.KeyID, id, logger.KeyError, err)
 		return nil, err
 	}
-	if err := s.authorizePipeline(p, run); err != nil {
+	if err := s.authorizePipeline(ctx, p, run); err != nil {
 		return nil, err
 	}
 	return run, nil
@@ -381,12 +390,16 @@ func (s *Service) GetPipelineNode(ctx context.Context, p principal.Principal, id
 	return n, nil
 }
 
-func (s *Service) authorizePipeline(p principal.Principal, run *Pipeline) error {
+func (s *Service) authorizePipeline(ctx context.Context, p principal.Principal, run *Pipeline) error {
 	switch p.Type {
 	case principal.TypeUser:
-		if run.UserID != p.ID {
-			return apperror.NewNotFoundError("Pipeline not found", nil)
+		if s.authz == nil {
+			if run.UserID != p.ID {
+				return apperror.NewNotFoundError("Pipeline not found", nil)
+			}
+			return nil
 		}
+		return s.authz.VisibleFor(ctx, p, run.NetworkID, apperror.NewNotFoundError("Pipeline not found", nil))
 	case principal.TypeOrganizationUser:
 		if run.NetworkID != p.NetworkID || run.OrganizationID != p.OrganizationID {
 			return apperror.NewNotFoundError("Pipeline not found", nil)

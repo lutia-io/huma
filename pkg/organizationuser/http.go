@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/organization"
 	"github.com/lutia-io/huma/pkg/principal"
@@ -87,9 +88,23 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 	}
 	req.NetworkID = networkID
 	req.OrganizationID = organizationID
-	// Platform users invite org users into a network they administer.
-	if err := principal.RequireUser(p, req.NetworkID); err != nil {
-		render.WriteError(w, err)
+	switch p.Type {
+	case principal.TypeUser:
+		if err := h.service.authz.Allow(r.Context(), p, authz.ActionCreate, authz.ResourceOrganizationUser, "", req.NetworkID, req.OrganizationID); err != nil {
+			render.WriteError(w, err)
+			return
+		}
+	case principal.TypeOrganizationUser:
+		if p.NetworkID != req.NetworkID || p.OrganizationID != req.OrganizationID {
+			render.WriteError(w, apperror.NewForbiddenError("Cannot invite users to another organization", nil))
+			return
+		}
+		if err := h.service.authz.Allow(r.Context(), p, authz.ActionCreate, authz.ResourceOrganizationUser, "", req.NetworkID, req.OrganizationID); err != nil {
+			render.WriteError(w, err)
+			return
+		}
+	default:
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
 	id, err := h.service.Insert(r.Context(), req)
@@ -112,7 +127,7 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.Type != principal.TypeOrganizationUser || p.ID != existing.ID {
-		if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		if err := h.service.authz.Allow(r.Context(), p, authz.ActionUpdate, authz.ResourceOrganizationUser, existing.ID, existing.NetworkID, existing.OrganizationID); err != nil {
 			render.WriteError(w, err)
 			return
 		}

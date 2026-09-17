@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/hasher"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
@@ -18,14 +19,16 @@ type service struct {
 	store       store
 	hasher      hasher.Hasher
 	systemUsers SystemUserSeeder
+	authz       *authz.Engine
 }
 
-func newService(logger *logger.Logger, store store, hasher hasher.Hasher, systemUsers SystemUserSeeder) *service {
+func newService(logger *logger.Logger, store store, hasher hasher.Hasher, systemUsers SystemUserSeeder, engine *authz.Engine) *service {
 	return &service{
 		logger:      logger,
 		store:       store,
 		hasher:      hasher,
 		systemUsers: systemUsers,
+		authz:       engine,
 	}
 }
 
@@ -73,6 +76,12 @@ func (s *service) Insert(ctx context.Context, req insertOrganizationRequest) (st
 		return "", err
 	}
 	s.logger.InfoContext(ctx, "Successfully created organization", logger.KeySlug, slug)
+	if s.authz != nil {
+		if err := s.authz.SeedOrganization(ctx, id, networkID); err != nil {
+			s.logger.ErrorContext(ctx, "Failed to seed organization access", logger.KeyID, id, logger.KeyError, err)
+			return "", err
+		}
+	}
 	if s.systemUsers != nil {
 		if _, err := s.systemUsers.EnsureSystemUser(ctx, id, networkID); err != nil {
 			s.logger.ErrorContext(ctx, "Failed to create system organization user", logger.KeyID, id, logger.KeyError, err)
@@ -162,8 +171,8 @@ func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*o
 
 	switch p.Type {
 	case principal.TypeUser:
-		if o.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Organization not found", nil)
+		if err := s.authz.VisibleFor(ctx, p, o.NetworkID, apperror.NewNotFoundError("Organization not found", nil)); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if p.OrganizationID != o.ID {

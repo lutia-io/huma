@@ -64,8 +64,8 @@ func TestBuildListQuery_searchAndPagination(t *testing.T) {
 		PageSize: 20,
 	}
 	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
-	if !strings.Contains(countSQL, "n.user_id = $1") {
-		t.Fatalf("count SQL missing user filter: %s", countSQL)
+	if !strings.Contains(countSQL, "created_by") {
+		t.Fatalf("count SQL missing membership filter: %s", countSQL)
 	}
 	if !strings.Contains(countSQL, "ou.internal = FALSE") {
 		t.Fatalf("count SQL missing internal filter: %s", countSQL)

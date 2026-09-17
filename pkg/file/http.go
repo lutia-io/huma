@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/organizationuser"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
@@ -67,8 +68,12 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid multipart form", err))
 		return
 	}
-	actor, err := organizationuser.ResolveCreateActor(r.Context(), p, r.FormValue("organizationUserId"), h.orgUsers.Scope)
+	actor, err := organizationuser.ResolveCreateActor(r.Context(), p, r.FormValue("organizationUserId"), h.orgUsers.Scope, h.service.authz.IsNetworkMember)
 	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionCreate, authz.ResourceFile, "", actor.NetworkID, actor.OrganizationID); err != nil {
 		render.WriteError(w, err)
 		return
 	}
@@ -166,7 +171,12 @@ func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	if _, err := h.service.Get(r.Context(), p, id); err != nil {
+	existing, err := h.service.Get(r.Context(), p, id)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionDelete, authz.ResourceFile, existing.ID, existing.NetworkID, existing.OrganizationID); err != nil {
 		render.WriteError(w, err)
 		return
 	}

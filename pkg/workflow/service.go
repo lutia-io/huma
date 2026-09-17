@@ -7,6 +7,7 @@ import (
 
 	"github.com/lutia-io/huma/pkg/action"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/criteria"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
@@ -18,12 +19,14 @@ import (
 type Service struct {
 	logger *logger.Logger
 	store  store
+	authz  *authz.Engine
 }
 
-func NewService(logger *logger.Logger, store store) *Service {
+func NewService(logger *logger.Logger, store store, engine *authz.Engine) *Service {
 	return &Service{
 		logger: logger,
 		store:  store,
+		authz:  engine,
 	}
 }
 
@@ -225,8 +228,14 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*W
 
 	switch p.Type {
 	case principal.TypeUser:
-		if wf.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
+		if s.authz == nil {
+			if wf.UserID != p.ID {
+				return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
+			}
+			break
+		}
+		if err := s.authz.VisibleFor(ctx, p, wf.NetworkID, apperror.NewNotFoundError("Workflow definition not found", nil)); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if wf.NetworkID != p.NetworkID {
@@ -279,7 +288,7 @@ func (s *Service) GetWorkflow(ctx context.Context, p principal.Principal, id str
 		return nil, err
 	}
 
-	if err := s.authorizeWorkflow(p, wf); err != nil {
+	if err := s.authorizeWorkflow(ctx, p, wf); err != nil {
 		return nil, err
 	}
 	return wf, nil
@@ -356,12 +365,16 @@ func (s *Service) GetWorkflowAction(ctx context.Context, p principal.Principal, 
 	return wfAction, nil
 }
 
-func (s *Service) authorizeWorkflow(p principal.Principal, wf *Workflow) error {
+func (s *Service) authorizeWorkflow(ctx context.Context, p principal.Principal, wf *Workflow) error {
 	switch p.Type {
 	case principal.TypeUser:
-		if wf.UserID != p.ID {
-			return apperror.NewNotFoundError("Workflow not found", nil)
+		if s.authz == nil {
+			if wf.UserID != p.ID {
+				return apperror.NewNotFoundError("Workflow not found", nil)
+			}
+			return nil
 		}
+		return s.authz.VisibleFor(ctx, p, wf.NetworkID, apperror.NewNotFoundError("Workflow not found", nil))
 	case principal.TypeOrganizationUser:
 		if wf.NetworkID != p.NetworkID || wf.OrganizationID != p.OrganizationID {
 			return apperror.NewNotFoundError("Workflow not found", nil)

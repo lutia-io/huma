@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/network"
 	"github.com/lutia-io/huma/pkg/organization"
 	"github.com/lutia-io/huma/pkg/principal"
@@ -95,6 +96,10 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionCreate, authz.ResourceSchema, "", req.NetworkID, req.OrganizationID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
 	// Internal schemas are not allowed to be created via the API
 	req.Internal = false
 
@@ -118,6 +123,10 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionUpdate, authz.ResourceSchema, existing.ID, existing.NetworkID, authz.PointerID(existing.OrganizationID)); err != nil {
 		render.WriteError(w, err)
 		return
 	}

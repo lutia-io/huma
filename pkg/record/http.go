@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/organizationuser"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/render"
@@ -80,8 +81,12 @@ func (h *httpHandler) Insert(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	actor, err := organizationuser.ResolveCreateActor(r.Context(), p, req.OrganizationUserID, h.orgUsers.Scope)
+	actor, err := organizationuser.ResolveCreateActor(r.Context(), p, req.OrganizationUserID, h.orgUsers.Scope, h.service.authz.IsNetworkMember)
 	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionCreate, authz.ResourceRecord, req.SchemaID, actor.NetworkID, actor.OrganizationID); err != nil {
 		render.WriteError(w, err)
 		return
 	}
@@ -115,7 +120,7 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
 		return
 	}
-	if err := h.service.PatchData(r.Context(), existing, req.Data); err != nil {
+	if err := h.service.PatchVisible(r.Context(), p, existing, req.Data); err != nil {
 		render.WriteError(w, err)
 		return
 	}

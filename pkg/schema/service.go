@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/schema/validator"
@@ -18,12 +19,14 @@ import (
 type Service struct {
 	logger *logger.Logger
 	store  store
+	authz  *authz.Engine
 }
 
-func NewService(logger *logger.Logger, store store) *Service {
+func NewService(logger *logger.Logger, store store, engine *authz.Engine) *Service {
 	return &Service{
 		logger: logger,
 		store:  store,
+		authz:  engine,
 	}
 }
 
@@ -234,8 +237,8 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*s
 
 	switch p.Type {
 	case principal.TypeUser:
-		if sch.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Schema not found", nil)
+		if err := s.authz.VisibleFor(ctx, p, sch.NetworkID, apperror.NewNotFoundError("Schema not found", nil)); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if !visibleToOrganization(sch, p.NetworkID, p.OrganizationID) {

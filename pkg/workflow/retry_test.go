@@ -64,7 +64,7 @@ func (s *retryStore) RetryFailed(_ context.Context, id string, definition Defini
 }
 
 func retryService(store *retryStore) *Service {
-	return NewService(logger.NewWithWriter(io.Discard), store)
+	return NewService(logger.NewWithWriter(io.Discard), store, nil)
 }
 
 func TestRetry_usesLiveDefinition(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
 
@@ -167,7 +168,7 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	where := []string{"ou.internal = FALSE"}
 
 	if params.UserID != "" {
-		where = append(where, "n.user_id = "+b.add(params.UserID))
+		where = append(where, authz.MemberFilter("n.id", b.add(params.UserID)))
 	}
 	if params.NetworkID != "" {
 		where = append(where, "ou.network_id = "+b.add(params.NetworkID))

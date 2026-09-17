@@ -46,8 +46,8 @@ func TestBuildRunListQuery_search(t *testing.T) {
 		PageSize: 20,
 	}
 	countSQL, listSQL, _, _ := buildRunListQuery(params)
-	if !strings.Contains(countSQL, "n.user_id = $1") {
-		t.Fatalf("missing user filter: %s", countSQL)
+	if !strings.Contains(countSQL, "created_by") {
+		t.Fatalf("missing membership filter: %s", countSQL)
 	}
 	if !strings.Contains(listSQL, "ORDER BY COALESCE(pd.name, '') ASC") {
 		t.Fatalf("missing order: %s", listSQL)

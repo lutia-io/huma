@@ -4,12 +4,13 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/logger"
 )
 
-func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux) *Service {
+func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, engine *authz.Engine) *Service {
 	store := newPostgresStore(pool)
-	service := NewService(logger, store)
+	service := NewService(logger, store, engine)
 	newHTTPHandler(service, mux)
 	return service
 }
@@ -17,5 +18,5 @@ func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux) *Service
 // NewWithPool constructs a Service without registering HTTP handlers, for
 // consumers like the workflow engine that only need validation and resolution.
 func NewWithPool(logger *logger.Logger, pool *pgxpool.Pool) *Service {
-	return NewService(logger, newPostgresStore(pool))
+	return NewService(logger, newPostgresStore(pool), authz.New(pool))
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/schema"
@@ -23,14 +24,16 @@ type Service struct {
 	store         store
 	js            jetstream.JetStream
 	schemaService *schema.Service
+	authz         *authz.Engine
 }
 
-func NewService(logger *logger.Logger, store store, js jetstream.JetStream, schemaService *schema.Service) *Service {
+func NewService(logger *logger.Logger, store store, js jetstream.JetStream, schemaService *schema.Service, engine *authz.Engine) *Service {
 	return &Service{
 		logger:        logger,
 		store:         store,
 		js:            js,
 		schemaService: schemaService,
+		authz:         engine,
 	}
 }
 
@@ -157,13 +160,19 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 	if err := s.resolveListParams(ctx, &params); err != nil {
 		return nil, err
 	}
+	if err := s.authorizeList(ctx, p, params); err != nil {
+		return nil, err
+	}
 
 	result, err := s.store.List(ctx, params)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to list records", logger.KeyUserID, p.ID, logger.KeyError, err)
 		return nil, err
 	}
-	related, err := s.relatedMap(ctx, result.Items)
+	if err := s.applyRecordView(ctx, p, result.Items...); err != nil {
+		return nil, err
+	}
+	related, err := s.relatedMap(ctx, p, result.Items)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to load related records", logger.KeyError, err)
 		return nil, err
@@ -307,12 +316,23 @@ func (s *Service) GetVisible(ctx context.Context, p principal.Principal, id stri
 
 	switch p.Type {
 	case principal.TypeUser:
-		if rec.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Record not found", nil)
+		if s.authz == nil {
+			if rec.UserID != p.ID {
+				return nil, apperror.NewNotFoundError("Record not found", nil)
+			}
+			return rec, nil
+		}
+		if err := s.authz.Allow(ctx, p, authz.ActionRead, authz.ResourceRecord, rec.SchemaID, rec.NetworkID, rec.OrganizationID); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if rec.NetworkID != p.NetworkID || rec.OrganizationID != p.OrganizationID {
 			return nil, apperror.NewNotFoundError("Record not found", nil)
+		}
+		if s.authz != nil {
+			if err := s.authz.Allow(ctx, p, authz.ActionRead, authz.ResourceRecord, rec.SchemaID, rec.NetworkID, rec.OrganizationID); err != nil {
+				return nil, err
+			}
 		}
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
@@ -326,12 +346,91 @@ func (s *Service) GetVisibleWithRelated(ctx context.Context, p principal.Princip
 	if err != nil {
 		return nil, nil, err
 	}
-	related, err := s.relatedMap(ctx, []*Record{rec})
+	viewed := *rec
+	if err := s.applyRecordView(ctx, p, &viewed); err != nil {
+		return nil, nil, err
+	}
+	related, err := s.relatedMap(ctx, p, []*Record{&viewed})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to load related records", logger.KeyID, id, logger.KeyError, err)
 		return nil, nil, err
 	}
-	return rec, related, nil
+	return &viewed, related, nil
+}
+
+func (s *Service) PatchVisible(ctx context.Context, p principal.Principal, rec *Record, data json.RawMessage) error {
+	if s.authz != nil {
+		if err := s.authz.Allow(ctx, p, authz.ActionUpdate, authz.ResourceRecord, rec.SchemaID, rec.NetworkID, rec.OrganizationID); err != nil {
+			return err
+		}
+		snap, err := s.authz.Load(ctx, p, rec.NetworkID, rec.OrganizationID)
+		if err != nil {
+			return err
+		}
+		merged, err := authz.RecordPatch(rec.Data, data, snap.RecordAccess(rec.SchemaID))
+		if err != nil {
+			return err
+		}
+		data = merged
+	}
+	return s.PatchData(ctx, rec, data)
+}
+
+func (s *Service) authorizeList(ctx context.Context, p principal.Principal, params listParams) error {
+	if s.authz == nil {
+		return nil
+	}
+	if p.Type == principal.TypeUser && params.NetworkID == "" {
+		return nil
+	}
+	networkID := params.NetworkID
+	organizationID := params.OrganizationID
+	if p.Type == principal.TypeOrganizationUser {
+		networkID = p.NetworkID
+		organizationID = p.OrganizationID
+	}
+	if err := s.authz.Allow(ctx, p, authz.ActionRead, authz.ResourceRecord, params.SchemaID, networkID, organizationID); err != nil {
+		return err
+	}
+	if p.Type != principal.TypeOrganizationUser {
+		return nil
+	}
+	snap, err := s.authz.Load(ctx, p, networkID, organizationID)
+	if err != nil {
+		return err
+	}
+	if _, reserved := reservedSortColumns[params.Sort]; !reserved {
+		if err := snap.RejectHiddenListField(params.SchemaID, params.Sort); err != nil {
+			return err
+		}
+	}
+	for _, field := range params.Fields {
+		if err := snap.RejectHiddenListField(params.SchemaID, field.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) applyRecordView(ctx context.Context, p principal.Principal, recs ...*Record) error {
+	if s.authz == nil || p.Type != principal.TypeOrganizationUser {
+		return nil
+	}
+	for _, rec := range recs {
+		if rec == nil {
+			continue
+		}
+		snap, err := s.authz.Load(ctx, p, rec.NetworkID, rec.OrganizationID)
+		if err != nil {
+			return err
+		}
+		viewed, err := authz.RecordView(rec.Data, snap.RecordAccess(rec.SchemaID))
+		if err != nil {
+			return err
+		}
+		rec.Data = viewed
+	}
+	return nil
 }
 
 // PatchData validates data against the record's schema and replaces it.
@@ -484,7 +583,7 @@ func (s *Service) validateForeignRefs(ctx context.Context, schemaID, networkID, 
 	return nil
 }
 
-func (s *Service) relatedMap(ctx context.Context, records []*Record) (map[string]RelatedRecord, error) {
+func (s *Service) relatedMap(ctx context.Context, p principal.Principal, records []*Record) (map[string]RelatedRecord, error) {
 	related := make(map[string]RelatedRecord)
 	if len(records) == 0 {
 		return related, nil
@@ -571,10 +670,22 @@ func (s *Service) relatedMap(ctx context.Context, records []*Record) (map[string
 			fallback = snap.Name
 			definition = snap.Definition
 		}
+		data := target.Data
+		if s.authz != nil && p.Type == principal.TypeOrganizationUser {
+			authzSnap, err := s.authz.Load(ctx, p, target.NetworkID, target.OrganizationID)
+			if err != nil {
+				return nil, err
+			}
+			viewed, err := authz.RecordView(data, authzSnap.RecordAccess(target.SchemaID))
+			if err != nil {
+				return nil, err
+			}
+			data = viewed
+		}
 		related[target.ID] = RelatedRecord{
 			ID:       target.ID,
 			SchemaID: target.SchemaID,
-			Title:    validator.DisplayTitle(target.Data, definition, fallback),
+			Title:    validator.DisplayTitle(data, definition, fallback),
 		}
 	}
 	return related, nil

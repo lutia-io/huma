@@ -64,7 +64,7 @@ func (s *retryStore) RetryFailed(_ context.Context, id string, definition Snapsh
 }
 
 func retryService(store *retryStore) *Service {
-	return NewService(logger.NewWithWriter(io.Discard), store)
+	return NewService(logger.NewWithWriter(io.Discard), store, nil)
 }
 
 func mapperNode(name, field string) Node {

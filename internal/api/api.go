@@ -9,11 +9,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/auth"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/file"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/middleware"
 	"github.com/lutia-io/huma/pkg/network"
+	"github.com/lutia-io/huma/pkg/networkaccess"
 	"github.com/lutia-io/huma/pkg/organization"
+	"github.com/lutia-io/huma/pkg/organizationaccess"
 	"github.com/lutia-io/huma/pkg/organizationuser"
 	"github.com/lutia-io/huma/pkg/pipeline"
 	"github.com/lutia-io/huma/pkg/record"
@@ -68,16 +71,20 @@ func New() {
 	}
 
 	mux := http.NewServeMux()
+	engine := authz.New(pool)
+	authz.RegisterHTTP(engine, mux)
 	authService := auth.New(log, pool, mux)
 	user.New(log, pool, mux)
-	network.New(log, pool, mux)
-	orgUserService := organizationuser.New(log, pool, mux)
-	organization.New(log, pool, mux, orgUserService)
-	schemaService := schema.New(log, pool, mux)
-	pipeline.New(log, pool, mux)
-	workflow.New(log, pool, mux)
-	file.New(log, pool, mux, objs, orgUserService)
-	record.New(log, pool, mux, js, schemaService, orgUserService)
+	network.New(log, pool, mux, engine)
+	networkaccess.New(log, pool, mux, engine)
+	orgUserService := organizationuser.New(log, pool, mux, engine)
+	organization.New(log, pool, mux, orgUserService, engine)
+	organizationaccess.New(log, pool, mux, engine)
+	schemaService := schema.New(log, pool, mux, engine)
+	pipeline.New(log, pool, mux, engine)
+	workflow.New(log, pool, mux, engine)
+	file.New(log, pool, mux, objs, orgUserService, engine)
+	record.New(log, pool, mux, js, schemaService, orgUserService, engine)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

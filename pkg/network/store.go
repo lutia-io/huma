@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/user"
 )
 
@@ -139,7 +140,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*network, e
 func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*network, error) {
 	sql := `
 		SELECT` + networkSelectColumns + networkFromSQL + `
-		WHERE n.user_id = $1
+		WHERE ` + authz.MemberFilter("n.id", "$1") + `
 		ORDER BY n.created_at DESC`
 
 	rows, err := store.db.Query(ctx, sql, userID)

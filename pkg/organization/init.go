@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/hasher"
 	"github.com/lutia-io/huma/pkg/logger"
 )
@@ -15,12 +16,13 @@ type SystemUserSeeder interface {
 	EnsureSystemUser(ctx context.Context, organizationID, networkID string) (string, error)
 }
 
-func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, systemUsers SystemUserSeeder) {
+func New(logger *logger.Logger, pool *pgxpool.Pool, mux *http.ServeMux, systemUsers SystemUserSeeder, engine *authz.Engine) {
 	service := newService(
 		logger,
 		newPostgresStore(pool),
 		hasher.NewArgon2IDHasher(),
 		systemUsers,
+		engine,
 	)
 	newHTTPHandler(service, mux)
 }

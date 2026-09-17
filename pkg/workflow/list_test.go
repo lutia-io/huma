@@ -70,8 +70,8 @@ func TestBuildListQuery_searchAndPagination(t *testing.T) {
 		PageSize: 20,
 	}
 	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
-	if !strings.Contains(countSQL, "wd.user_id = $1") {
-		t.Fatalf("count SQL missing user filter: %s", countSQL)
+	if !strings.Contains(countSQL, "created_by") {
+		t.Fatalf("count SQL missing membership filter: %s", countSQL)
 	}
 	if !strings.Contains(countSQL, "wd.name ILIKE") || !strings.Contains(countSQL, "wd.description ILIKE") || !strings.Contains(countSQL, "ESCAPE '!'") {
 		t.Fatalf("count SQL missing search: %s", countSQL)

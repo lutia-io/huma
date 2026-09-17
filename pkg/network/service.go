@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/slug"
@@ -15,12 +16,14 @@ import (
 type service struct {
 	logger *logger.Logger
 	store  store
+	authz  *authz.Engine
 }
 
-func newService(logger *logger.Logger, store store) *service {
+func newService(logger *logger.Logger, store store, engine *authz.Engine) *service {
 	return &service{
 		logger: logger,
 		store:  store,
+		authz:  engine,
 	}
 }
 
@@ -61,6 +64,12 @@ func (s *service) Insert(ctx context.Context, req insertNetworkRequest) (string,
 		return "", err
 	}
 	s.logger.InfoContext(ctx, "Successfully created network", logger.KeyID, id)
+	if s.authz != nil {
+		if err := s.authz.SeedNetwork(ctx, id, userID); err != nil {
+			s.logger.ErrorContext(ctx, "Failed to seed network access", logger.KeyID, id, logger.KeyError, err)
+			return "", err
+		}
+	}
 	return id, nil
 }
 
@@ -145,8 +154,8 @@ func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*n
 
 	switch p.Type {
 	case principal.TypeUser:
-		if n.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Network not found", nil)
+		if err := s.authz.VisibleNetwork(ctx, p, n.ID); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if p.NetworkID != n.ID {

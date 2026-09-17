@@ -62,9 +62,9 @@ func NewExecutor() {
 	}
 
 	schemaService := schema.NewWithPool(log, pool)
-	recordService := record.NewWithPool(log, pool, js, schemaService)
-	fileService := file.NewWithPool(log, pool, objs)
-	orgUserService := organizationuser.NewWithPool(log, pool)
+	recordService := record.NewWithPool(log, pool, js, schemaService, nil)
+	fileService := file.NewWithPool(log, pool, objs, nil)
+	orgUserService := organizationuser.NewWithPool(log, pool, nil)
 
 	pipelineStore := executor.NewPostgresPipelineStore(pool, workerLeaseTimeout)
 	registry := executor.NewRegistry(

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/hasher"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
@@ -27,13 +28,15 @@ type Service struct {
 	logger *logger.Logger
 	store  store
 	hasher hasher.Hasher
+	authz  *authz.Engine
 }
 
-func NewService(logger *logger.Logger, store store, hasher hasher.Hasher) *Service {
+func NewService(logger *logger.Logger, store store, hasher hasher.Hasher, engine *authz.Engine) *Service {
 	return &Service{
 		logger: logger,
 		store:  store,
 		hasher: hasher,
+		authz:  engine,
 	}
 }
 
@@ -252,8 +255,14 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*o
 
 	switch p.Type {
 	case principal.TypeUser:
-		if u.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Organization user not found", nil)
+		if s.authz == nil {
+			if u.UserID != p.ID {
+				return nil, apperror.NewNotFoundError("Organization user not found", nil)
+			}
+			break
+		}
+		if err := s.authz.VisibleFor(ctx, p, u.NetworkID, apperror.NewNotFoundError("Organization user not found", nil)); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if u.NetworkID != p.NetworkID || u.OrganizationID != p.OrganizationID {
@@ -361,8 +370,8 @@ func randomPassword() (string, error) {
 
 // ResolveCreateActor returns the organization user a record or file should be
 // created as. Organization-user sessions always create as themselves.
-// Platform users must pass an organizationUserId they administer.
-func ResolveCreateActor(ctx context.Context, p principal.Principal, organizationUserID string, lookup func(context.Context, string) (*Scope, error)) (*Scope, error) {
+// Platform users must pass an organizationUserId in a network they belong to.
+func ResolveCreateActor(ctx context.Context, p principal.Principal, organizationUserID string, lookup func(context.Context, string) (*Scope, error), memberOf func(context.Context, string, string) (bool, error)) (*Scope, error) {
 	requestedID := strings.TrimSpace(organizationUserID)
 
 	switch p.Type {
@@ -386,11 +395,17 @@ func ResolveCreateActor(ctx context.Context, p principal.Principal, organization
 		if err != nil {
 			return nil, err
 		}
-		if scope.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("Organization user not found", nil)
-		}
 		if p.NetworkID != "" && p.NetworkID != scope.NetworkID {
 			return nil, apperror.NewForbiddenError("Network mismatch", nil)
+		}
+		if memberOf != nil {
+			ok, err := memberOf(ctx, p.ID, scope.NetworkID)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, apperror.NewNotFoundError("Organization user not found", nil)
+			}
 		}
 		return scope, nil
 	default:

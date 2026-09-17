@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/uuid"
@@ -18,13 +19,15 @@ type Service struct {
 	logger *logger.Logger
 	store  store
 	objs   jetstream.ObjectStore
+	authz  *authz.Engine
 }
 
-func NewService(logger *logger.Logger, store store, objs jetstream.ObjectStore) *Service {
+func NewService(logger *logger.Logger, store store, objs jetstream.ObjectStore, engine *authz.Engine) *Service {
 	return &Service{
 		logger: logger,
 		store:  store,
 		objs:   objs,
+		authz:  engine,
 	}
 }
 
@@ -133,6 +136,18 @@ func (s *Service) List(ctx context.Context, p principal.Principal, params listPa
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
 	}
 
+	if s.authz != nil && (p.Type == principal.TypeOrganizationUser || params.NetworkID != "") {
+		networkID := params.NetworkID
+		organizationID := params.OrganizationID
+		if p.Type == principal.TypeOrganizationUser {
+			networkID = p.NetworkID
+			organizationID = p.OrganizationID
+		}
+		if err := s.authz.Allow(ctx, p, authz.ActionRead, authz.ResourceFile, "", networkID, organizationID); err != nil {
+			return nil, err
+		}
+	}
+
 	result, err := s.store.List(ctx, params)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to list files", logger.KeyUserID, p.ID, logger.KeyError, err)
@@ -157,12 +172,23 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*F
 
 	switch p.Type {
 	case principal.TypeUser:
-		if f.UserID != p.ID {
-			return nil, apperror.NewNotFoundError("File not found", nil)
+		if s.authz == nil {
+			if f.UserID != p.ID {
+				return nil, apperror.NewNotFoundError("File not found", nil)
+			}
+			return f, nil
+		}
+		if err := s.authz.Allow(ctx, p, authz.ActionRead, authz.ResourceFile, f.ID, f.NetworkID, f.OrganizationID); err != nil {
+			return nil, err
 		}
 	case principal.TypeOrganizationUser:
 		if f.NetworkID != p.NetworkID || f.OrganizationID != p.OrganizationID {
 			return nil, apperror.NewNotFoundError("File not found", nil)
+		}
+		if s.authz != nil {
+			if err := s.authz.Allow(ctx, p, authz.ActionRead, authz.ResourceFile, f.ID, f.NetworkID, f.OrganizationID); err != nil {
+				return nil, err
+			}
 		}
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
