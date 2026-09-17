@@ -97,8 +97,8 @@ func (s *service) Patch(ctx context.Context, existing *network, req patchNetwork
 	return nil
 }
 
-func (s *service) Delete(ctx context.Context, existing *network, updatedBy string) error {
-	if err := s.store.Delete(ctx, existing.ID, updatedBy); err != nil {
+func (s *service) Delete(ctx context.Context, existing *network) error {
+	if err := s.store.Delete(ctx, existing.ID); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to delete network", logger.KeyID, existing.ID, logger.KeyError, err)
 		return err
 	}

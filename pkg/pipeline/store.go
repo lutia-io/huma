@@ -105,7 +105,7 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 			definition = $6,
 			updated_by = $7,
 			updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql,
 		pipeline.ID,
@@ -131,7 +131,7 @@ func (store *postgresStore) Update(ctx context.Context, pipeline *pipelineDefini
 
 const pipelineSelectColumns = `
 	pd.id, pd.name, pd.slug, pd.description, pd.active, pd.internal, pd.definition, pd.network_id, pd.organization_id, pd.user_id,
-	pd.created_at, pd.updated_at, pd.deleted_at,
+	pd.created_at, pd.updated_at,
 	` + user.SelectSQL
 
 var pipelineListSelectColumns = pipelineSelectColumns
@@ -151,7 +151,6 @@ func scanPipelineDefinition(row pgx.Row, pipeline *pipelineDefinition) error {
 		&pipeline.UserID,
 		&pipeline.CreatedAt,
 		&pipeline.UpdatedAt,
-		&pipeline.DeletedAt,
 		&pipeline.CreatedBy.ID,
 		&pipeline.CreatedBy.FirstName,
 		&pipeline.CreatedBy.LastName,
@@ -190,7 +189,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*pipelineDe
 	sql := `
 		SELECT` + pipelineSelectColumns + `
 		FROM public.pipeline_definitions pd` + user.JoinSQL("pd") + `
-		WHERE pd.id = $1 AND pd.deleted_at IS NULL`
+		WHERE pd.id = $1`
 
 	pipeline := &pipelineDefinition{}
 	err := scanPipelineDefinition(store.db.QueryRow(ctx, sql, id), pipeline)
@@ -209,7 +208,6 @@ func (store *postgresStore) GetBySlug(ctx context.Context, networkID, slug, orga
 		FROM public.pipeline_definitions pd` + user.JoinSQL("pd") + `
 		WHERE pd.network_id = $1
 			AND pd.slug = $2
-			AND pd.deleted_at IS NULL
 			AND (pd.organization_id IS NULL OR pd.organization_id = NULLIF($3, '')::uuid)
 		ORDER BY pd.organization_id NULLS LAST
 		LIMIT 1`

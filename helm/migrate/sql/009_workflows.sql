@@ -3,14 +3,14 @@
 -- always executes against the state it started with, regardless of later edits.
 CREATE TABLE public.workflows (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workflow_definition_id UUID NOT NULL REFERENCES public.workflow_definitions(id),
-    network_id UUID NOT NULL REFERENCES public.networks(id),
+    workflow_definition_id UUID NOT NULL REFERENCES public.workflow_definitions(id) ON DELETE CASCADE,
+    network_id UUID NOT NULL REFERENCES public.networks(id) ON DELETE CASCADE,
     -- The record that triggered the run; data is its content at trigger time
     -- and org identity flows from it onto records created by actions.
-    record_id UUID NOT NULL REFERENCES public.records(id),
+    record_id UUID NOT NULL REFERENCES public.records(id) ON DELETE CASCADE,
     data JSONB NOT NULL,
-    organization_id UUID NOT NULL REFERENCES public.organizations(id),
-    organization_user_id UUID NOT NULL REFERENCES public.organization_users(id),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_user_id UUID NOT NULL REFERENCES public.organization_users(id) ON DELETE CASCADE,
     dedupe_key TEXT NOT NULL,
     definition JSONB NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',

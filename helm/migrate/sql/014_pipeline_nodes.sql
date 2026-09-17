@@ -2,7 +2,7 @@
 -- updated; failed attempts are preserved for audit and debugging.
 CREATE TABLE public.pipeline_nodes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    pipeline_id UUID NOT NULL REFERENCES public.pipelines(id),
+    pipeline_id UUID NOT NULL REFERENCES public.pipelines(id) ON DELETE CASCADE,
     level_index INT NOT NULL,
     node_index INT NOT NULL,
     attempt INT NOT NULL,

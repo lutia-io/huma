@@ -123,7 +123,7 @@ func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	if err := h.service.Delete(r.Context(), existing, p.ID); err != nil {
+	if err := h.service.Delete(r.Context(), existing); err != nil {
 		render.WriteError(w, err)
 		return
 	}

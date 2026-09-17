@@ -85,7 +85,7 @@ func (store *postgresStore) GetWorkflowByID(ctx context.Context, id string) (*Wo
 		SELECT` + workflowSelectColumns + `
 		FROM public.workflows w
 		JOIN public.networks n ON n.id = w.network_id
-		WHERE w.id = $1 AND n.deleted_at IS NULL`
+		WHERE w.id = $1`
 
 	wf := &Workflow{}
 	err := scanWorkflow(store.db.QueryRow(ctx, sql, id), wf)

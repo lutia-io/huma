@@ -124,7 +124,7 @@ func parseRunListParams(r *http.Request) (runListParams, error) {
 
 func buildRunListQuery(params runListParams) (countSQL, listSQL string, countArgs, listArgs []any) {
 	b := &queryBuilder{}
-	where := []string{"n.deleted_at IS NULL"}
+	where := []string{}
 
 	if params.UserID != "" {
 		where = append(where, "n.user_id = "+b.add(params.UserID))
@@ -162,13 +162,15 @@ func buildRunListQuery(params runListParams) (countSQL, listSQL string, countArg
 		applyStringFilter(b, &where, "o.name", params.Organization, params.OrganizationOp)
 	}
 
-	whereSQL := strings.Join(where, " AND ")
 	fromSQL := `
 		FROM public.workflows w
 		JOIN public.networks n ON n.id = w.network_id
 		LEFT JOIN public.workflow_definitions wd ON wd.id = w.workflow_definition_id
-		LEFT JOIN public.organizations o ON o.id = w.organization_id AND o.deleted_at IS NULL
-		WHERE ` + whereSQL
+		LEFT JOIN public.organizations o ON o.id = w.organization_id`
+	if len(where) > 0 {
+		fromSQL += `
+		WHERE ` + strings.Join(where, " AND ")
+	}
 
 	countSQL = "SELECT count(*)" + fromSQL
 	countArgs = append([]any{}, b.args...)

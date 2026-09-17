@@ -15,9 +15,8 @@ type network struct {
 	CreatedBy user.Ref `json:"createdBy"`
 	UpdatedBy user.Ref `json:"updatedBy"`
 
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type insertNetworkRequest struct {

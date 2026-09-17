@@ -135,7 +135,7 @@ func (store *postgresStore) GetPipelineByID(ctx context.Context, id string) (*Pi
 		SELECT` + pipelineRunSelectColumns + `
 		FROM public.pipelines p
 		JOIN public.networks n ON n.id = p.network_id
-		WHERE p.id = $1 AND n.deleted_at IS NULL`
+		WHERE p.id = $1`
 
 	p := &Pipeline{}
 	err := scanPipeline(store.db.QueryRow(ctx, sql, id), p)

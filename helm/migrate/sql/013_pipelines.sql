@@ -3,10 +3,10 @@
 -- run always executes against the state it started with.
 CREATE TABLE public.pipelines (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    pipeline_definition_id UUID NOT NULL REFERENCES public.pipeline_definitions(id),
-    network_id UUID NOT NULL REFERENCES public.networks(id),
-    organization_id UUID NOT NULL REFERENCES public.organizations(id),
-    organization_user_id UUID NOT NULL REFERENCES public.organization_users(id),
+    pipeline_definition_id UUID NOT NULL REFERENCES public.pipeline_definitions(id) ON DELETE CASCADE,
+    network_id UUID NOT NULL REFERENCES public.networks(id) ON DELETE CASCADE,
+    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_user_id UUID NOT NULL REFERENCES public.organization_users(id) ON DELETE CASCADE,
     dedupe_key TEXT NOT NULL,
     input JSONB NOT NULL,
     definition JSONB NOT NULL,

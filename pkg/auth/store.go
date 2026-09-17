@@ -80,7 +80,7 @@ func (s *postgresStore) GetUserByEmail(ctx context.Context, email string) (*iden
 	const sql = `
 		SELECT id, email, password
 		FROM public.users
-		WHERE email = $1 AND deleted_at IS NULL`
+		WHERE email = $1`
 	u := &identityUser{}
 	err := s.db.QueryRow(ctx, sql, email).Scan(&u.ID, &u.Email, &u.Password)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *postgresStore) GetUserByID(ctx context.Context, id string) (*identityPr
 	const sql = `
 		SELECT id, first_name, last_name, email
 		FROM public.users
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 	p := &identityProfile{}
 	err := s.db.QueryRow(ctx, sql, id).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Email)
 	if err != nil {
@@ -115,8 +115,7 @@ func (s *postgresStore) GetOrganizationUserByEmail(ctx context.Context, email, n
 		WHERE email = $1
 			AND network_id = $2
 			AND organization_id = $3
-			AND internal = FALSE
-			AND deleted_at IS NULL`
+			AND internal = FALSE`
 	u := &identityOrganizationUser{}
 	err := s.db.QueryRow(ctx, sql, email, networkID, organizationID).Scan(
 		&u.ID, &u.Email, &u.Password, &u.OrganizationID, &u.NetworkID,
@@ -134,7 +133,7 @@ func (s *postgresStore) GetOrganizationUserByID(ctx context.Context, id string) 
 	const sql = `
 		SELECT id, first_name, last_name, email
 		FROM public.organization_users
-		WHERE id = $1 AND internal = FALSE AND deleted_at IS NULL`
+		WHERE id = $1 AND internal = FALSE`
 	p := &identityProfile{}
 	err := s.db.QueryRow(ctx, sql, id).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Email)
 	if err != nil {
@@ -150,7 +149,7 @@ func (s *postgresStore) GetOrganizationByID(ctx context.Context, id string) (*id
 	const sql = `
 		SELECT id, network_id
 		FROM public.organizations
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 	o := &identityOrganization{}
 	err := s.db.QueryRow(ctx, sql, id).Scan(&o.ID, &o.NetworkID)
 	if err != nil {
@@ -163,7 +162,7 @@ func (s *postgresStore) GetOrganizationByID(ctx context.Context, id string) (*id
 }
 
 func (s *postgresStore) NetworkExists(ctx context.Context, id string) (bool, error) {
-	const sql = `SELECT 1 FROM public.networks WHERE id = $1 AND deleted_at IS NULL`
+	const sql = `SELECT 1 FROM public.networks WHERE id = $1`
 	var one int
 	err := s.db.QueryRow(ctx, sql, id).Scan(&one)
 	if err != nil {

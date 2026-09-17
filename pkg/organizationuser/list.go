@@ -164,7 +164,7 @@ func hasStringFilter(value, op string) bool {
 
 func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, listArgs []any) {
 	b := &queryBuilder{}
-	where := []string{"ou.deleted_at IS NULL", "ou.internal = FALSE"}
+	where := []string{"ou.internal = FALSE"}
 
 	if params.UserID != "" {
 		where = append(where, "n.user_id = "+b.add(params.UserID))
@@ -200,8 +200,8 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	whereSQL := strings.Join(where, " AND ")
 	fromSQL := `
 		FROM public.organization_users ou
-		JOIN public.networks n ON n.id = ou.network_id AND n.deleted_at IS NULL
-		LEFT JOIN public.organizations o ON o.id = ou.organization_id AND o.deleted_at IS NULL
+		JOIN public.networks n ON n.id = ou.network_id
+		LEFT JOIN public.organizations o ON o.id = ou.organization_id
 		WHERE ` + whereSQL
 
 	countSQL = "SELECT count(*)" + fromSQL

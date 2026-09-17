@@ -435,7 +435,7 @@ func fileIDsArrayExpr(jsonExpr string) string {
 
 func fileFilenamesExpr(key string) string {
 	return fmt.Sprintf(
-		"(SELECT string_agg(f.filename, ' ' ORDER BY f.filename) FROM public.files f WHERE f.deleted_at IS NULL AND f.id::text = ANY (%s))",
+		"(SELECT string_agg(f.filename, ' ' ORDER BY f.filename) FROM public.files f WHERE f.id::text = ANY (%s))",
 		fileIDsArrayExpr(fmt.Sprintf("r.data -> %s", key)),
 	)
 }
@@ -448,7 +448,7 @@ func addressTextExpr(key string) string {
 }
 
 func relatedTitleExpr(b *queryBuilder, fieldKeyPlaceholder, titleKey string) string {
-	idMatch := fmt.Sprintf("related.id::text = r.data ->> %s AND related.deleted_at IS NULL", fieldKeyPlaceholder)
+	idMatch := fmt.Sprintf("related.id::text = r.data ->> %s", fieldKeyPlaceholder)
 	if titleKey == "" {
 		return fmt.Sprintf("(SELECT related.id::text FROM public.records related WHERE %s)", idMatch)
 	}
@@ -461,7 +461,7 @@ func relatedTitleExpr(b *queryBuilder, fieldKeyPlaceholder, titleKey string) str
 
 func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, listArgs []any) {
 	b := &queryBuilder{}
-	where := []string{"r.deleted_at IS NULL"}
+	where := []string{}
 
 	if params.UserID != "" {
 		where = append(where, "n.user_id = "+b.add(params.UserID))
@@ -485,8 +485,7 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 			`(r.id::text ILIKE %s ESCAPE '%s' OR o.name ILIKE %s ESCAPE '%s' OR r.data::text ILIKE %s ESCAPE '%s' OR EXISTS (
 				SELECT 1
 				FROM jsonb_each(r.data) kv
-				JOIN public.files f ON f.deleted_at IS NULL
-					AND f.id::text = ANY (%s)
+				JOIN public.files f ON f.id::text = ANY (%s)
 				WHERE f.filename ILIKE %s ESCAPE '%s'
 			))`,
 			idPlaceholder, likeEscapeChar,
@@ -503,12 +502,14 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		applyFieldFilter(b, &where, field)
 	}
 
-	whereSQL := strings.Join(where, " AND ")
 	fromSQL := `
 		FROM public.records r
-		JOIN public.networks n ON n.id = r.network_id AND n.deleted_at IS NULL
-		LEFT JOIN public.organizations o ON o.id = r.organization_id AND o.deleted_at IS NULL
-		WHERE ` + whereSQL
+		JOIN public.networks n ON n.id = r.network_id
+		LEFT JOIN public.organizations o ON o.id = r.organization_id`
+	if len(where) > 0 {
+		fromSQL += `
+		WHERE ` + strings.Join(where, " AND ")
+	}
 
 	countSQL = "SELECT count(*)" + fromSQL
 	countArgs = append([]any{}, b.args...)

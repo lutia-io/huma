@@ -2,7 +2,7 @@
 -- updated; failed attempts are preserved for audit and debugging.
 CREATE TABLE public.workflow_actions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workflow_id UUID NOT NULL REFERENCES public.workflows(id),
+    workflow_id UUID NOT NULL REFERENCES public.workflows(id) ON DELETE CASCADE,
     action_index INT NOT NULL,
     attempt INT NOT NULL,
     action_type TEXT NOT NULL,

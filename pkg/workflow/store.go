@@ -14,7 +14,7 @@ import (
 
 const workflowDefinitionSelectColumns = `
 	wd.id, wd.name, wd.slug, wd.description, wd.active, wd.internal, wd.definition, wd.schema_id, wd.network_id, wd.organization_id,
-	wd.user_id, wd.created_at, wd.updated_at, wd.deleted_at,
+	wd.user_id, wd.created_at, wd.updated_at,
 	` + user.SelectSQL
 
 var workflowDefinitionListSelectColumns = workflowDefinitionSelectColumns
@@ -64,7 +64,6 @@ func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefini
 		FROM public.schemas
 		WHERE id = $7
 			AND network_id = $8
-			AND deleted_at IS NULL
 			AND (
 				($9::uuid IS NULL AND organization_id IS NULL)
 				OR ($9::uuid IS NOT NULL AND (organization_id IS NULL OR organization_id = $9))
@@ -125,13 +124,11 @@ func (store *postgresStore) Update(ctx context.Context, workflow *WorkflowDefini
 			updated_by = $9,
 			updated_at = now()
 		WHERE id = $1
-			AND deleted_at IS NULL
 			AND EXISTS (
 				SELECT 1
 				FROM public.schemas
 				WHERE id = $7
 					AND network_id = $8
-					AND deleted_at IS NULL
 					AND (
 						($10::uuid IS NULL AND organization_id IS NULL)
 						OR ($10::uuid IS NOT NULL AND (organization_id IS NULL OR organization_id = $10))
@@ -187,7 +184,6 @@ func scanWorkflowDefinition(row pgx.Row, wf *WorkflowDefinition) error {
 		&wf.UserID,
 		&wf.CreatedAt,
 		&wf.UpdatedAt,
-		&wf.DeletedAt,
 		&wf.CreatedBy.ID,
 		&wf.CreatedBy.FirstName,
 		&wf.CreatedBy.LastName,
@@ -223,7 +219,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*WorkflowDe
 	sql := `
 		SELECT` + workflowDefinitionSelectColumns + `
 		FROM public.workflow_definitions wd` + user.JoinSQL("wd") + `
-		WHERE wd.id = $1 AND wd.deleted_at IS NULL`
+		WHERE wd.id = $1`
 
 	wf := &WorkflowDefinition{}
 	err := scanWorkflowDefinition(store.db.QueryRow(ctx, sql, id), wf)
@@ -273,8 +269,7 @@ func (store *postgresStore) ListActiveBySchemaID(ctx context.Context, schemaID s
 		SELECT` + workflowDefinitionSelectColumns + `
 		FROM public.workflow_definitions wd` + user.JoinSQL("wd") + `
 		WHERE wd.schema_id = $1
-			AND wd.active = true
-			AND wd.deleted_at IS NULL`
+			AND wd.active = true`
 
 	rows, err := store.db.Query(ctx, sql, schemaID)
 	if err != nil {
@@ -290,7 +285,6 @@ func (store *postgresStore) ListActiveScheduled(ctx context.Context) ([]*Workflo
 		SELECT` + workflowDefinitionSelectColumns + `
 		FROM public.workflow_definitions wd` + user.JoinSQL("wd") + `
 		WHERE wd.active = true
-			AND wd.deleted_at IS NULL
 			AND wd.definition->'trigger'->'on' ? 'schedule'`
 
 	rows, err := store.db.Query(ctx, sql)

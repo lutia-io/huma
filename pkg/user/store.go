@@ -66,15 +66,14 @@ func scanUser(row pgx.Row, u *user) error {
 		&u.Password,
 		&u.CreatedAt,
 		&u.UpdatedAt,
-		&u.DeletedAt,
 	)
 }
 
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*user, error) {
 	const sql = `
-		SELECT id, first_name, last_name, email, password, created_at, updated_at, deleted_at
+		SELECT id, first_name, last_name, email, password, created_at, updated_at
 		FROM public.users
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	u := &user{}
 	err := scanUser(store.db.QueryRow(ctx, sql, id), u)
@@ -89,9 +88,9 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*user, erro
 
 func (store *postgresStore) GetByEmail(ctx context.Context, email string) (*user, error) {
 	const sql = `
-		SELECT id, first_name, last_name, email, password, created_at, updated_at, deleted_at
+		SELECT id, first_name, last_name, email, password, created_at, updated_at
 		FROM public.users
-		WHERE email = $1 AND deleted_at IS NULL`
+		WHERE email = $1`
 
 	u := &user{}
 	err := scanUser(store.db.QueryRow(ctx, sql, email), u)
@@ -110,7 +109,7 @@ func (store *postgresStore) Update(ctx context.Context, user *user) error {
 		SET first_name = $2,
 			last_name = $3,
 			updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql,
 		user.ID,
@@ -131,7 +130,7 @@ func (store *postgresStore) UpdatePassword(ctx context.Context, id, hashedPasswo
 		UPDATE public.users
 		SET password = $2,
 			updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql, id, hashedPassword)
 	if err != nil {

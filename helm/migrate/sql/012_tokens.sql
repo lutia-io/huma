@@ -4,11 +4,11 @@ CREATE TABLE public.tokens (
     family_id UUID NOT NULL,
     principal_type TEXT NOT NULL,
     principal_id UUID NOT NULL,
-    network_id UUID REFERENCES public.networks(id),
-    organization_id UUID REFERENCES public.organizations(id),
+    network_id UUID REFERENCES public.networks(id) ON DELETE CASCADE,
+    organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,
-    replaced_by UUID REFERENCES public.tokens(id),
+    replaced_by UUID REFERENCES public.tokens(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
 

@@ -12,7 +12,7 @@ import (
 )
 
 const organizationSelectColumns = `
-	o.id, o.name, o.slug, o.network_id, o.user_id, o.created_at, o.updated_at, o.deleted_at,
+	o.id, o.name, o.slug, o.network_id, o.user_id, o.created_at, o.updated_at,
 	` + user.SelectSQL
 
 var organizationListSelectColumns = organizationSelectColumns
@@ -20,7 +20,7 @@ var organizationListSelectColumns = organizationSelectColumns
 type store interface {
 	Insert(ctx context.Context, organization *organization) (string, error)
 	Update(ctx context.Context, organization *organization) error
-	Delete(ctx context.Context, id, updatedBy string) error
+	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*organization, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 }
@@ -72,7 +72,7 @@ func (store *postgresStore) Update(ctx context.Context, organization *organizati
 	const sql = `
 		UPDATE public.organizations
 		SET name = $2, slug = $3, updated_by = $4, updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql, organization.ID, organization.Name, organization.Slug, organization.UpdatedBy.ID)
 	if err != nil {
@@ -88,13 +88,10 @@ func (store *postgresStore) Update(ctx context.Context, organization *organizati
 	return nil
 }
 
-func (store *postgresStore) Delete(ctx context.Context, id, updatedBy string) error {
-	const sql = `
-		UPDATE public.organizations
-		SET deleted_at = now(), updated_at = now(), updated_by = $2
-		WHERE id = $1 AND deleted_at IS NULL`
+func (store *postgresStore) Delete(ctx context.Context, id string) error {
+	const sql = `DELETE FROM public.organizations WHERE id = $1`
 
-	tag, err := store.db.Exec(ctx, sql, id, updatedBy)
+	tag, err := store.db.Exec(ctx, sql, id)
 	if err != nil {
 		return err
 	}
@@ -113,7 +110,6 @@ func scanOrganization(row pgx.Row, o *organization) error {
 		&o.UserID,
 		&o.CreatedAt,
 		&o.UpdatedAt,
-		&o.DeletedAt,
 		&o.CreatedBy.ID,
 		&o.CreatedBy.FirstName,
 		&o.CreatedBy.LastName,
@@ -146,7 +142,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*organizati
 	sql := `
 		SELECT` + organizationSelectColumns + `
 		FROM public.organizations o` + user.JoinSQL("o") + `
-		WHERE o.id = $1 AND o.deleted_at IS NULL`
+		WHERE o.id = $1`
 
 	o := &organization{}
 	err := scanOrganization(store.db.QueryRow(ctx, sql, id), o)

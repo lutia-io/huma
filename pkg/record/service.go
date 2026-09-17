@@ -134,7 +134,7 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 	return id, nil
 }
 
-// Get returns the record, or found=false if it does not exist or is deleted.
+// Get returns the record, or found=false if it does not exist.
 func (s *Service) Get(ctx context.Context, recordID string) (*Record, bool, error) {
 	return s.store.Get(ctx, recordID)
 }

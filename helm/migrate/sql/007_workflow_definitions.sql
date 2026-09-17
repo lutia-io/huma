@@ -6,16 +6,15 @@ CREATE TABLE public.workflow_definitions (
     active BOOLEAN NOT NULL,
     internal BOOLEAN NOT NULL,
     definition JSONB NOT NULL,
-    schema_id UUID NOT NULL REFERENCES public.schemas(id),
-    network_id UUID NOT NULL REFERENCES public.networks(id),
-    organization_id UUID REFERENCES public.organizations(id),
+    schema_id UUID NOT NULL REFERENCES public.schemas(id) ON DELETE CASCADE,
+    network_id UUID NOT NULL REFERENCES public.networks(id) ON DELETE CASCADE,
+    organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.users(id),
     created_by UUID NOT NULL REFERENCES public.users(id),
     updated_by UUID NOT NULL REFERENCES public.users(id),
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
-    deleted_at TIMESTAMPTZ,
-    FOREIGN KEY (organization_id, network_id) REFERENCES public.organizations(id, network_id)
+    FOREIGN KEY (organization_id, network_id) REFERENCES public.organizations(id, network_id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX workflow_definitions_network_slug_idx

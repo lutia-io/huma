@@ -5,6 +5,5 @@ CREATE TABLE public.users (
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL,
-    deleted_at TIMESTAMPTZ
+    updated_at TIMESTAMPTZ NOT NULL
 );

@@ -103,7 +103,7 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 	}, params.Content)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to put file object", logger.KeyID, id, logger.KeyError, err)
-		if delErr := s.store.Delete(ctx, id); delErr != nil {
+		if _, delErr := s.store.Delete(ctx, id); delErr != nil {
 			s.logger.ErrorContext(ctx, "Failed to delete file metadata after object put failure", logger.KeyID, id, logger.KeyError, delErr)
 		}
 		return "", apperror.NewInternalError("Failed to store file content", err)
@@ -171,7 +171,7 @@ func (s *Service) Get(ctx context.Context, p principal.Principal, id string) (*F
 	return f, nil
 }
 
-// GetMeta returns file metadata, or found=false if missing/deleted.
+// GetMeta returns file metadata, or found=false if missing.
 func (s *Service) GetMeta(ctx context.Context, fileID string) (*File, bool, error) {
 	return s.store.Get(ctx, fileID)
 }
@@ -197,17 +197,17 @@ func (s *Service) OpenContent(ctx context.Context, fileID string) (*Content, boo
 	return &Content{File: meta, Reader: result}, true, nil
 }
 
-// SoftDelete marks the file deleted in Postgres and removes the object from
-// the store. Returns found=false when the file is missing or already deleted.
-func (s *Service) SoftDelete(ctx context.Context, fileID string) (bool, error) {
+// Delete removes the file metadata and object. Returns found=false when the
+// file is missing.
+func (s *Service) Delete(ctx context.Context, fileID string) (bool, error) {
 	fileID = strings.TrimSpace(fileID)
 	if fileID == "" {
 		return false, apperror.NewBadRequestError("File ID is required", nil)
 	}
 
-	found, err := s.store.SoftDelete(ctx, fileID)
+	found, err := s.store.Delete(ctx, fileID)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to soft-delete file metadata", logger.KeyID, fileID, logger.KeyError, err)
+		s.logger.ErrorContext(ctx, "Failed to delete file metadata", logger.KeyID, fileID, logger.KeyError, err)
 		return false, err
 	}
 	if !found {

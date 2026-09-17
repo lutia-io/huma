@@ -218,7 +218,7 @@ func hasStringFilter(value, op string) bool {
 
 func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, listArgs []any) {
 	b := &queryBuilder{}
-	where := []string{"pd.deleted_at IS NULL", "n.deleted_at IS NULL"}
+	where := []string{}
 
 	if params.UserID != "" {
 		where = append(where, "pd.user_id = "+b.add(params.UserID))
@@ -279,12 +279,14 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		where = append(where, fmt.Sprintf("(%s) %s %s", stageCountExpr, operator, b.add(*params.Stages)))
 	}
 
-	whereSQL := strings.Join(where, " AND ")
 	fromSQL := `
 		FROM public.pipeline_definitions pd
 		JOIN public.networks n ON n.id = pd.network_id
-		LEFT JOIN public.organizations o ON o.id = pd.organization_id AND o.deleted_at IS NULL` + user.JoinSQL("pd") + `
-		WHERE ` + whereSQL
+		LEFT JOIN public.organizations o ON o.id = pd.organization_id` + user.JoinSQL("pd")
+	if len(where) > 0 {
+		fromSQL += `
+		WHERE ` + strings.Join(where, " AND ")
+	}
 
 	countSQL = "SELECT count(*)" + fromSQL
 	countArgs = append([]any{}, b.args...)

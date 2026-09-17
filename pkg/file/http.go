@@ -170,7 +170,7 @@ func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, err)
 		return
 	}
-	found, err := h.service.SoftDelete(r.Context(), id)
+	found, err := h.service.Delete(r.Context(), id)
 	if err != nil {
 		render.WriteError(w, err)
 		return

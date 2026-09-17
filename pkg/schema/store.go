@@ -13,7 +13,7 @@ import (
 
 const schemaSelectColumns = `
 	s.id, s.name, s.slug, s.internal, s.definition, s.network_id, s.organization_id,
-	s.user_id, s.created_at, s.updated_at, s.deleted_at,
+	s.user_id, s.created_at, s.updated_at,
 	` + user.SelectSQL
 
 var schemaListSelectColumns = schemaSelectColumns
@@ -83,7 +83,7 @@ func (store *postgresStore) Update(ctx context.Context, schema *schema) error {
 	const sql = `
 		UPDATE public.schemas
 		SET name = $2, slug = $3, definition = $4, updated_by = $5, updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql,
 		schema.ID,
@@ -117,7 +117,6 @@ func scanSchema(row pgx.Row, sch *schema) error {
 		&sch.UserID,
 		&sch.CreatedAt,
 		&sch.UpdatedAt,
-		&sch.DeletedAt,
 		&sch.CreatedBy.ID,
 		&sch.CreatedBy.FirstName,
 		&sch.CreatedBy.LastName,
@@ -150,7 +149,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*schema, er
 	sql := `
 		SELECT` + schemaSelectColumns + `
 		FROM public.schemas s` + user.JoinSQL("s") + `
-		WHERE s.id = $1 AND s.deleted_at IS NULL`
+		WHERE s.id = $1`
 
 	sch := &schema{}
 	err := scanSchema(store.db.QueryRow(ctx, sql, id), sch)

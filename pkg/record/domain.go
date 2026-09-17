@@ -16,9 +16,8 @@ type Record struct {
 	NetworkID          string `json:"networkId"`
 	IdempotencyKey     string `json:"-"`
 
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 
 	// UserID is the owning network's user, used for authorization only.
 	UserID string `json:"-"`

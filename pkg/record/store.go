@@ -21,7 +21,6 @@ const recordSelectColumns = `
 	r.network_id,
 	r.created_at,
 	r.updated_at,
-	r.deleted_at,
 	n.user_id`
 
 type store interface {
@@ -98,7 +97,6 @@ func scanRecord(row pgx.Row, rec *Record) error {
 		&rec.NetworkID,
 		&rec.CreatedAt,
 		&rec.UpdatedAt,
-		&rec.DeletedAt,
 		&rec.UserID,
 	)
 }
@@ -123,10 +121,9 @@ func collectRecords(rows pgx.Rows) ([]*Record, error) {
 func (store *postgresStore) Get(ctx context.Context, recordID string) (*Record, bool, error) {
 	const sql = `
 		SELECT id, data, schema_id, organization_id, organization_user_id, network_id,
-			created_at, updated_at, deleted_at
+			created_at, updated_at
 		FROM public.records
-		WHERE id = $1
-		  AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	rec := &Record{}
 	err := store.db.QueryRow(ctx, sql, recordID).Scan(
@@ -138,7 +135,6 @@ func (store *postgresStore) Get(ctx context.Context, recordID string) (*Record, 
 		&rec.NetworkID,
 		&rec.CreatedAt,
 		&rec.UpdatedAt,
-		&rec.DeletedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, nil
@@ -154,9 +150,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*Record, er
 		SELECT` + recordSelectColumns + `
 		FROM public.records r
 		JOIN public.networks n ON n.id = r.network_id
-		WHERE r.id = $1
-			AND r.deleted_at IS NULL
-			AND n.deleted_at IS NULL`
+		WHERE r.id = $1`
 
 	rec := &Record{}
 	err := scanRecord(store.db.QueryRow(ctx, sql, id), rec)
@@ -184,9 +178,7 @@ func (store *postgresStore) GetByIDs(ctx context.Context, ids []string) ([]*Reco
 		SELECT` + recordSelectColumns + `
 		FROM public.records r
 		JOIN public.networks n ON n.id = r.network_id
-		WHERE r.id IN (` + strings.Join(placeholders, ",") + `)
-			AND r.deleted_at IS NULL
-			AND n.deleted_at IS NULL`
+		WHERE r.id IN (` + strings.Join(placeholders, ",") + `)`
 
 	rows, err := store.db.Query(ctx, sql, b.args...)
 	if err != nil {
@@ -230,8 +222,7 @@ func (store *postgresStore) UpdateData(ctx context.Context, recordID string, dat
 	const sql = `
 		UPDATE public.records
 		SET data = $2, updated_at = now()
-		WHERE id = $1
-		  AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql, recordID, data)
 	if err != nil {
@@ -257,8 +248,7 @@ const schemaPageSelectColumns = `
 	organization_user_id,
 	network_id,
 	created_at,
-	updated_at,
-	deleted_at`
+	updated_at`
 
 func (store *postgresStore) ListBySchema(ctx context.Context, networkID, schemaID, afterID string, limit int) ([]*Record, error) {
 	if limit <= 0 {
@@ -275,7 +265,6 @@ func (store *postgresStore) ListBySchema(ctx context.Context, networkID, schemaI
 			FROM public.records
 			WHERE network_id = $1
 				AND schema_id = $2
-				AND deleted_at IS NULL
 			ORDER BY id
 			LIMIT $3`
 		rows, err = store.db.Query(ctx, sql, networkID, schemaID, limit)
@@ -285,7 +274,6 @@ func (store *postgresStore) ListBySchema(ctx context.Context, networkID, schemaI
 			FROM public.records
 			WHERE network_id = $1
 				AND schema_id = $2
-				AND deleted_at IS NULL
 				AND id > $3
 			ORDER BY id
 			LIMIT $4`
@@ -308,7 +296,6 @@ func (store *postgresStore) ListBySchema(ctx context.Context, networkID, schemaI
 			&rec.NetworkID,
 			&rec.CreatedAt,
 			&rec.UpdatedAt,
-			&rec.DeletedAt,
 		); err != nil {
 			return nil, err
 		}

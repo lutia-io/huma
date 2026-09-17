@@ -28,9 +28,8 @@ type organizationUser struct {
 	// returned by list/get and cannot log in.
 	Internal bool `json:"-"`
 
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 
 	// UserID is the owning network's user, used for authorization only.
 	UserID string `json:"-"`
@@ -48,9 +47,6 @@ func (u organizationUser) LogValue() slog.Value {
 		slog.Bool("internal", u.Internal),
 		slog.Time("createdAt", u.CreatedAt),
 		slog.Time("updatedAt", u.UpdatedAt),
-	}
-	if u.DeletedAt != nil {
-		attrs = append(attrs, slog.Time("deletedAt", *u.DeletedAt))
 	}
 	return slog.GroupValue(attrs...)
 }

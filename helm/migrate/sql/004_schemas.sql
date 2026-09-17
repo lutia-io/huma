@@ -5,15 +5,14 @@ CREATE TABLE public.schemas (
     internal BOOLEAN NOT NULL DEFAULT FALSE,
     -- JSON (not JSONB) preserves object key order for properties and TitleKey.
     definition JSON NOT NULL,
-    network_id UUID NOT NULL REFERENCES public.networks(id),
-    organization_id UUID REFERENCES public.organizations(id),
+    network_id UUID NOT NULL REFERENCES public.networks(id) ON DELETE CASCADE,
+    organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.users(id),
     created_by UUID NOT NULL REFERENCES public.users(id),
     updated_by UUID NOT NULL REFERENCES public.users(id),
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
-    deleted_at TIMESTAMPTZ,
-    FOREIGN KEY (organization_id, network_id) REFERENCES public.organizations(id, network_id)
+    FOREIGN KEY (organization_id, network_id) REFERENCES public.organizations(id, network_id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX schemas_network_slug_idx

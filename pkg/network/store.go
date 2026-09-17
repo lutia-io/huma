@@ -13,7 +13,7 @@ import (
 
 var (
 	networkSelectColumns = `
-	n.id, n.name, n.slug, n.user_id, n.created_at, n.updated_at, n.deleted_at,
+	n.id, n.name, n.slug, n.user_id, n.created_at, n.updated_at,
 	` + user.SelectSQL
 
 	networkFromSQL = `
@@ -23,7 +23,7 @@ var (
 type store interface {
 	Insert(ctx context.Context, network *network) (string, error)
 	Update(ctx context.Context, network *network) error
-	Delete(ctx context.Context, id, updatedBy string) error
+	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*network, error)
 	ListByUserID(ctx context.Context, userID string) ([]*network, error)
 }
@@ -72,7 +72,7 @@ func (store *postgresStore) Update(ctx context.Context, network *network) error 
 	const sql = `
 		UPDATE public.networks
 		SET name = $2, slug = $3, updated_by = $4, updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql, network.ID, network.Name, network.Slug, network.UpdatedBy.ID)
 	if err != nil {
@@ -88,13 +88,10 @@ func (store *postgresStore) Update(ctx context.Context, network *network) error 
 	return nil
 }
 
-func (store *postgresStore) Delete(ctx context.Context, id, updatedBy string) error {
-	const sql = `
-		UPDATE public.networks
-		SET deleted_at = now(), updated_at = now(), updated_by = $2
-		WHERE id = $1 AND deleted_at IS NULL`
+func (store *postgresStore) Delete(ctx context.Context, id string) error {
+	const sql = `DELETE FROM public.networks WHERE id = $1`
 
-	tag, err := store.db.Exec(ctx, sql, id, updatedBy)
+	tag, err := store.db.Exec(ctx, sql, id)
 	if err != nil {
 		return err
 	}
@@ -112,7 +109,6 @@ func scanNetwork(row pgx.Row, n *network) error {
 		&n.UserID,
 		&n.CreatedAt,
 		&n.UpdatedAt,
-		&n.DeletedAt,
 		&n.CreatedBy.ID,
 		&n.CreatedBy.FirstName,
 		&n.CreatedBy.LastName,
@@ -127,7 +123,7 @@ func scanNetwork(row pgx.Row, n *network) error {
 func (store *postgresStore) GetByID(ctx context.Context, id string) (*network, error) {
 	sql := `
 		SELECT` + networkSelectColumns + networkFromSQL + `
-		WHERE n.id = $1 AND n.deleted_at IS NULL`
+		WHERE n.id = $1`
 
 	n := &network{}
 	err := scanNetwork(store.db.QueryRow(ctx, sql, id), n)
@@ -143,7 +139,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*network, e
 func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*network, error) {
 	sql := `
 		SELECT` + networkSelectColumns + networkFromSQL + `
-		WHERE n.user_id = $1 AND n.deleted_at IS NULL
+		WHERE n.user_id = $1
 		ORDER BY n.created_at DESC`
 
 	rows, err := store.db.Query(ctx, sql, userID)

@@ -4,12 +4,11 @@ CREATE TABLE public.organization_users (
     last_name TEXT NOT NULL,
     email TEXT NOT NULL,
     password TEXT NOT NULL,
-    organization_id UUID NOT NULL REFERENCES public.organizations(id),
-    network_id UUID NOT NULL REFERENCES public.networks(id),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    network_id UUID NOT NULL REFERENCES public.networks(id) ON DELETE CASCADE,
     internal BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
-    deleted_at TIMESTAMPTZ,
     UNIQUE (network_id, email)
 );
 
@@ -17,4 +16,4 @@ CREATE TABLE public.organization_users (
 -- on records created by workflow and pipeline nodes.
 CREATE UNIQUE INDEX organization_users_internal_per_org_idx
     ON public.organization_users (organization_id)
-    WHERE internal AND deleted_at IS NULL;
+    WHERE internal;

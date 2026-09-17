@@ -114,8 +114,8 @@ func (s *service) Patch(ctx context.Context, existing *organization, req patchOr
 	return nil
 }
 
-func (s *service) Delete(ctx context.Context, existing *organization, updatedBy string) error {
-	if err := s.store.Delete(ctx, existing.ID, updatedBy); err != nil {
+func (s *service) Delete(ctx context.Context, existing *organization) error {
+	if err := s.store.Delete(ctx, existing.ID); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to delete organization", logger.KeyID, existing.ID, logger.KeyError, err)
 		return err
 	}

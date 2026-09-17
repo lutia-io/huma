@@ -13,9 +13,8 @@ type user struct {
 	Email     string `json:"email"`
 	Password  string `json:"-"`
 
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // LogValue implements slog.LogValuer so the password is redacted in logs.
@@ -27,9 +26,6 @@ func (u user) LogValue() slog.Value {
 		slog.String("email", u.Email),
 		slog.Time("createdAt", u.CreatedAt),
 		slog.Time("updatedAt", u.UpdatedAt),
-	}
-	if u.DeletedAt != nil {
-		attrs = append(attrs, slog.Time("deletedAt", *u.DeletedAt))
 	}
 	return slog.GroupValue(attrs...)
 }

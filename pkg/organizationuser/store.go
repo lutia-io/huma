@@ -20,7 +20,6 @@ const organizationUserSelectColumns = `
 	ou.internal,
 	ou.created_at,
 	ou.updated_at,
-	ou.deleted_at,
 	n.user_id`
 
 type store interface {
@@ -92,7 +91,7 @@ func (store *postgresStore) Update(ctx context.Context, organizationUser *organi
 			email = $4,
 			password = COALESCE($5, password),
 			updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	tag, err := store.db.Exec(ctx, sql,
 		organizationUser.ID,
@@ -125,7 +124,6 @@ func scanOrganizationUser(row pgx.Row, u *organizationUser) error {
 		&u.Internal,
 		&u.CreatedAt,
 		&u.UpdatedAt,
-		&u.DeletedAt,
 		&u.UserID,
 	)
 }
@@ -152,9 +150,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*organizati
 		SELECT` + organizationUserSelectColumns + `
 		FROM public.organization_users ou
 		JOIN public.networks n ON n.id = ou.network_id
-		WHERE ou.id = $1
-			AND ou.deleted_at IS NULL
-			AND n.deleted_at IS NULL`
+		WHERE ou.id = $1`
 
 	u := &organizationUser{}
 	err := scanOrganizationUser(store.db.QueryRow(ctx, sql, id), u)
@@ -170,12 +166,11 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*organizati
 func (store *postgresStore) GetByEmail(ctx context.Context, email, networkID, organizationID string) (*organizationUser, error) {
 	const sql = `
 		SELECT id, first_name, last_name, email, password, organization_id, network_id,
-			created_at, updated_at, deleted_at
+			created_at, updated_at
 		FROM public.organization_users
 		WHERE email = $1
 			AND network_id = $2
-			AND organization_id = $3
-			AND deleted_at IS NULL`
+			AND organization_id = $3`
 
 	u := &organizationUser{}
 	err := store.db.QueryRow(ctx, sql, email, networkID, organizationID).Scan(
@@ -188,7 +183,6 @@ func (store *postgresStore) GetByEmail(ctx context.Context, email, networkID, or
 		&u.NetworkID,
 		&u.CreatedAt,
 		&u.UpdatedAt,
-		&u.DeletedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -203,7 +197,7 @@ func (store *postgresStore) GetPasswordByID(ctx context.Context, id string) (str
 	const sql = `
 		SELECT password
 		FROM public.organization_users
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 	var password string
 	err := store.db.QueryRow(ctx, sql, id).Scan(&password)
 	if err != nil {
@@ -220,7 +214,7 @@ func (store *postgresStore) UpdatePassword(ctx context.Context, id, hashedPasswo
 		UPDATE public.organization_users
 		SET password = $2,
 			updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL`
+		WHERE id = $1`
 	tag, err := store.db.Exec(ctx, sql, id, hashedPassword)
 	if err != nil {
 		return err
@@ -237,8 +231,7 @@ func (store *postgresStore) GetSystemUserID(ctx context.Context, organizationID,
 		FROM public.organization_users
 		WHERE organization_id = $1
 			AND network_id = $2
-			AND internal
-			AND deleted_at IS NULL`
+			AND internal`
 	var id string
 	err := store.db.QueryRow(ctx, sql, organizationID, networkID).Scan(&id)
 	if err != nil {
@@ -266,7 +259,7 @@ func (store *postgresStore) InsertSystemUser(ctx context.Context, organizationUs
 			$1, $2, $3, $4, $5,
 			$6, TRUE, now(), now()
 		)
-		ON CONFLICT (organization_id) WHERE internal AND deleted_at IS NULL
+		ON CONFLICT (organization_id) WHERE internal
 		DO UPDATE SET updated_at = organization_users.updated_at
 		RETURNING id`
 

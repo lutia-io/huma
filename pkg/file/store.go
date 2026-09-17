@@ -20,7 +20,6 @@ const fileSelectColumns = `
 	f.network_id,
 	f.created_at,
 	f.updated_at,
-	f.deleted_at,
 	n.user_id`
 
 type store interface {
@@ -31,8 +30,7 @@ type store interface {
 	Get(ctx context.Context, fileID string) (*File, bool, error)
 	GetByID(ctx context.Context, id string) (*File, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
-	Delete(ctx context.Context, fileID string) error
-	SoftDelete(ctx context.Context, fileID string) (bool, error)
+	Delete(ctx context.Context, fileID string) (bool, error)
 }
 
 type postgresStore struct {
@@ -63,7 +61,7 @@ func (store *postgresStore) Insert(ctx context.Context, f *File) (string, bool, 
 			now(), now()
 		)
 		ON CONFLICT (network_id, idempotency_key)
-			WHERE idempotency_key IS NOT NULL AND deleted_at IS NULL
+			WHERE idempotency_key IS NOT NULL
 			DO NOTHING
 		RETURNING id`
 
@@ -81,8 +79,7 @@ func (store *postgresStore) Insert(ctx context.Context, f *File) (string, bool, 
 		const selectSQL = `
 			SELECT id FROM public.files
 			WHERE network_id = $1
-			  AND idempotency_key = $2
-			  AND deleted_at IS NULL`
+			  AND idempotency_key = $2`
 		if err := store.db.QueryRow(ctx, selectSQL, f.NetworkID, f.IdempotencyKey).Scan(&id); err != nil {
 			return "", false, err
 		}
@@ -102,8 +99,7 @@ func (store *postgresStore) UpdateSize(ctx context.Context, fileID string, sizeB
 	const sql = `
 		UPDATE public.files
 		SET size_bytes = $2, updated_at = now()
-		WHERE id = $1
-		  AND deleted_at IS NULL`
+		WHERE id = $1`
 	_, err := store.db.Exec(ctx, sql, fileID, sizeBytes)
 	return err
 }
@@ -119,7 +115,6 @@ func scanFile(row pgx.Row, f *File) error {
 		&f.NetworkID,
 		&f.CreatedAt,
 		&f.UpdatedAt,
-		&f.DeletedAt,
 		&f.UserID,
 	)
 }
@@ -147,8 +142,7 @@ func (store *postgresStore) Get(ctx context.Context, fileID string) (*File, bool
 		       organization_id, organization_user_id, network_id,
 		       created_at, updated_at
 		FROM public.files
-		WHERE id = $1
-		  AND deleted_at IS NULL`
+		WHERE id = $1`
 
 	f := &File{}
 	err := store.db.QueryRow(ctx, sql, fileID).Scan(
@@ -176,9 +170,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*File, erro
 		SELECT` + fileSelectColumns + `
 		FROM public.files f
 		JOIN public.networks n ON n.id = f.network_id
-		WHERE f.id = $1
-			AND f.deleted_at IS NULL
-			AND n.deleted_at IS NULL`
+		WHERE f.id = $1`
 
 	f := &File{}
 	err := scanFile(store.db.QueryRow(ctx, sql, id), f)
@@ -221,18 +213,8 @@ func (store *postgresStore) List(ctx context.Context, params listParams) (*listR
 	}, nil
 }
 
-func (store *postgresStore) Delete(ctx context.Context, fileID string) error {
+func (store *postgresStore) Delete(ctx context.Context, fileID string) (bool, error) {
 	const sql = `DELETE FROM public.files WHERE id = $1`
-	_, err := store.db.Exec(ctx, sql, fileID)
-	return err
-}
-
-func (store *postgresStore) SoftDelete(ctx context.Context, fileID string) (bool, error) {
-	const sql = `
-		UPDATE public.files
-		SET deleted_at = now(), updated_at = now()
-		WHERE id = $1
-		  AND deleted_at IS NULL`
 	tag, err := store.db.Exec(ctx, sql, fileID)
 	if err != nil {
 		return false, err
