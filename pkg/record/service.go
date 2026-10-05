@@ -441,16 +441,22 @@ func (s *Service) PatchData(ctx context.Context, rec *Record, data json.RawMessa
 		s.logger.WarnContext(ctx, "Empty data")
 		return apperror.NewBadRequestError("Data is required", nil)
 	}
-	if err := s.schemaService.ValidateRecordData(ctx, rec.SchemaID, data); err != nil {
+	definition, err := s.schemaService.Definition(ctx, rec.SchemaID)
+	if err != nil {
 		return err
 	}
-	if err := s.validateForeignRefs(ctx, rec.SchemaID, rec.NetworkID, rec.OrganizationID, data); err != nil {
+	prepared, err := validator.PrepareUpdate(definition, rec.Data, data)
+	if err != nil {
+		s.logger.WarnContext(ctx, "Invalid record data", "schema_id", rec.SchemaID, logger.KeyError, err)
+		return apperror.NewBadRequestError(err.Error(), err)
+	}
+	if err := s.validateForeignRefs(ctx, rec.SchemaID, rec.NetworkID, rec.OrganizationID, prepared); err != nil {
 		return err
 	}
-	if EqualDocuments(rec.Data, data) {
+	if EqualDocuments(rec.Data, prepared) {
 		return nil
 	}
-	found, err := s.store.UpdateData(ctx, rec.ID, data)
+	found, err := s.store.UpdateData(ctx, rec.ID, prepared)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to update record", logger.KeyID, rec.ID, logger.KeyError, err)
 		return err
@@ -464,7 +470,7 @@ func (s *Service) PatchData(ctx context.Context, rec *Record, data json.RawMessa
 	payload, err := json.Marshal(UpdatedEvent{
 		ID:                 rec.ID,
 		Before:             rec.Data,
-		After:              data,
+		After:              prepared,
 		EventID:            eventID,
 		SchemaID:           rec.SchemaID,
 		OrganizationID:     rec.OrganizationID,

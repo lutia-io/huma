@@ -60,6 +60,7 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 		return nil, fmt.Errorf("definition is required")
 	}
 
+	definition = asNumberTypes(definition)
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(definition))
 	if err != nil {
 		return nil, fmt.Errorf("invalid definition: %w", err)
@@ -113,7 +114,132 @@ func ValidateDefinition(definition json.RawMessage) error {
 	if err := ValidatePhoneKeywords(definition); err != nil {
 		return err
 	}
-	return ValidateDefaultKeywords(definition)
+	if err := ValidateDefaultKeywords(definition); err != nil {
+		return err
+	}
+	return ValidateFieldNames(definition)
+}
+
+// PrepareUpdate validates next against definition for a record rewrite.
+// When additional properties are forbidden, a key that is no longer in the
+// schema is still accepted if that key already exists on previous. The
+// returned document is next unchanged, so removed columns stay stored until a
+// writer omits them. A new unknown key is rejected.
+func PrepareUpdate(definition, previous, next json.RawMessage) (json.RawMessage, error) {
+	if !forbidsAdditionalProperties(definition) {
+		if err := ValidateData(definition, next); err != nil {
+			return nil, err
+		}
+		return next, nil
+	}
+
+	properties, err := Properties(definition)
+	if err != nil {
+		return nil, fmt.Errorf("invalid definition: %w", err)
+	}
+	known := make(map[string]struct{}, len(properties))
+	for _, property := range properties {
+		known[property.Name] = struct{}{}
+	}
+
+	var prev map[string]json.RawMessage
+	if len(bytes.TrimSpace(previous)) > 0 && string(previous) != "null" {
+		if err := json.Unmarshal(previous, &prev); err != nil {
+			return nil, fmt.Errorf("invalid data: %w", err)
+		}
+	}
+	var nextObj map[string]json.RawMessage
+	if err := json.Unmarshal(next, &nextObj); err != nil {
+		return nil, fmt.Errorf("invalid data: %w", err)
+	}
+
+	stripped := make(map[string]json.RawMessage, len(nextObj))
+	for key, value := range nextObj {
+		if _, ok := known[key]; ok {
+			stripped[key] = value
+			continue
+		}
+		if _, ok := prev[key]; ok {
+			continue
+		}
+		return nil, fmt.Errorf("additional properties not allowed: %s", key)
+	}
+
+	raw, err := json.Marshal(stripped)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateData(definition, raw); err != nil {
+		return nil, err
+	}
+	return next, nil
+}
+
+func forbidsAdditionalProperties(definition json.RawMessage) bool {
+	var doc struct {
+		Additional json.RawMessage `json:"additionalProperties"`
+	}
+	if err := json.Unmarshal(definition, &doc); err != nil {
+		return false
+	}
+	if len(bytes.TrimSpace(doc.Additional)) == 0 {
+		return false
+	}
+	var allowed bool
+	if err := json.Unmarshal(doc.Additional, &allowed); err != nil {
+		return false
+	}
+	return !allowed
+}
+
+// asNumberTypes rewrites JSON Schema "integer" to "number". Schemas have one
+// numeric type, and older whole-number columns stay valid.
+func asNumberTypes(definition json.RawMessage) json.RawMessage {
+	var doc any
+	if err := json.Unmarshal(definition, &doc); err != nil {
+		return definition
+	}
+	if !rewriteIntegerTypes(doc) {
+		return definition
+	}
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return definition
+	}
+	return out
+}
+
+func rewriteIntegerTypes(v any) bool {
+	changed := false
+	switch n := v.(type) {
+	case map[string]any:
+		switch t := n["type"].(type) {
+		case string:
+			if t == "integer" {
+				n["type"] = "number"
+				changed = true
+			}
+		case []any:
+			for i, item := range t {
+				if s, ok := item.(string); ok && s == "integer" {
+					t[i] = "number"
+					changed = true
+				}
+			}
+		}
+		for _, child := range n {
+			if rewriteIntegerTypes(child) {
+				changed = true
+			}
+		}
+	case []any:
+		for _, child := range n {
+			if rewriteIntegerTypes(child) {
+				changed = true
+			}
+		}
+	}
+	return changed
 }
 
 // ValidateData validates data against a JSON Schema definition.

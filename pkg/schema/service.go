@@ -198,6 +198,21 @@ func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRe
 	return nil
 }
 
+func (s *Service) Delete(ctx context.Context, existing *schema) error {
+	if existing.Internal {
+		return apperror.NewBadRequestError("Internal schemas cannot be deleted", nil)
+	}
+	if err := s.store.Delete(ctx, existing.ID); err != nil {
+		if apperror.IsNotFound(err) {
+			return err
+		}
+		s.logger.ErrorContext(ctx, "Failed to delete schema", logger.KeyID, existing.ID, logger.KeyError, err)
+		return err
+	}
+	s.logger.InfoContext(ctx, "Successfully deleted schema", logger.KeyID, existing.ID)
+	return nil
+}
+
 func (s *Service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:

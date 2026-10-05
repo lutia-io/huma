@@ -21,6 +21,7 @@ var schemaListSelectColumns = schemaSelectColumns
 type store interface {
 	Insert(ctx context.Context, schema *schema) (string, error)
 	Update(ctx context.Context, schema *schema) error
+	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*schema, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 }
@@ -97,6 +98,19 @@ func (store *postgresStore) Update(ctx context.Context, schema *schema) error {
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return apperror.NewConflictError("Schema already exists", err)
 		}
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NewNotFoundError("Schema not found", nil)
+	}
+	return nil
+}
+
+func (store *postgresStore) Delete(ctx context.Context, id string) error {
+	const sql = `DELETE FROM public.schemas WHERE id = $1`
+
+	tag, err := store.db.Exec(ctx, sql, id)
+	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {

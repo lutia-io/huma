@@ -12,6 +12,7 @@ import (
 // Property is one JSON Schema object property, in document order.
 type Property struct {
 	Name     string
+	Title    string
 	Type     string
 	Format   string
 	SchemaID string
@@ -59,6 +60,7 @@ func Properties(definition json.RawMessage) ([]Property, error) {
 		}
 		name, _ := keyTok.(string)
 		var spec struct {
+			Title    string          `json:"title"`
 			Type     json.RawMessage `json:"type"`
 			Format   string          `json:"format"`
 			SchemaID string          `json:"schemaId"`
@@ -70,6 +72,7 @@ func Properties(definition json.RawMessage) ([]Property, error) {
 		}
 		properties = append(properties, Property{
 			Name:     name,
+			Title:    spec.Title,
 			Type:     jsonTypeName(spec.Type),
 			Format:   spec.Format,
 			SchemaID: strings.TrimSpace(spec.SchemaID),

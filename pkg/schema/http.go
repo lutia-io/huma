@@ -30,6 +30,7 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /schema/{id}", h.Get)
 	mux.HandleFunc("POST /schema", h.Insert)
 	mux.HandleFunc("PATCH /schema/{id}", h.Patch)
+	mux.HandleFunc("DELETE /schema/{id}", h.Delete)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -140,4 +141,30 @@ func (h *httpHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.WriteJSON(w, http.StatusOK, map[string]string{"id": existing.ID})
+}
+
+func (h *httpHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	existing, err := h.service.Get(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := principal.RequireUser(p, existing.NetworkID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.authz.Allow(r.Context(), p, authz.ActionDelete, authz.ResourceSchema, existing.ID, existing.NetworkID, authz.PointerID(existing.OrganizationID)); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	if err := h.service.Delete(r.Context(), existing); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

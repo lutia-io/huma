@@ -522,3 +522,119 @@ func TestTitleKeySkipsPhone(t *testing.T) {
 		t.Fatalf("title key=%q", got)
 	}
 }
+
+func TestValidateDefinition_emptyTableAndColumnTitle(t *testing.T) {
+	def := json.RawMessage(`{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"title": "Orders",
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"status": { "type": "string", "title": "Order status" }
+		},
+		"required": []
+	}`)
+	if err := ValidateDefinition(def); err != nil {
+		t.Fatal(err)
+	}
+	properties, err := Properties(def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(properties) != 1 || properties[0].Name != "status" {
+		t.Fatalf("properties = %+v", properties)
+	}
+}
+
+func TestValidateDefinition_duplicateFieldNames(t *testing.T) {
+	tests := []struct {
+		name    string
+		def     string
+		wantErr string
+	}{
+		{
+			name: "distinct titles",
+			def:  `{"type":"object","properties":{"status":{"type":"string","title":"Status"},"state":{"type":"string","title":"State"}}}`,
+		},
+		{
+			name: "untitled keys stay distinct",
+			def:  `{"type":"object","properties":{"status":{"type":"string"},"notes":{"type":"string"}}}`,
+		},
+		{
+			name: "humanized key differs from another title",
+			def:  `{"type":"object","properties":{"userId":{"type":"string"},"user":{"type":"string","title":"User"}}}`,
+		},
+		{
+			name: "nested titles are ignored",
+			def:  `{"type":"object","properties":{"office":{"type":"object","format":"address","properties":{"city":{"type":"string","title":"City"},"town":{"type":"string","title":"City"}}},"name":{"type":"string","title":"Name"}}}`,
+		},
+		{
+			name:    "same title ignoring case",
+			def:     `{"type":"object","properties":{"status":{"type":"string","title":"Status"},"state":{"type":"string","title":"status"}}}`,
+			wantErr: "a field named status already exists",
+		},
+		{
+			name:    "same title ignoring surrounding space",
+			def:     `{"type":"object","properties":{"status":{"type":"string","title":"Status"},"state":{"type":"string","title":" Status "}}}`,
+			wantErr: "a field named Status already exists",
+		},
+		{
+			name:    "title matches another field's key label",
+			def:     `{"type":"object","properties":{"poNumber":{"type":"string"},"code":{"type":"string","title":"Po Number"}}}`,
+			wantErr: "a field named Po Number already exists",
+		},
+		{
+			name:    "title matches humanized id key",
+			def:     `{"type":"object","properties":{"userId":{"type":"string"},"label":{"type":"string","title":"User ID"}}}`,
+			wantErr: "a field named User ID already exists",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDefinition(json.RawMessage(tt.def))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPrepareUpdateRetainsRemovedColumn(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"additionalProperties": false,
+		"properties": { "name": { "type": "string" } },
+		"required": ["name"]
+	}`)
+	previous := json.RawMessage(`{"name":"Ada","note":"kept"}`)
+	next := json.RawMessage(`{"name":"Ada Lovelace","note":"kept"}`)
+
+	got, err := PrepareUpdate(def, previous, next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(next) {
+		t.Fatalf("got %s", got)
+	}
+
+	if _, err := PrepareUpdate(def, previous, json.RawMessage(`{"name":"Ada","extra":1}`)); err == nil {
+		t.Fatal("expected new unknown key to be rejected")
+	}
+	if _, err := PrepareUpdate(def, previous, json.RawMessage(`{"note":"kept"}`)); err == nil {
+		t.Fatal("expected missing required name to fail")
+	}
+}
+
+func TestValidateData_integerIsNumber(t *testing.T) {
+	def := json.RawMessage(`{"type":"object","properties":{"count":{"type":"integer"},"tags":{"type":"array","items":{"type":"integer"}}}}`)
+	if err := ValidateData(def, json.RawMessage(`{"count":1.5,"tags":[1,2.5]}`)); err != nil {
+		t.Fatal(err)
+	}
+}
