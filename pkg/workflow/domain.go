@@ -112,10 +112,13 @@ type listParams struct {
 	SlugOp         string
 	Schema         string
 	SchemaOp       string
+	SchemaID       string
+	Field          string
 	Network        string
 	NetworkOp      string
 	Actions        *int
 	ActionsOp      string
+	Internal       *bool
 	Sort           string
 	Order          string
 	Page           int

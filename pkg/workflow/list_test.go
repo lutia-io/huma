@@ -53,6 +53,74 @@ func TestParseListParams_paginationAndFilters(t *testing.T) {
 	}
 }
 
+func TestParseListParams_schemaId(t *testing.T) {
+	id := "11111111-1111-1111-1111-111111111111"
+	r := httptest.NewRequest(http.MethodGet, "/workflow-definition?schemaId="+id, nil)
+	params, err := parseListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.SchemaID != id {
+		t.Fatalf("got schemaId=%s", params.SchemaID)
+	}
+
+	bad := httptest.NewRequest(http.MethodGet, "/workflow-definition?schemaId=not-a-uuid", nil)
+	if _, err := parseListParams(bad); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestBuildListQuery_schemaId(t *testing.T) {
+	params := listParams{
+		SchemaID: "11111111-1111-1111-1111-111111111111",
+		Sort:     "name",
+		Order:    "asc",
+	}
+	countSQL, _, countArgs, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "wd.schema_id = $1") {
+		t.Fatalf("missing schema id filter: %s", countSQL)
+	}
+	if countArgs[0] != params.SchemaID {
+		t.Fatalf("schema id arg = %v", countArgs[0])
+	}
+}
+
+func TestParseListParams_fieldAndInternal(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/workflow-definition?field=status&internal=false", nil)
+	params, err := parseListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.Field != "status" || params.Internal == nil || *params.Internal {
+		t.Fatalf("got field=%s internal=%v", params.Field, params.Internal)
+	}
+
+	bad := httptest.NewRequest(http.MethodGet, "/workflow-definition?internal=maybe", nil)
+	if _, err := parseListParams(bad); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestBuildListQuery_fieldAndInternal(t *testing.T) {
+	internal := false
+	params := listParams{
+		Field:    "status",
+		Internal: &internal,
+		Sort:     "name",
+		Order:    "asc",
+	}
+	countSQL, _, countArgs, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "trigger'->'changed'") || !strings.Contains(countSQL, "jsonb_path_exists") {
+		t.Fatalf("missing field filter: %s", countSQL)
+	}
+	if !strings.Contains(countSQL, "wd.internal = $3") {
+		t.Fatalf("missing internal filter: %s", countSQL)
+	}
+	if countArgs[0] != "status" || countArgs[1] != "status" || countArgs[2] != false {
+		t.Fatalf("args = %v", countArgs)
+	}
+}
+
 func TestParseListParams_rejectsInvalidSort(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/workflow-definition?sort=definition", nil)
 	if _, err := parseListParams(r); err == nil {

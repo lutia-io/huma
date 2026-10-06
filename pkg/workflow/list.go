@@ -53,6 +53,8 @@ func parseListParams(r *http.Request) (listParams, error) {
 		SlugOp:         strings.TrimSpace(query.Get("slugOp")),
 		Schema:         strings.TrimSpace(query.Get("schema")),
 		SchemaOp:       strings.TrimSpace(query.Get("schemaOp")),
+		SchemaID:       strings.TrimSpace(query.Get("schemaId")),
+		Field:          strings.TrimSpace(query.Get("field")),
 		Network:        strings.TrimSpace(query.Get("network")),
 		NetworkOp:      strings.TrimSpace(query.Get("networkOp")),
 		ActionsOp:      strings.TrimSpace(query.Get("actionsOp")),
@@ -118,6 +120,19 @@ func parseListParams(r *http.Request) (listParams, error) {
 		}
 	}
 
+	if value := strings.TrimSpace(query.Get("internal")); value != "" {
+		switch value {
+		case "true":
+			internal := true
+			params.Internal = &internal
+		case "false":
+			internal := false
+			params.Internal = &internal
+		default:
+			return listParams{}, apperror.NewBadRequestError("Invalid internal filter", nil)
+		}
+	}
+
 	if params.ActionsOp == opEmpty {
 		// value is optional for empty
 	} else if value := strings.TrimSpace(query.Get("actions")); value != "" {
@@ -136,6 +151,9 @@ func parseListParams(r *http.Request) (listParams, error) {
 		params.ActionsOp = op
 	}
 
+	if params.SchemaID != "" && !uuid.Valid(params.SchemaID) {
+		return listParams{}, apperror.NewBadRequestError("Invalid schema ID", nil)
+	}
 	if params.NetworkID != "" && !uuid.Valid(params.NetworkID) {
 		return listParams{}, apperror.NewBadRequestError("Invalid network ID", nil)
 	}
@@ -222,6 +240,24 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 
 	if params.UserID != "" {
 		where = append(where, authz.MemberFilter("wd.network_id", b.add(params.UserID)))
+	}
+	if params.SchemaID != "" {
+		where = append(where, "wd.schema_id = "+b.add(params.SchemaID))
+	}
+	if params.Field != "" {
+		changed := b.add(params.Field)
+		criteria := b.add(params.Field)
+		where = append(where, fmt.Sprintf(`(
+			COALESCE(wd.definition->'trigger'->'changed', '[]'::jsonb) ? %s
+			OR jsonb_path_exists(
+				COALESCE(wd.definition->'criteria', '{}'::jsonb),
+				'$.**.field ? (@ == $name)',
+				jsonb_build_object('name', %s::text)
+			)
+		)`, changed, criteria))
+	}
+	if params.Internal != nil {
+		where = append(where, "wd.internal = "+b.add(*params.Internal))
 	}
 	if params.NetworkID != "" {
 		where = append(where, "wd.network_id = "+b.add(params.NetworkID))
