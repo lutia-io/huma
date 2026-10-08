@@ -73,6 +73,7 @@ func TestParseSchemaFields(t *testing.T) {
 			"signatureCaptured": { "type": "boolean" },
 			"proofFileId": { "type": "string", "format": "file" },
 			"attachments": { "type": "array", "format": "file", "items": { "type": "string", "format": "file" } },
+			"owner": { "type": "string", "format": "user" },
 			"investorId": { "type": "string", "format": "foreign", "schemaId": "11111111-1111-1111-1111-111111111111" },
 			"mailingAddress": { "type": "object", "format": "address" }
 		}
@@ -94,6 +95,9 @@ func TestParseSchemaFields(t *testing.T) {
 	}
 	if fields["attachments"].Kind != fieldKindFile {
 		t.Fatalf("attachments kind=%s", fields["attachments"].Kind)
+	}
+	if fields["owner"].Kind != fieldKindUser {
+		t.Fatalf("owner kind=%s", fields["owner"].Kind)
 	}
 	if fields["investorId"].Kind != fieldKindForeign {
 		t.Fatalf("investorId kind=%s", fields["investorId"].Kind)
@@ -121,6 +125,9 @@ func TestBuildListQuery_searchAndPagination(t *testing.T) {
 	}
 	if !strings.Contains(countSQL, "r.data::text ILIKE") || !strings.Contains(countSQL, "ESCAPE '!'") {
 		t.Fatalf("count SQL missing search: %s", countSQL)
+	}
+	if !strings.Contains(countSQL, "public.organization_users") || !strings.Contains(countSQL, "ou.first_name") {
+		t.Fatalf("count SQL missing organization user search: %s", countSQL)
 	}
 	if got, want := countArgs[1], "%inv!_oice%"; got != want {
 		t.Fatalf("escaped like pattern = %v want %v", got, want)
@@ -229,6 +236,27 @@ func TestBuildListQuery_emptyField(t *testing.T) {
 	countSQL, _, _, _ := buildListQuery(params)
 	if !strings.Contains(countSQL, "jsonb_typeof(r.data -> $2) = 'null'") {
 		t.Fatalf("missing empty json filter: %s", countSQL)
+	}
+}
+
+func TestBuildListQuery_userField(t *testing.T) {
+	params := listParams{
+		UserID: "user-1",
+		Fields: []fieldFilter{
+			{Name: "owner", Value: "Ada", Op: opContains, Kind: fieldKindUser},
+		},
+		SchemaFields: map[string]schemaField{
+			"owner": {Name: "owner", Kind: fieldKindUser},
+		},
+		Sort:  "owner",
+		Order: "asc",
+	}
+	countSQL, listSQL, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "public.organization_users") || !strings.Contains(countSQL, "ou.first_name") {
+		t.Fatalf("missing user filter: %s", countSQL)
+	}
+	if !strings.Contains(listSQL, "ORDER BY (SELECT TRIM(CONCAT(ou.first_name, ' ', ou.last_name))") {
+		t.Fatalf("missing user sort: %s", listSQL)
 	}
 }
 

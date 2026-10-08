@@ -215,11 +215,12 @@ func TestDisplayTitle(t *testing.T) {
 			"status": { "type": "string", "enum": ["active"] },
 			"investorId": { "type": "string", "format": "foreign", "schemaId": "550e8400-e29b-41d4-a716-446655440000" },
 			"proofFileId": { "type": "string", "format": "file" },
+			"owner": { "type": "string", "format": "user" },
 			"legalName": { "type": "string" },
 			"email": { "type": "string", "format": "email" }
 		}
 	}`)
-	title := DisplayTitle(json.RawMessage(`{"status":"active","legalName":"Acme LP","email":"a@x.com"}`), def, "Investor")
+	title := DisplayTitle(json.RawMessage(`{"status":"active","owner":"550e8400-e29b-41d4-a716-446655440000","legalName":"Acme LP","email":"a@x.com"}`), def, "Investor")
 	if title != "Acme LP" {
 		t.Fatalf("title=%q", title)
 	}
@@ -438,6 +439,76 @@ func TestValidateDataFileFormatArray(t *testing.T) {
 			}
 			if !tt.wantErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateDataUserFormat(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"owner": { "type": "string", "format": "user" }
+		},
+		"required": ["owner"]
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{name: "valid organization user id", data: `{"owner":"550e8400-e29b-41d4-a716-446655440000"}`},
+		{name: "not a uuid", data: `{"owner":"not-a-user-id"}`, wantErr: true},
+		{name: "empty string", data: `{"owner":""}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateDefinition_userFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		def     string
+		wantErr string
+	}{
+		{
+			name: "string",
+			def:  `{"type":"object","properties":{"owner":{"type":"string","format":"user"}}}`,
+		},
+		{
+			name:    "array",
+			def:     `{"type":"object","properties":{"owners":{"type":"array","format":"user","items":{"type":"string","format":"user"}}}}`,
+			wantErr: "format user requires type string",
+		},
+		{
+			name:    "non-string type",
+			def:     `{"type":"object","properties":{"owner":{"type":"integer","format":"user"}}}`,
+			wantErr: "format user requires type string",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDefinition(json.RawMessage(tt.def))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want contain %q", err, tt.wantErr)
 			}
 		})
 	}

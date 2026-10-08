@@ -25,6 +25,10 @@ const FileFormat = "file"
 // Schema authors use: {"type":"string","format":"foreign","schemaId":"<uuid>"}
 const ForeignFormat = "foreign"
 
+// UserFormat is the JSON Schema format name for an organization user ID.
+// Schema authors use: {"type":"string","format":"user"}
+const UserFormat = "user"
+
 type deniedLoader struct{}
 
 func (deniedLoader) Load(url string) (any, error) {
@@ -55,6 +59,18 @@ func validateForeignFormat(v any) error {
 	return nil
 }
 
+// validateUserFormat asserts the value is a UUID string (an organization user ID).
+func validateUserFormat(v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	if !uuid.Valid(s) {
+		return fmt.Errorf("must be an organization user id (uuid)")
+	}
+	return nil
+}
+
 func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 	if len(bytes.TrimSpace(definition)) == 0 {
 		return nil, fmt.Errorf("definition is required")
@@ -76,6 +92,10 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 	c.RegisterFormat(&jsonschema.Format{
 		Name:     ForeignFormat,
 		Validate: validateForeignFormat,
+	})
+	c.RegisterFormat(&jsonschema.Format{
+		Name:     UserFormat,
+		Validate: validateUserFormat,
 	})
 	c.RegisterFormat(&jsonschema.Format{
 		Name:     AddressFormat,
@@ -109,6 +129,9 @@ func ValidateDefinition(definition json.RawMessage) error {
 		return err
 	}
 	if err := ValidateFileKeywords(definition); err != nil {
+		return err
+	}
+	if err := ValidateUserKeywords(definition); err != nil {
 		return err
 	}
 	if err := ValidatePhoneKeywords(definition); err != nil {

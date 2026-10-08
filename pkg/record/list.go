@@ -34,6 +34,7 @@ const (
 	fieldKindFile    = "file"
 	fieldKindForeign = "foreign"
 	fieldKindAddress = "address"
+	fieldKindUser    = "user"
 
 	fieldPrefix   = "field."
 	fieldOpPrefix = "fieldOp."
@@ -287,6 +288,9 @@ func fieldKindFromProp(typeJSON json.RawMessage, format string) string {
 	if strings.EqualFold(format, "file") {
 		return fieldKindFile
 	}
+	if strings.EqualFold(format, "user") {
+		return fieldKindUser
+	}
 	if strings.EqualFold(format, "foreign") {
 		return fieldKindForeign
 	}
@@ -390,6 +394,8 @@ func applyFieldFilter(b *queryBuilder, where *[]string, field fieldFilter) {
 		*where = append(*where, fmt.Sprintf("r.data -> %s = '%s'::jsonb", key, literal))
 	case fieldKindFile:
 		applyStringFilter(b, where, fileFilenamesExpr(key), field.Value, field.Op)
+	case fieldKindUser:
+		applyStringFilter(b, where, userNameExpr(key), field.Value, field.Op)
 	case fieldKindForeign:
 		applyStringFilter(b, where, relatedTitleExpr(b, key, field.TitleKey), field.Value, field.Op)
 	case fieldKindAddress:
@@ -415,6 +421,8 @@ func sortExpression(params listParams, b *queryBuilder) string {
 		return fmt.Sprintf("(CASE WHEN jsonb_typeof(r.data -> %s) = 'boolean' THEN (r.data ->> %s)::boolean END)", key, key)
 	case fieldKindFile:
 		return fileFilenamesExpr(key)
+	case fieldKindUser:
+		return userNameExpr(key)
 	case fieldKindForeign:
 		return relatedTitleExpr(b, key, meta.TitleKey)
 	case fieldKindAddress:
@@ -438,6 +446,13 @@ func fileFilenamesExpr(key string) string {
 	return fmt.Sprintf(
 		"(SELECT string_agg(f.filename, ' ' ORDER BY f.filename) FROM public.files f WHERE f.id::text = ANY (%s))",
 		fileIDsArrayExpr(fmt.Sprintf("r.data -> %s", key)),
+	)
+}
+
+func userNameExpr(key string) string {
+	return fmt.Sprintf(
+		"(SELECT TRIM(CONCAT(ou.first_name, ' ', ou.last_name)) FROM public.organization_users ou WHERE ou.id::text = r.data ->> %s AND ou.internal = FALSE)",
+		key,
 	)
 }
 
@@ -482,18 +497,26 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 		orgPlaceholder := b.add(pattern)
 		dataPlaceholder := b.add(pattern)
 		filePlaceholder := b.add(pattern)
+		userPlaceholder := b.add(pattern)
 		where = append(where, fmt.Sprintf(
 			`(r.id::text ILIKE %s ESCAPE '%s' OR o.name ILIKE %s ESCAPE '%s' OR r.data::text ILIKE %s ESCAPE '%s' OR EXISTS (
 				SELECT 1
 				FROM jsonb_each(r.data) kv
 				JOIN public.files f ON f.id::text = ANY (%s)
 				WHERE f.filename ILIKE %s ESCAPE '%s'
+			) OR EXISTS (
+				SELECT 1
+				FROM jsonb_each(r.data) kv
+				JOIN public.organization_users ou ON ou.id::text = kv.value #>> '{}'
+				WHERE ou.internal = FALSE
+					AND TRIM(CONCAT(ou.first_name, ' ', ou.last_name)) ILIKE %s ESCAPE '%s'
 			))`,
 			idPlaceholder, likeEscapeChar,
 			orgPlaceholder, likeEscapeChar,
 			dataPlaceholder, likeEscapeChar,
 			fileIDsArrayExpr("kv.value"),
 			filePlaceholder, likeEscapeChar,
+			userPlaceholder, likeEscapeChar,
 		))
 	}
 	if hasStringFilter(params.Organization, params.OrganizationOp) {

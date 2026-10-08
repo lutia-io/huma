@@ -19,11 +19,18 @@ import (
 
 // Service is the record domain API. HTTP handlers and the workflow engine
 // both call into it; SQL lives only in the store.
+// schemaSource is the schema API record writes need. *schema.Service satisfies it.
+type schemaSource interface {
+	Definition(ctx context.Context, schemaID string) (json.RawMessage, error)
+	SnapshotByID(ctx context.Context, schemaID string) (*schema.Snapshot, error)
+	ValidateRecordData(ctx context.Context, schemaID string, data json.RawMessage) error
+}
+
 type Service struct {
 	logger        *logger.Logger
 	store         store
 	js            jetstream.JetStream
-	schemaService *schema.Service
+	schemaService schemaSource
 	authz         *authz.Engine
 }
 
@@ -94,6 +101,9 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (string, erro
 		return "", err
 	}
 	if err := s.validateForeignRefs(ctx, schemaID, params.NetworkID, params.OrganizationID, data); err != nil {
+		return "", err
+	}
+	if err := s.validateUserRefs(ctx, schemaID, params.NetworkID, params.OrganizationID, data); err != nil {
 		return "", err
 	}
 
@@ -453,6 +463,9 @@ func (s *Service) PatchData(ctx context.Context, rec *Record, data json.RawMessa
 	if err := s.validateForeignRefs(ctx, rec.SchemaID, rec.NetworkID, rec.OrganizationID, prepared); err != nil {
 		return err
 	}
+	if err := s.validateUserRefs(ctx, rec.SchemaID, rec.NetworkID, rec.OrganizationID, prepared); err != nil {
+		return err
+	}
 	if EqualDocuments(rec.Data, prepared) {
 		return nil
 	}
@@ -584,6 +597,79 @@ func (s *Service) validateForeignRefs(ctx context.Context, schemaID, networkID, 
 		if target.SchemaID != field.schemaID {
 			s.logger.WarnContext(ctx, "Foreign record schema mismatch", "property", field.name, logger.KeyID, field.recordID)
 			return apperror.NewBadRequestError(fmt.Sprintf("%s must reference a record of the related schema", field.name), nil)
+		}
+	}
+	return nil
+}
+
+func (s *Service) validateUserRefs(ctx context.Context, schemaID, networkID, organizationID string, data json.RawMessage) error {
+	definition, err := s.schemaService.Definition(ctx, schemaID)
+	if err != nil {
+		return err
+	}
+	fields, err := validator.UserFields(definition)
+	if err != nil {
+		return apperror.NewBadRequestError("Invalid schema definition", err)
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return apperror.NewBadRequestError("Invalid data", err)
+	}
+
+	ids := make([]string, 0)
+	seen := make(map[string]struct{})
+	type ref struct {
+		name   string
+		userID string
+	}
+	refs := make([]ref, 0)
+	for _, field := range fields {
+		raw, ok := obj[field.Name]
+		if !ok {
+			continue
+		}
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		refs = append(refs, ref{name: field.Name, userID: value})
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		ids = append(ids, value)
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+
+	users, err := s.store.GetOrganizationUsersByIDs(ctx, ids)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to load organization users", logger.KeyError, err)
+		return err
+	}
+	byID := make(map[string]organizationUserRef, len(users))
+	for _, user := range users {
+		byID[user.ID] = user
+	}
+
+	for _, field := range refs {
+		user, ok := byID[field.userID]
+		if !ok {
+			s.logger.WarnContext(ctx, "Unknown organization user", "property", field.name, logger.KeyID, field.userID)
+			return apperror.NewBadRequestError(fmt.Sprintf("%s must reference an existing organization user", field.name), nil)
+		}
+		if user.Internal || user.NetworkID != networkID || user.OrganizationID != organizationID {
+			s.logger.WarnContext(ctx, "Organization user out of scope", "property", field.name, logger.KeyID, field.userID)
+			return apperror.NewBadRequestError(fmt.Sprintf("%s must reference an organization user in this organization", field.name), nil)
 		}
 	}
 	return nil

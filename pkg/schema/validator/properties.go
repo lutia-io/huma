@@ -180,7 +180,7 @@ func isTitleProperty(property Property) bool {
 	if property.Type != "" && property.Type != "string" {
 		return false
 	}
-	if strings.EqualFold(property.Format, FileFormat) || isForeign(property) || isAddress(property) || isPhone(property) {
+	if strings.EqualFold(property.Format, FileFormat) || isForeign(property) || isAddress(property) || isPhone(property) || isUser(property) {
 		return false
 	}
 	return len(property.Enum) == 0

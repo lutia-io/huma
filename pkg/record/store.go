@@ -28,6 +28,7 @@ type store interface {
 	Get(ctx context.Context, recordID string) (*Record, bool, error)
 	GetByID(ctx context.Context, id string) (*Record, error)
 	GetByIDs(ctx context.Context, ids []string) ([]*Record, error)
+	GetOrganizationUsersByIDs(ctx context.Context, ids []string) ([]organizationUserRef, error)
 	List(ctx context.Context, params listParams) (*listResult, error)
 	ListBySchema(ctx context.Context, networkID, schemaID, afterID string, limit int) ([]*Record, error)
 	UpdateData(ctx context.Context, recordID string, data json.RawMessage) (bool, error)
@@ -185,6 +186,50 @@ func (store *postgresStore) GetByIDs(ctx context.Context, ids []string) ([]*Reco
 		return nil, err
 	}
 	return collectRecords(rows)
+}
+
+// organizationUserRef is the membership data needed to accept a user field value.
+type organizationUserRef struct {
+	ID             string
+	OrganizationID string
+	NetworkID      string
+	Internal       bool
+}
+
+func (store *postgresStore) GetOrganizationUsersByIDs(ctx context.Context, ids []string) ([]organizationUserRef, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	b := &queryBuilder{}
+	placeholders := make([]string, len(ids))
+	for i, id := range ids {
+		placeholders[i] = b.add(id)
+	}
+
+	sql := `
+		SELECT id, organization_id, network_id, internal
+		FROM public.organization_users
+		WHERE id IN (` + strings.Join(placeholders, ",") + `)`
+
+	rows, err := store.db.Query(ctx, sql, b.args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]organizationUserRef, 0)
+	for rows.Next() {
+		var user organizationUserRef
+		if err := rows.Scan(&user.ID, &user.OrganizationID, &user.NetworkID, &user.Internal); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
