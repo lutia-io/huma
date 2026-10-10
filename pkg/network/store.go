@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lutia-io/huma/pkg/apperror"
-	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/user"
 )
 
@@ -26,7 +25,7 @@ type store interface {
 	Update(ctx context.Context, network *network) error
 	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*network, error)
-	ListByUserID(ctx context.Context, userID string) ([]*network, error)
+	List(ctx context.Context, params listParams) (*listResult, error)
 }
 
 type postgresStore struct {
@@ -137,16 +136,7 @@ func (store *postgresStore) GetByID(ctx context.Context, id string) (*network, e
 	return n, nil
 }
 
-func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]*network, error) {
-	sql := `
-		SELECT` + networkSelectColumns + networkFromSQL + `
-		WHERE ` + authz.MemberFilter("n.id", "$1") + `
-		ORDER BY n.created_at DESC`
-
-	rows, err := store.db.Query(ctx, sql, userID)
-	if err != nil {
-		return nil, err
-	}
+func collectNetworks(rows pgx.Rows) ([]*network, error) {
 	defer rows.Close()
 
 	networks := make([]*network, 0)
@@ -161,4 +151,34 @@ func (store *postgresStore) ListByUserID(ctx context.Context, userID string) ([]
 		return nil, err
 	}
 	return networks, nil
+}
+
+func (store *postgresStore) List(ctx context.Context, params listParams) (*listResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildListQuery(params)
+
+	var total int
+	if err := store.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	rows, err := store.db.Query(ctx, listSQL, listArgs...)
+	if err != nil {
+		return nil, err
+	}
+	items, err := collectNetworks(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = total
+	}
+
+	return &listResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+	}, nil
 }

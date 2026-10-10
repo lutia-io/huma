@@ -115,27 +115,26 @@ func (s *service) Delete(ctx context.Context, existing *network) error {
 	return nil
 }
 
-func (s *service) List(ctx context.Context, p principal.Principal) ([]*network, error) {
+func (s *service) List(ctx context.Context, p principal.Principal, params listParams) (*listResult, error) {
 	switch p.Type {
 	case principal.TypeUser:
-		networks, err := s.store.ListByUserID(ctx, p.ID)
-		if err != nil {
-			s.logger.ErrorContext(ctx, "Failed to list networks", logger.KeyUserID, p.ID, logger.KeyError, err)
-			return nil, err
-		}
-		return networks, nil
+		params.UserID = p.ID
 	case principal.TypeOrganizationUser:
 		if p.NetworkID == "" {
 			return nil, apperror.NewForbiddenError("Organization user token missing network", nil)
 		}
-		n, err := s.Get(ctx, p, p.NetworkID)
-		if err != nil {
-			return nil, err
-		}
-		return []*network{n}, nil
+		params.UserID = ""
+		params.NetworkID = p.NetworkID
 	default:
 		return nil, apperror.NewUnauthorizedError("Authentication required", nil)
 	}
+
+	result, err := s.store.List(ctx, params)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to list networks", logger.KeyUserID, p.ID, logger.KeyError, err)
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *service) Get(ctx context.Context, p principal.Principal, id string) (*network, error) {

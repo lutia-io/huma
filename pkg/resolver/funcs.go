@@ -26,6 +26,7 @@ var typedFuncs = map[string]func(...any) (any, error){
 	"mockInteger":  mockInteger,
 	"mockBoolean":  mockBoolean,
 	"mockDate":     mockDate,
+	"mockTime":     mockTime,
 	"mockDateTime": mockDateTime,
 	"mockEmail":    mockEmail,
 	"mockURL":      mockURL,

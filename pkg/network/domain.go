@@ -27,3 +27,24 @@ type insertNetworkRequest struct {
 type patchNetworkRequest struct {
 	Name *string `json:"name"`
 }
+
+type listParams struct {
+	UserID    string
+	NetworkID string
+	Query     string
+	Name      string
+	NameOp    string
+	Slug      string
+	SlugOp    string
+	Sort      string
+	Order     string
+	Page      int
+	PageSize  int
+}
+
+type listResult struct {
+	Items    []*network `json:"items"`
+	Total    int        `json:"total"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"pageSize"`
+}

@@ -178,6 +178,10 @@ func (s *Service) Patch(ctx context.Context, existing *schema, req patchSchemaRe
 			s.logger.WarnContext(ctx, "Invalid definition", logger.KeyError, err)
 			return apperror.NewBadRequestError(err.Error(), err)
 		}
+		if err := validator.RejectRenamedFieldKeys(existing.Definition, req.Definition); err != nil {
+			s.logger.WarnContext(ctx, "Rejected field key rename", logger.KeyID, existing.ID, logger.KeyError, err)
+			return apperror.NewBadRequestError(err.Error(), err)
+		}
 		if err := s.validateForeignTargets(ctx, req.Definition, existing.NetworkID, existing.OrganizationID); err != nil {
 			return err
 		}

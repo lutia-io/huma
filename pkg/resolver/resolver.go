@@ -31,6 +31,7 @@
 //	{{ mockInteger }}                 a random whole number
 //	{{ mockBoolean }}                 true or false
 //	{{ mockDate }}                    a random YYYY-MM-DD date
+//	{{ mockTime }}                    a random RFC 3339 full-time
 //	{{ mockDateTime }}                a random RFC 3339 timestamp
 //	{{ mockEmail }}                   a sample email address
 //	{{ mockURL }}                     a sample https URL

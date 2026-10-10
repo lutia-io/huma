@@ -65,6 +65,14 @@ func mockDate(values ...any) (any, error) {
 	return randomDay().Format(time.DateOnly), nil
 }
 
+// mockTime returns a random RFC 3339 full-time for time fields.
+func mockTime(values ...any) (any, error) {
+	if len(values) != 0 {
+		return nil, fmt.Errorf("mockTime accepts no arguments")
+	}
+	return randomDay().UTC().Format("15:04:05Z07:00"), nil
+}
+
 // mockDateTime returns a random RFC 3339 timestamp for date-time fields.
 func mockDateTime(values ...any) (any, error) {
 	if len(values) != 0 {

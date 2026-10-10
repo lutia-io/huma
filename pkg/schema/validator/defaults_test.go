@@ -115,13 +115,14 @@ func TestApplyDefaultsMockFunctionsThenValidate(t *testing.T) {
 			"website": { "type": "string", "format": "uri", "default": "{{ mockURL }}" },
 			"phone": { "type": "string", "format": "phone", "default": "{{ mockPhone }}" },
 			"born": { "type": "string", "format": "date", "default": "{{ mockDate }}" },
+			"opensAt": { "type": "string", "format": "time", "default": "{{ mockTime }}" },
 			"seenAt": { "type": "string", "format": "date-time", "default": "{{ mockDateTime }}" },
 			"age": { "type": "integer", "default": "{{ mockInteger }}" },
 			"score": { "type": "number", "default": "{{ mockNumber }}" },
 			"active": { "type": "boolean", "default": "{{ mockBoolean }}" },
 			"status": { "type": "string", "enum": ["draft", "active"], "default": "{{ mockChoice \"draft\" \"active\" }}" }
 		},
-		"required": ["name", "email", "website", "phone", "born", "seenAt", "age", "score", "active", "status"],
+		"required": ["name", "email", "website", "phone", "born", "opensAt", "seenAt", "age", "score", "active", "status"],
 		"additionalProperties": false
 	}`)
 	filled, err := ApplyDefaults(def, json.RawMessage(`{}`))

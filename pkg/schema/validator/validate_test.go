@@ -86,6 +86,39 @@ func TestValidateData(t *testing.T) {
 	}
 }
 
+func TestValidateDataTimeFormat(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"opensAt": { "type": "string", "format": "time" }
+		},
+		"additionalProperties": false
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{name: "utc", data: `{"opensAt":"14:30:00Z"}`},
+		{name: "offset", data: `{"opensAt":"09:15:00-07:00"}`},
+		{name: "missing seconds", data: `{"opensAt":"14:30"}`, wantErr: true},
+		{name: "missing offset", data: `{"opensAt":"14:30:00"}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateDefinition_foreignFormat(t *testing.T) {
 	validID := "550e8400-e29b-41d4-a716-446655440000"
 	tests := []struct {

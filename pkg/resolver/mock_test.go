@@ -15,6 +15,7 @@ func TestResolveMockFunctions(t *testing.T) {
 		"integer":  "{{ mockInteger }}",
 		"boolean":  "{{ mockBoolean }}",
 		"date":     "{{ mockDate }}",
+		"time":     "{{ mockTime }}",
 		"datetime": "{{ mockDateTime }}",
 		"email":    "{{ mockEmail }}",
 		"url":      "{{ mockURL }}",
@@ -52,6 +53,11 @@ func TestResolveMockFunctions(t *testing.T) {
 	date, _ := got["date"].(string)
 	if _, err := time.Parse(time.DateOnly, date); err != nil {
 		t.Errorf("mockDate = %#v: %v", got["date"], err)
+	}
+
+	clock, _ := got["time"].(string)
+	if _, err := time.Parse("15:04:05Z07:00", clock); err != nil {
+		t.Errorf("mockTime = %#v: %v", got["time"], err)
 	}
 
 	datetime, _ := got["datetime"].(string)
