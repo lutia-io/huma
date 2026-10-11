@@ -258,6 +258,80 @@ func TestResolveArithmetic(t *testing.T) {
 	}
 }
 
+func TestResolveLength(t *testing.T) {
+	trigger := Trigger{
+		Data: map[string]any{
+			"participants": []any{"a", "b", "c"},
+			"amount":       float64(12),
+			"tags":         map[string]any{"a": true, "b": true},
+		},
+	}
+
+	tests := []struct {
+		name string
+		data map[string]any
+		want map[string]any
+	}{
+		{
+			name: "list stays an integer",
+			data: map[string]any{"count": "{{ length .Record.data.participants }}"},
+			want: map[string]any{"count": int64(3)},
+		},
+		{
+			name: "missing field is zero",
+			data: map[string]any{"count": "{{ length .Record.data.missing }}"},
+			want: map[string]any{"count": int64(0)},
+		},
+		{
+			name: "map stays an integer",
+			data: map[string]any{"count": "{{ length .Record.data.tags }}"},
+			want: map[string]any{"count": int64(2)},
+		},
+		{
+			name: "div by length stays a number",
+			data: map[string]any{"share": "{{ div .Record.data.amount (length .Record.data.participants) }}"},
+			want: map[string]any{"share": int64(4)},
+		},
+		{
+			name: "add length stays an integer",
+			data: map[string]any{"total": "{{ add (length .Record.data.participants) 1 }}"},
+			want: map[string]any{"total": int64(4)},
+		},
+		{
+			name: "sub length stays an integer",
+			data: map[string]any{"total": "{{ sub (length .Record.data.participants) 1 }}"},
+			want: map[string]any{"total": int64(2)},
+		},
+		{
+			name: "mul length stays an integer",
+			data: map[string]any{"total": "{{ mul (length .Record.data.participants) 2 }}"},
+			want: map[string]any{"total": int64(6)},
+		},
+		{
+			name: "mod length stays an integer",
+			data: map[string]any{"total": "{{ mod (length .Record.data.participants) 2 }}"},
+			want: map[string]any{"total": int64(1)},
+		},
+		{
+			name: "mixed text interpolates to string",
+			data: map[string]any{"note": "n={{ length .Record.data.participants }}"},
+			want: map[string]any{"note": "n=3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Resolve(tt.data, trigger)
+			if err != nil {
+				t.Fatalf("Resolve() error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Resolve() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveInputWithListItem(t *testing.T) {
 	got, err := ResolveInputWith(map[string]any{
 		"investorId": "{{ .investor.id }}",

@@ -632,20 +632,14 @@ func (s *Service) validateUserRefs(ctx context.Context, schemaID, networkID, org
 		if !ok {
 			continue
 		}
-		var value string
-		if err := json.Unmarshal(raw, &value); err != nil {
-			continue
+		for _, value := range userRefIDs(raw, field.Multiple) {
+			refs = append(refs, ref{name: field.Name, userID: value})
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			ids = append(ids, value)
 		}
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		refs = append(refs, ref{name: field.Name, userID: value})
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		ids = append(ids, value)
 	}
 	if len(refs) == 0 {
 		return nil
@@ -673,6 +667,33 @@ func (s *Service) validateUserRefs(ctx context.Context, schemaID, networkID, org
 		}
 	}
 	return nil
+}
+
+func userRefIDs(raw json.RawMessage, multiple bool) []string {
+	if multiple {
+		var values []string
+		if err := json.Unmarshal(raw, &values); err != nil {
+			return nil
+		}
+		ids := make([]string, 0, len(values))
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			ids = append(ids, value)
+		}
+		return ids
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return []string{value}
 }
 
 func (s *Service) relatedMap(ctx context.Context, p principal.Principal, records []*Record) (map[string]RelatedRecord, error) {

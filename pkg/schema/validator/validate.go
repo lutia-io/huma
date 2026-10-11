@@ -26,7 +26,13 @@ const FileFormat = "file"
 const ForeignFormat = "foreign"
 
 // UserFormat is the JSON Schema format name for an organization user ID.
-// Schema authors use: {"type":"string","format":"user"}
+// Schema authors use either a single ID:
+//
+//	{"type":"string","format":"user"}
+//
+// or a list of IDs, with the format on each item:
+//
+//	{"type":"array","items":{"type":"string","format":"user"}}
 const UserFormat = "user"
 
 type deniedLoader struct{}
@@ -105,6 +111,10 @@ func compile(definition json.RawMessage) (*jsonschema.Schema, error) {
 		Name:     PhoneFormat,
 		Validate: validatePhoneFormat,
 	})
+	c.RegisterFormat(&jsonschema.Format{
+		Name:     CurrencyFormat,
+		Validate: validateCurrencyFormat,
+	})
 	c.UseLoader(deniedLoader{})
 
 	if err := c.AddResource(schemaURL, doc); err != nil {
@@ -135,6 +145,9 @@ func ValidateDefinition(definition json.RawMessage) error {
 		return err
 	}
 	if err := ValidatePhoneKeywords(definition); err != nil {
+		return err
+	}
+	if err := ValidateCurrencyKeywords(definition); err != nil {
 		return err
 	}
 	if err := ValidateDefaultKeywords(definition); err != nil {

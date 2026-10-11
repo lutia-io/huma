@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"text/template"
 	"text/template/parse"
@@ -21,6 +22,7 @@ var typedFuncs = map[string]func(...any) (any, error){
 	"mul":          mul,
 	"div":          div,
 	"mod":          mod,
+	"length":       length,
 	"mockText":     mockText,
 	"mockNumber":   mockNumber,
 	"mockInteger":  mockInteger,
@@ -82,6 +84,26 @@ func div(values ...any) (any, error) {
 		}
 		return acc / n, nil
 	})
+}
+
+// length returns the number of items in a slice, array, or map as int64.
+// A missing value is 0. {{ length .Record.data.participants }} stays an integer
+// so it can be an argument to add, sub, mul, div, and mod.
+func length(values ...any) (any, error) {
+	if len(values) != 1 {
+		return nil, fmt.Errorf("length requires 1 argument")
+	}
+	value := values[0]
+	if value == nil {
+		return int64(0), nil
+	}
+	rv := reflect.ValueOf(value)
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Array, reflect.Map:
+		return int64(rv.Len()), nil
+	default:
+		return nil, fmt.Errorf("length requires a list or map")
+	}
 }
 
 // mod returns the remainder of two numbers. {{ mod 10 3 }} is 1.

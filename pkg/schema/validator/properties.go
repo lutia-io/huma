@@ -11,13 +11,15 @@ import (
 
 // Property is one JSON Schema object property, in document order.
 type Property struct {
-	Name     string
-	Title    string
-	Type     string
-	Format   string
-	SchemaID string
-	Enum     []string
-	Default  json.RawMessage
+	Name        string
+	Title       string
+	Type        string
+	Format      string
+	ItemsType   string
+	ItemsFormat string
+	SchemaID    string
+	Enum        []string
+	Default     json.RawMessage
 }
 
 // ForeignField is a property with format "foreign".
@@ -63,6 +65,7 @@ func Properties(definition json.RawMessage) ([]Property, error) {
 			Title    string          `json:"title"`
 			Type     json.RawMessage `json:"type"`
 			Format   string          `json:"format"`
+			Items    json.RawMessage `json:"items"`
 			SchemaID string          `json:"schemaId"`
 			Enum     []string        `json:"enum"`
 			Default  json.RawMessage `json:"default"`
@@ -70,14 +73,17 @@ func Properties(definition json.RawMessage) ([]Property, error) {
 		if err := dec.Decode(&spec); err != nil {
 			return nil, err
 		}
+		itemsType, itemsFormat := itemsKeywords(spec.Items)
 		properties = append(properties, Property{
-			Name:     name,
-			Title:    spec.Title,
-			Type:     jsonTypeName(spec.Type),
-			Format:   spec.Format,
-			SchemaID: strings.TrimSpace(spec.SchemaID),
-			Enum:     spec.Enum,
-			Default:  spec.Default,
+			Name:        name,
+			Title:       spec.Title,
+			Type:        jsonTypeName(spec.Type),
+			Format:      spec.Format,
+			ItemsType:   itemsType,
+			ItemsFormat: itemsFormat,
+			SchemaID:    strings.TrimSpace(spec.SchemaID),
+			Enum:        spec.Enum,
+			Default:     spec.Default,
 		})
 	}
 	return properties, nil
@@ -184,6 +190,21 @@ func isTitleProperty(property Property) bool {
 		return false
 	}
 	return len(property.Enum) == 0
+}
+
+func itemsKeywords(raw json.RawMessage) (string, string) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return "", ""
+	}
+	var spec struct {
+		Type   json.RawMessage `json:"type"`
+		Format string          `json:"format"`
+	}
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		return "", ""
+	}
+	return jsonTypeName(spec.Type), spec.Format
 }
 
 func jsonTypeName(typeJSON json.RawMessage) string {

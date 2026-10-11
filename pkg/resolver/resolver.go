@@ -24,6 +24,8 @@
 //	{{ mul 3 4 }}                     multiply two or more numbers
 //	{{ div 10 2 }}                    divide two or more numbers
 //	{{ mod 10 3 }}                    remainder of two numbers
+//	{{ length .Record.data.participants }}  number of items in a list, as an integer
+//	{{ div .Record.data.amount (length .Record.data.participants) }}
 //	{{ add .Record.data.count 1 }}    increment a numeric field
 //	{{ add .Context.data.total .Record.data.amount }}
 //	{{ mockText }}                    a short sample phrase

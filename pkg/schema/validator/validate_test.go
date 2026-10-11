@@ -509,6 +509,38 @@ func TestValidateDataUserFormat(t *testing.T) {
 	}
 }
 
+func TestValidateDataUserList(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"participants": { "type": "array", "items": { "type": "string", "format": "user" } }
+		}
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{name: "user ids", data: `{"participants":["550e8400-e29b-41d4-a716-446655440000","6ba7b810-9dad-11d1-80b4-00c04fd430c8"]}`},
+		{name: "empty array", data: `{"participants":[]}`},
+		{name: "not a uuid", data: `{"participants":["not-a-user-id"]}`, wantErr: true},
+		{name: "string instead of array", data: `{"participants":"550e8400-e29b-41d4-a716-446655440000"}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateDefinition_userFormat(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -523,6 +555,20 @@ func TestValidateDefinition_userFormat(t *testing.T) {
 			name:    "array",
 			def:     `{"type":"object","properties":{"owners":{"type":"array","format":"user","items":{"type":"string","format":"user"}}}}`,
 			wantErr: "format user requires type string",
+		},
+		{
+			name: "list of users",
+			def:  `{"type":"object","properties":{"participants":{"type":"array","items":{"type":"string","format":"user"}}}}`,
+		},
+		{
+			name:    "user items on a string",
+			def:     `{"type":"object","properties":{"owner":{"type":"string","items":{"type":"string","format":"user"}}}}`,
+			wantErr: "format user items require type array",
+		},
+		{
+			name:    "user items are not strings",
+			def:     `{"type":"object","properties":{"participants":{"type":"array","items":{"type":"number","format":"user"}}}}`,
+			wantErr: "format user items require type string",
 		},
 		{
 			name:    "non-string type",
@@ -612,6 +658,88 @@ func TestValidateDefinition_phoneFormat(t *testing.T) {
 				t.Fatalf("error = %v, want contain %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateDataCurrencyFormat(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"amount": { "type": "number", "format": "currency" }
+		},
+		"required": ["amount"]
+	}`)
+
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{name: "dollars and cents", data: `{"amount":12.5}`},
+		{name: "whole dollars", data: `{"amount":10}`},
+		{name: "zero", data: `{"amount":0}`},
+		{name: "negative", data: `{"amount":-4.25}`},
+		{name: "string", data: `{"amount":"12.50"}`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateData(def, json.RawMessage(tt.data))
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateDefinition_currencyFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		def     string
+		wantErr string
+	}{
+		{
+			name: "number",
+			def:  `{"type":"object","properties":{"amount":{"type":"number","format":"currency"}}}`,
+		},
+		{
+			name: "integer rewritten to number",
+			def:  `{"type":"object","properties":{"amount":{"type":"integer","format":"currency"}}}`,
+		},
+		{
+			name:    "string type",
+			def:     `{"type":"object","properties":{"amount":{"type":"string","format":"currency"}}}`,
+			wantErr: "format currency requires type number",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDefinition(json.RawMessage(tt.def))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestTitleKeySkipsCurrency(t *testing.T) {
+	def := json.RawMessage(`{
+		"properties": {
+			"amount": { "type": "number", "format": "currency" },
+			"legalName": { "type": "string" }
+		}
+	}`)
+	if got := TitleKey(def); got != "legalName" {
+		t.Fatalf("title key=%q", got)
 	}
 }
 

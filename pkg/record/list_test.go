@@ -70,10 +70,12 @@ func TestParseSchemaFields(t *testing.T) {
 		"properties": {
 			"status": { "type": "string", "enum": ["open", "closed"] },
 			"declaredValue": { "type": "number" },
+			"amount": { "type": "number", "format": "currency" },
 			"signatureCaptured": { "type": "boolean" },
 			"proofFileId": { "type": "string", "format": "file" },
 			"attachments": { "type": "array", "format": "file", "items": { "type": "string", "format": "file" } },
 			"owner": { "type": "string", "format": "user" },
+			"participants": { "type": "array", "items": { "type": "string", "format": "user" } },
 			"investorId": { "type": "string", "format": "foreign", "schemaId": "11111111-1111-1111-1111-111111111111" },
 			"mailingAddress": { "type": "object", "format": "address" }
 		}
@@ -87,6 +89,9 @@ func TestParseSchemaFields(t *testing.T) {
 	if fields["declaredValue"].Kind != fieldKindNumber {
 		t.Fatalf("declaredValue kind=%s", fields["declaredValue"].Kind)
 	}
+	if fields["amount"].Kind != fieldKindNumber {
+		t.Fatalf("amount kind=%s", fields["amount"].Kind)
+	}
 	if fields["signatureCaptured"].Kind != fieldKindBoolean {
 		t.Fatalf("signatureCaptured kind=%s", fields["signatureCaptured"].Kind)
 	}
@@ -98,6 +103,9 @@ func TestParseSchemaFields(t *testing.T) {
 	}
 	if fields["owner"].Kind != fieldKindUser {
 		t.Fatalf("owner kind=%s", fields["owner"].Kind)
+	}
+	if fields["participants"].Kind != fieldKindUser {
+		t.Fatalf("participants kind=%s", fields["participants"].Kind)
 	}
 	if fields["investorId"].Kind != fieldKindForeign {
 		t.Fatalf("investorId kind=%s", fields["investorId"].Kind)
@@ -255,8 +263,11 @@ func TestBuildListQuery_userField(t *testing.T) {
 	if !strings.Contains(countSQL, "public.organization_users") || !strings.Contains(countSQL, "ou.first_name") {
 		t.Fatalf("missing user filter: %s", countSQL)
 	}
-	if !strings.Contains(listSQL, "ORDER BY (SELECT TRIM(CONCAT(ou.first_name, ' ', ou.last_name))") {
+	if !strings.Contains(listSQL, "ORDER BY (SELECT string_agg(TRIM(CONCAT(ou.first_name, ' ', ou.last_name))") {
 		t.Fatalf("missing user sort: %s", listSQL)
+	}
+	if !strings.Contains(countSQL, "jsonb_array_elements_text") {
+		t.Fatalf("user filter should match a list of ids: %s", countSQL)
 	}
 }
 

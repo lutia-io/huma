@@ -1,6 +1,7 @@
 package record
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -261,6 +262,7 @@ func parseSchemaFields(definition json.RawMessage) (map[string]schemaField, erro
 		Properties map[string]struct {
 			Type     json.RawMessage `json:"type"`
 			Format   string          `json:"format"`
+			Items    json.RawMessage `json:"items"`
 			SchemaID string          `json:"schemaId"`
 		} `json:"properties"`
 	}
@@ -277,18 +279,33 @@ func parseSchemaFields(definition json.RawMessage) (map[string]schemaField, erro
 		}
 		fields[name] = schemaField{
 			Name:     name,
-			Kind:     fieldKindFromProp(prop.Type, prop.Format),
+			Kind:     fieldKindFromProp(prop.Type, prop.Format, itemsFormat(prop.Items)),
 			SchemaID: strings.TrimSpace(prop.SchemaID),
 		}
 	}
 	return fields, nil
 }
 
-func fieldKindFromProp(typeJSON json.RawMessage, format string) string {
-	if strings.EqualFold(format, "file") {
+func itemsFormat(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return ""
+	}
+	var spec struct {
+		Format string `json:"format"`
+	}
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		return ""
+	}
+	return spec.Format
+}
+
+func fieldKindFromProp(typeJSON json.RawMessage, format, itemFormat string) string {
+	typeName := jsonSchemaTypeName(typeJSON)
+	if strings.EqualFold(format, "file") || (typeName == "array" && strings.EqualFold(itemFormat, "file")) {
 		return fieldKindFile
 	}
-	if strings.EqualFold(format, "user") {
+	if strings.EqualFold(format, "user") || (typeName == "array" && strings.EqualFold(itemFormat, "user")) {
 		return fieldKindUser
 	}
 	if strings.EqualFold(format, "foreign") {
@@ -297,7 +314,6 @@ func fieldKindFromProp(typeJSON json.RawMessage, format string) string {
 	if strings.EqualFold(format, "address") {
 		return fieldKindAddress
 	}
-	typeName := jsonSchemaTypeName(typeJSON)
 	switch typeName {
 	case "number", "integer":
 		return fieldKindNumber
@@ -451,8 +467,8 @@ func fileFilenamesExpr(key string) string {
 
 func userNameExpr(key string) string {
 	return fmt.Sprintf(
-		"(SELECT TRIM(CONCAT(ou.first_name, ' ', ou.last_name)) FROM public.organization_users ou WHERE ou.id::text = r.data ->> %s AND ou.internal = FALSE)",
-		key,
+		"(SELECT string_agg(TRIM(CONCAT(ou.first_name, ' ', ou.last_name)), ' ' ORDER BY ou.first_name, ou.last_name) FROM public.organization_users ou WHERE ou.id::text = ANY (%s) AND ou.internal = FALSE)",
+		fileIDsArrayExpr(fmt.Sprintf("r.data -> %s", key)),
 	)
 }
 

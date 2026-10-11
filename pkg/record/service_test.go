@@ -122,3 +122,27 @@ func TestValidateUserRefs(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateUserRefsList(t *testing.T) {
+	const (
+		schemaID       = "11111111-1111-1111-1111-111111111111"
+		networkID      = "22222222-2222-2222-2222-222222222222"
+		organizationID = "33333333-3333-3333-3333-333333333333"
+		firstID        = "550e8400-e29b-41d4-a716-446655440000"
+		secondID       = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+	)
+	definition := json.RawMessage(`{"properties":{"participants":{"type":"array","items":{"type":"string","format":"user"}}}}`)
+	data := json.RawMessage(`{"participants":["` + firstID + `","` + secondID + `"]}`)
+	svc := &Service{
+		logger: logger.New(),
+		store: stubStore{users: []organizationUserRef{
+			{ID: firstID, OrganizationID: organizationID, NetworkID: networkID},
+			{ID: secondID, OrganizationID: "44444444-4444-4444-4444-444444444444", NetworkID: networkID},
+		}},
+		schemaService: stubSchema{definition: definition},
+	}
+	err := svc.validateUserRefs(context.Background(), schemaID, networkID, organizationID, data)
+	if err == nil || !strings.Contains(err.Error(), "in this organization") {
+		t.Fatalf("error = %v, want organization scope", err)
+	}
+}

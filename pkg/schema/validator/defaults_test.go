@@ -119,10 +119,11 @@ func TestApplyDefaultsMockFunctionsThenValidate(t *testing.T) {
 			"seenAt": { "type": "string", "format": "date-time", "default": "{{ mockDateTime }}" },
 			"age": { "type": "integer", "default": "{{ mockInteger }}" },
 			"score": { "type": "number", "default": "{{ mockNumber }}" },
+			"amount": { "type": "number", "format": "currency", "default": "{{ mockNumber }}" },
 			"active": { "type": "boolean", "default": "{{ mockBoolean }}" },
 			"status": { "type": "string", "enum": ["draft", "active"], "default": "{{ mockChoice \"draft\" \"active\" }}" }
 		},
-		"required": ["name", "email", "website", "phone", "born", "opensAt", "seenAt", "age", "score", "active", "status"],
+		"required": ["name", "email", "website", "phone", "born", "opensAt", "seenAt", "age", "score", "amount", "active", "status"],
 		"additionalProperties": false
 	}`)
 	filled, err := ApplyDefaults(def, json.RawMessage(`{}`))
