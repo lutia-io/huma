@@ -47,7 +47,6 @@ type WorkflowNode struct {
 	LevelIndex  int
 	NodeIndex   int
 	Attempt     int
-	NodeSlug    string
 	NodeType    string
 	Status      NodeStatus
 	Input       []byte

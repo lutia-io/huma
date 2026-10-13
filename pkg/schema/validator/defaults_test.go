@@ -106,6 +106,39 @@ func TestApplyDefaultsThenValidate(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsNowDateThenValidate(t *testing.T) {
+	def := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"born": { "type": "string", "format": "date", "default": "{{ nowDate }}" },
+			"opensAt": { "type": "string", "format": "time", "default": "{{ nowTime }}" },
+			"seenAt": { "type": "string", "format": "date-time", "default": "{{ nowDateTime }}" }
+		},
+		"required": ["born", "opensAt", "seenAt"],
+		"additionalProperties": false
+	}`)
+	filled, err := ApplyDefaults(def, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateData(def, filled); err != nil {
+		t.Fatalf("ValidateData: %v\nfilled: %s", err, filled)
+	}
+	var obj map[string]string
+	if err := json.Unmarshal(filled, &obj); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := time.Parse(time.DateOnly, obj["born"]); err != nil {
+		t.Errorf("born: %v", err)
+	}
+	if _, err := time.Parse("15:04:05Z07:00", obj["opensAt"]); err != nil {
+		t.Errorf("opensAt: %v", err)
+	}
+	if _, err := time.Parse(time.RFC3339, obj["seenAt"]); err != nil {
+		t.Errorf("seenAt: %v", err)
+	}
+}
+
 func TestApplyDefaultsMockFunctionsThenValidate(t *testing.T) {
 	def := json.RawMessage(`{
 		"type": "object",

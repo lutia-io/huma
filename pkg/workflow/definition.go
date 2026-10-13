@@ -2,17 +2,14 @@ package workflow
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/criteria"
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/slug"
 )
 
 // Node is one step in a workflow definition level.
 type Node struct {
-	Name       string    `json:"name"`
 	Type       node.Type `json:"type"`
 	Definition any       `json:"definition"`
 }
@@ -21,7 +18,6 @@ type Node struct {
 // Node.Definition instead of re-parsing raw JSON.
 func (n *Node) UnmarshalJSON(data []byte) error {
 	var raw struct {
-		Name       string          `json:"name"`
 		Type       node.Type       `json:"type"`
 		Definition json.RawMessage `json:"definition"`
 	}
@@ -34,7 +30,6 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	n.Name = strings.TrimSpace(raw.Name)
 	n.Type = raw.Type
 	n.Definition = def
 	return nil
@@ -49,9 +44,6 @@ func validateNodes(nodes [][]Node) error {
 			return apperror.NewBadRequestError("Workflow definition levels cannot be empty", nil)
 		}
 		for _, n := range level {
-			if n.Name == "" {
-				return apperror.NewBadRequestError("Each node needs a name", nil)
-			}
 			if n.Type == "" {
 				return apperror.NewBadRequestError("Each node needs a type", nil)
 			}
@@ -63,21 +55,8 @@ func validateNodes(nodes [][]Node) error {
 	return nil
 }
 
-func nodeSlug(n Node) string {
-	s := slug.Slugify(n.Name)
-	if s == "" {
-		s = slug.Slugify(string(n.Type))
-	}
-	if s == "" {
-		s = "node"
-	}
-	return s
-}
-
 // SnapshotNode is a node frozen onto a workflow run.
 type SnapshotNode struct {
-	Name       string    `json:"name"`
-	Slug       string    `json:"slug"`
 	Type       node.Type `json:"type"`
 	Definition any       `json:"definition"`
 }
@@ -100,8 +79,6 @@ func SnapshotRunDefinition(def Definition) RunDefinition {
 		out.Nodes[i] = make([]SnapshotNode, len(level))
 		for j, n := range level {
 			out.Nodes[i][j] = SnapshotNode{
-				Name:       n.Name,
-				Slug:       nodeSlug(n),
 				Type:       n.Type,
 				Definition: n.Definition,
 			}

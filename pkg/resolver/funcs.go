@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"text/template"
 	"text/template/parse"
-	"time"
 
 	"github.com/lutia-io/huma/pkg/uuid"
 )
@@ -23,6 +22,12 @@ var typedFuncs = map[string]func(...any) (any, error){
 	"div":          div,
 	"mod":          mod,
 	"length":       length,
+	"now":          now,
+	"nowDate":      nowDate,
+	"nowTime":      nowTime,
+	"nowDateTime":  nowDateTime,
+	"dateOf":       dateOf,
+	"timeOf":       timeOf,
 	"mockText":     mockText,
 	"mockNumber":   mockNumber,
 	"mockInteger":  mockInteger,
@@ -41,9 +46,6 @@ var uuidFunc = uuid.New
 
 func templateFuncs() template.FuncMap {
 	funcs := template.FuncMap{
-		"now": func() string {
-			return nowFunc().UTC().Format(time.RFC3339)
-		},
 		"uuid": func() (string, error) {
 			return uuidFunc()
 		},

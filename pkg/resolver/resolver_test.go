@@ -395,8 +395,13 @@ func TestResolveDateNow(t *testing.T) {
 	defer func() { nowFunc = orig }()
 
 	got, err := Resolve(map[string]any{
-		"at":   "{{ now }}",
-		"note": "created at {{ now }}",
+		"at":        "{{ now }}",
+		"atAlias":   "{{ nowDateTime }}",
+		"day":       "{{ nowDate }}",
+		"clock":     "{{ nowTime }}",
+		"note":      "created at {{ now }}",
+		"dayOfNow":  "{{ dateOf (now) }}",
+		"timeOfNow": "{{ timeOf (now) }}",
 	}, Trigger{})
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
@@ -404,8 +409,88 @@ func TestResolveDateNow(t *testing.T) {
 	if got["at"] != "2026-08-04T12:30:00Z" {
 		t.Errorf("at = %v, want 2026-08-04T12:30:00Z", got["at"])
 	}
+	if got["atAlias"] != "2026-08-04T12:30:00Z" {
+		t.Errorf("atAlias = %v, want 2026-08-04T12:30:00Z", got["atAlias"])
+	}
+	if got["day"] != "2026-08-04" {
+		t.Errorf("day = %v, want 2026-08-04", got["day"])
+	}
+	if got["clock"] != "12:30:00Z" {
+		t.Errorf("clock = %v, want 12:30:00Z", got["clock"])
+	}
 	if got["note"] != "created at 2026-08-04T12:30:00Z" {
 		t.Errorf("note = %v", got["note"])
+	}
+	if got["dayOfNow"] != "2026-08-04" {
+		t.Errorf("dayOfNow = %v, want 2026-08-04", got["dayOfNow"])
+	}
+	if got["timeOfNow"] != "12:30:00Z" {
+		t.Errorf("timeOfNow = %v, want 12:30:00Z", got["timeOfNow"])
+	}
+}
+
+func TestResolveDateOfTimeOf(t *testing.T) {
+	got, err := Resolve(map[string]any{
+		"fromDateTime": "{{ dateOf .Record.data.createdAt }}",
+		"timeFromDT":   "{{ timeOf .Record.data.createdAt }}",
+		"fromDate":     "{{ dateOf .Record.data.born }}",
+		"fromTime":     "{{ timeOf .Record.data.opensAt }}",
+		"literalDate":  `{{ dateOf "2026-08-04T12:30:00Z" }}`,
+		"literalTime":  `{{ timeOf "2026-08-04T12:30:00-07:00" }}`,
+	}, Trigger{Data: map[string]any{
+		"createdAt": "2026-08-04T12:30:00Z",
+		"born":      "2026-01-15",
+		"opensAt":   "09:15:00Z",
+	}})
+	if err != nil {
+		t.Fatalf("Resolve() error: %v", err)
+	}
+	if got["fromDateTime"] != "2026-08-04" {
+		t.Errorf("fromDateTime = %v", got["fromDateTime"])
+	}
+	if got["timeFromDT"] != "12:30:00Z" {
+		t.Errorf("timeFromDT = %v", got["timeFromDT"])
+	}
+	if got["fromDate"] != "2026-01-15" {
+		t.Errorf("fromDate = %v", got["fromDate"])
+	}
+	if got["fromTime"] != "09:15:00Z" {
+		t.Errorf("fromTime = %v", got["fromTime"])
+	}
+	if got["literalDate"] != "2026-08-04" {
+		t.Errorf("literalDate = %v", got["literalDate"])
+	}
+	if got["literalTime"] != "19:30:00Z" {
+		t.Errorf("literalTime = %v, want 19:30:00Z (UTC)", got["literalTime"])
+	}
+
+	tests := []struct {
+		name string
+		data map[string]any
+	}{
+		{
+			name: "dateOf time-only",
+			data: map[string]any{"x": `{{ dateOf "09:15:00Z" }}`},
+		},
+		{
+			name: "timeOf date-only",
+			data: map[string]any{"x": `{{ timeOf "2026-01-15" }}`},
+		},
+		{
+			name: "dateOf missing args",
+			data: map[string]any{"x": "{{ dateOf }}"},
+		},
+		{
+			name: "timeOf bad string",
+			data: map[string]any{"x": `{{ timeOf "not-a-date" }}`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Resolve(tt.data, Trigger{}); err == nil {
+				t.Fatal("Resolve() error = nil, want error")
+			}
+		})
 	}
 }
 

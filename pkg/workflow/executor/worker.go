@@ -162,7 +162,6 @@ func (w *worker) executeNode(ctx context.Context, wf *Workflow, level, index int
 		LevelIndex: level,
 		NodeIndex:  index,
 		Attempt:    wf.Attempts,
-		NodeSlug:   n.Slug,
 		NodeType:   string(n.Type),
 		Input:      NodeInputJSON(input),
 		StartedAt:  time.Now().UTC(),

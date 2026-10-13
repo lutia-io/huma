@@ -17,7 +17,13 @@
 // rewritten to index calls because Go templates cannot parse ".1" as a field
 // name. Custom functions:
 //
-//	{{ now }}                         current UTC time in RFC 3339
+//	{{ now }}                         current UTC time in RFC 3339 (alias of nowDateTime)
+//	{{ nowDateTime }}                 current UTC time in RFC 3339
+//	{{ nowDate }}                     current UTC date as YYYY-MM-DD
+//	{{ nowTime }}                     current UTC clock time as RFC 3339 full-time
+//	{{ dateOf .Record.data.createdAt }}  YYYY-MM-DD date part of a date-time or date
+//	{{ timeOf .Record.data.createdAt }}  RFC 3339 full-time part of a date-time or time
+//	{{ dateOf (now) }}                date part of the current UTC timestamp
 //	{{ uuid }}                        a random UUID v4
 //	{{ add 1 1 }}                     sum two or more numbers
 //	{{ sub 5 2 }}                     subtract two or more numbers
@@ -43,8 +49,8 @@
 //	{"email": "{{ .Record.data.email }}", "createdAt": "{{ now }}", "id": "{{ uuid }}", "total": "{{ add .Record.data.count 1 }}"}
 //
 // Schema property default values use the same language, evaluated with an
-// empty trigger so only functions (now, uuid, arithmetic on literals, mock*)
-// are useful.
+// empty trigger so only functions (now*, dateOf, timeOf, uuid, arithmetic on
+// literals, mock*) are useful.
 //
 // .Record is the trigger row, not the JSONB document:
 //

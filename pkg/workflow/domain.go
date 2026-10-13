@@ -219,7 +219,6 @@ type WorkflowNode struct {
 	LevelIndex  int             `json:"levelIndex"`
 	NodeIndex   int             `json:"nodeIndex"`
 	Attempt     int             `json:"attempt"`
-	NodeSlug    string          `json:"nodeSlug"`
 	NodeType    string          `json:"nodeType"`
 	Status      string          `json:"status"`
 	Input       json.RawMessage `json:"input,omitempty"`

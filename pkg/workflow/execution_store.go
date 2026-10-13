@@ -30,7 +30,7 @@ const workflowSelectColumns = `
 
 const workflowNodeSelectColumns = `
 	id, workflow_id, level_index, node_index, attempt,
-	node_slug, node_type, status, input, output, payload, error, started_at, completed_at`
+	node_type, status, input, output, payload, error, started_at, completed_at`
 
 func scanWorkflow(row pgx.Row, wf *Workflow) error {
 	var dataJSON, inputJSON, defJSON []byte
@@ -149,7 +149,6 @@ func scanWorkflowNode(row pgx.Row, node *WorkflowNode) error {
 		&node.LevelIndex,
 		&node.NodeIndex,
 		&node.Attempt,
-		&node.NodeSlug,
 		&node.NodeType,
 		&node.Status,
 		&input,

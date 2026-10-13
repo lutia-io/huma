@@ -6,7 +6,6 @@ CREATE TABLE public.workflow_nodes (
     level_index INT NOT NULL,
     node_index INT NOT NULL,
     attempt INT NOT NULL,
-    node_slug TEXT NOT NULL,
     node_type TEXT NOT NULL,
     status TEXT NOT NULL,
     input JSONB,

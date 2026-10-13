@@ -63,7 +63,7 @@ func sampleDef(id string, trigger workflow.Trigger, status string) *workflow.Wor
 		Definition: workflow.Definition{
 			Trigger: trigger,
 			Nodes: [][]workflow.Node{{{
-				Name: "noop", Type: node.TypeNoop, Definition: node.NoopContext{},
+				Type: node.TypeNoop, Definition: node.NoopContext{},
 			}}},
 		},
 	}

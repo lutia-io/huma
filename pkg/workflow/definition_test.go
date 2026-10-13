@@ -9,7 +9,6 @@ import (
 func validNodes() [][]Node {
 	return [][]Node{{
 		{
-			Name:       "noop",
 			Type:       node.TypeNoop,
 			Definition: node.NoopContext{Message: "ok"},
 		},

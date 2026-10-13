@@ -77,13 +77,13 @@ func TestRetry_usesLiveDefinition(t *testing.T) {
 	snap := SnapshotRunDefinition(Definition{
 		Trigger: Trigger{On: []string{TriggerOnCreated}},
 		Nodes: [][]Node{{{
-			Name: "a", Type: node.TypeNoop, Definition: node.NoopContext{Message: "old"},
+			Type: node.TypeNoop, Definition: node.NoopContext{Message: "old"},
 		}}},
 	})
 	live := SnapshotRunDefinition(Definition{
 		Trigger: Trigger{On: []string{TriggerOnCreated}},
 		Nodes: [][]Node{{{
-			Name: "a", Type: node.TypeNoop, Definition: node.NoopContext{Message: "new"},
+			Type: node.TypeNoop, Definition: node.NoopContext{Message: "new"},
 		}}},
 	})
 	store := &retryStore{
@@ -97,7 +97,7 @@ func TestRetry_usesLiveDefinition(t *testing.T) {
 		live: &WorkflowDefinition{ID: defID, Definition: Definition{
 			Trigger: Trigger{On: []string{TriggerOnCreated}},
 			Nodes: [][]Node{{{
-				Name: "a", Type: node.TypeNoop, Definition: node.NoopContext{Message: "new"},
+				Type: node.TypeNoop, Definition: node.NoopContext{Message: "new"},
 			}}},
 		}},
 	}

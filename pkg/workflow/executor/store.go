@@ -165,7 +165,6 @@ const insertNodeSQL = `
 		level_index,
 		node_index,
 		attempt,
-		node_slug,
 		node_type,
 		status,
 		input,
@@ -175,7 +174,7 @@ const insertNodeSQL = `
 		started_at,
 		completed_at
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, ''), $12, now()
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, ''), $11, now()
 	)`
 
 func (s *postgresWorkflowStore) journalNode(ctx context.Context, entry WorkflowNode, status NodeStatus) error {
@@ -184,7 +183,6 @@ func (s *postgresWorkflowStore) journalNode(ctx context.Context, entry WorkflowN
 		entry.LevelIndex,
 		entry.NodeIndex,
 		entry.Attempt,
-		entry.NodeSlug,
 		entry.NodeType,
 		status,
 		entry.Input,
