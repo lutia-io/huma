@@ -12,8 +12,7 @@ Usage: huma <command> [options]
 Commands:
   api                	The api service serves the main public api.
   workflow-evaluator 	Consumes record created/updated events, ticks scheduled workflows, and inserts pending workflows.
-  workflow-executor  	Claims pending workflows and executes their actions.
-  pipeline-executor  	Claims pending pipelines and executes their nodes.
+  workflow-executor  	Claims pending workflows and executes their nodes.
 ```
 
 

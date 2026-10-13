@@ -2,10 +2,8 @@ package workflow
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/lutia-io/huma/pkg/action"
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/authz"
 	"github.com/lutia-io/huma/pkg/criteria"
@@ -17,9 +15,9 @@ import (
 )
 
 type Service struct {
-	logger *logger.Logger
-	store  store
-	authz  *authz.Engine
+	logger     *logger.Logger
+	store      store
+	authz      *authz.Engine
 }
 
 func NewService(logger *logger.Logger, store store, engine *authz.Engine) *Service {
@@ -74,11 +72,16 @@ func (s *Service) Insert(ctx context.Context, req insertWorkflowDefinitionReques
 	}
 
 	schemaID := strings.TrimSpace(req.SchemaID)
-	if schemaID == "" {
-		s.logger.WarnContext(ctx, "Empty schema ID")
-		return "", apperror.NewBadRequestError("Schema ID is required", nil)
-	}
-	if !uuid.Valid(schemaID) {
+	if req.Definition.Trigger.HasAutoIntake() {
+		if schemaID == "" {
+			s.logger.WarnContext(ctx, "Empty schema ID")
+			return "", apperror.NewBadRequestError("Schema ID is required for record or schedule triggers", nil)
+		}
+		if !uuid.Valid(schemaID) {
+			s.logger.WarnContext(ctx, "Invalid schema ID")
+			return "", apperror.NewBadRequestError("Invalid schema ID", nil)
+		}
+	} else if schemaID != "" && !uuid.Valid(schemaID) {
 		s.logger.WarnContext(ctx, "Invalid schema ID")
 		return "", apperror.NewBadRequestError("Invalid schema ID", nil)
 	}
@@ -164,11 +167,15 @@ func (s *Service) Patch(ctx context.Context, existing *WorkflowDefinition, req p
 
 	if req.SchemaID != nil {
 		schemaID := strings.TrimSpace(*req.SchemaID)
-		if schemaID == "" {
-			s.logger.WarnContext(ctx, "Empty schema ID")
-			return apperror.NewBadRequestError("Schema ID is required", nil)
+		def := existing.Definition
+		if req.Definition != nil {
+			def = *req.Definition
 		}
-		if !uuid.Valid(schemaID) {
+		if def.Trigger.HasAutoIntake() && schemaID == "" {
+			s.logger.WarnContext(ctx, "Empty schema ID")
+			return apperror.NewBadRequestError("Schema ID is required for record or schedule triggers", nil)
+		}
+		if schemaID != "" && !uuid.Valid(schemaID) {
 			s.logger.WarnContext(ctx, "Invalid schema ID")
 			return apperror.NewBadRequestError("Invalid schema ID", nil)
 		}
@@ -294,25 +301,90 @@ func (s *Service) GetWorkflow(ctx context.Context, p principal.Principal, id str
 	return wf, nil
 }
 
-func (s *Service) ListWorkflowActions(ctx context.Context, p principal.Principal, workflowID string) ([]*WorkflowAction, error) {
+func (s *Service) loadDefinitionForEnqueue(ctx context.Context, networkID, organizationID, definitionID, slug string) (*WorkflowDefinition, error) {
+	var (
+		def *WorkflowDefinition
+		err error
+	)
+	switch {
+	case strings.TrimSpace(definitionID) != "":
+		if !uuid.Valid(definitionID) {
+			return nil, apperror.NewBadRequestError("Invalid workflow definition ID", nil)
+		}
+		def, err = s.store.GetByID(ctx, definitionID)
+	case strings.TrimSpace(slug) != "":
+		def, err = s.store.GetBySlug(ctx, networkID, slug, organizationID)
+	default:
+		return nil, apperror.NewBadRequestError("Workflow definition is required", nil)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if def.NetworkID != networkID {
+		return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
+	}
+	if !def.MatchesOrganization(organizationID) {
+		return nil, apperror.NewNotFoundError("Workflow definition not found", nil)
+	}
+	if !def.Active {
+		return nil, apperror.NewBadRequestError("Workflow definition is not active", nil)
+	}
+	if err := validateDefinition(def.Definition); err != nil {
+		return nil, err
+	}
+	return def, nil
+}
+
+func (s *Service) Enqueue(ctx context.Context, req EnqueueRequest) (string, error) {
+	def, err := s.loadDefinitionForEnqueue(ctx, req.NetworkID, req.OrganizationID, req.WorkflowDefinitionID, req.WorkflowSlug)
+	if err != nil {
+		return "", err
+	}
+
+	input := req.Input
+	if input == nil {
+		input = map[string]any{}
+	}
+	dedupeKey := strings.TrimSpace(req.DedupeKey)
+	if dedupeKey == "" {
+		dedupeKey = uuid.MustNew()
+	}
+
+	run := &Workflow{
+		WorkflowDefinitionID: def.ID,
+		NetworkID:            def.NetworkID,
+		OrganizationID:       req.OrganizationID,
+		OrganizationUserID:   req.OrganizationUserID,
+		DedupeKey:            dedupeKey,
+		Input:                input,
+		Data:                 map[string]any{},
+		Definition:           SnapshotRunDefinition(def.Definition),
+	}
+	id, err := s.store.InsertPending(ctx, run)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to enqueue workflow", logger.KeyID, def.ID, logger.KeyError, err)
+		return "", err
+	}
+	s.logger.InfoContext(ctx, "Enqueued workflow", logger.KeyID, id, "workflow_definition_id", def.ID)
+	return id, nil
+}
+
+func (s *Service) ListWorkflowNodes(ctx context.Context, p principal.Principal, workflowID string) ([]*WorkflowNode, error) {
 	if _, err := s.GetWorkflow(ctx, p, workflowID); err != nil {
 		return nil, err
 	}
 
-	actions, err := s.store.ListWorkflowActionsByWorkflowID(ctx, workflowID)
+	nodes, err := s.store.ListWorkflowNodesByWorkflowID(ctx, workflowID)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to list workflow actions", logger.KeyID, workflowID, logger.KeyError, err)
+		s.logger.ErrorContext(ctx, "Failed to list workflow nodes", logger.KeyID, workflowID, logger.KeyError, err)
 		return nil, err
 	}
-	return actions, nil
+	return nodes, nil
 }
 
-// Retry reopens a failed workflow for another execution. Trigger data stays
-// the snapshot from intake. The action list is replaced with the live
-// definition when it still exists, so a definition fix (wrong field name,
-// etc.) is what actually runs. Workers skip action indexes that already
-// completed, which keeps continue-on-error from repeating successful side
-// effects such as an additive UPDATE_RECORD.
+// Retry reopens a failed workflow for another execution. Trigger data and input
+// stay the snapshot from intake. The node graph is replaced with the live
+// definition when it still exists. Workers skip nodes that already completed.
 func (s *Service) Retry(ctx context.Context, p principal.Principal, id string) error {
 	wf, err := s.GetWorkflow(ctx, p, id)
 	if err != nil {
@@ -330,7 +402,7 @@ func (s *Service) Retry(ctx context.Context, p principal.Principal, id string) e
 			return err
 		}
 	} else {
-		definition = live.Definition
+		definition = SnapshotRunDefinition(live.Definition)
 	}
 
 	if err := s.store.RetryFailed(ctx, wf.ID, definition); err != nil {
@@ -345,24 +417,24 @@ func (s *Service) Retry(ctx context.Context, p principal.Principal, id string) e
 	return nil
 }
 
-func (s *Service) GetWorkflowAction(ctx context.Context, p principal.Principal, id string) (*WorkflowAction, error) {
+func (s *Service) GetWorkflowNode(ctx context.Context, p principal.Principal, id string) (*WorkflowNode, error) {
 	if !uuid.Valid(id) {
-		return nil, apperror.NewBadRequestError("Invalid workflow action ID", nil)
+		return nil, apperror.NewBadRequestError("Invalid workflow node ID", nil)
 	}
 
-	wfAction, err := s.store.GetWorkflowActionByID(ctx, id)
+	node, err := s.store.GetWorkflowNodeByID(ctx, id)
 	if err != nil {
 		if apperror.IsNotFound(err) {
 			return nil, err
 		}
-		s.logger.ErrorContext(ctx, "Failed to get workflow action", logger.KeyID, id, logger.KeyError, err)
+		s.logger.ErrorContext(ctx, "Failed to get workflow node", logger.KeyID, id, logger.KeyError, err)
 		return nil, err
 	}
 
-	if _, err := s.GetWorkflow(ctx, p, wfAction.WorkflowID); err != nil {
+	if _, err := s.GetWorkflow(ctx, p, node.WorkflowID); err != nil {
 		return nil, err
 	}
-	return wfAction, nil
+	return node, nil
 }
 
 func (s *Service) authorizeWorkflow(ctx context.Context, p principal.Principal, wf *Workflow) error {
@@ -385,6 +457,11 @@ func (s *Service) authorizeWorkflow(ctx context.Context, p principal.Principal, 
 	return nil
 }
 
+// ValidateDefinition checks trigger, criteria, and node levels.
+func ValidateDefinition(def Definition) error {
+	return validateDefinition(def)
+}
+
 func validateDefinition(def Definition) error {
 	if err := validateTrigger(def.Trigger); err != nil {
 		return err
@@ -392,7 +469,7 @@ func validateDefinition(def Definition) error {
 	if err := validateCriteria(def.Criteria); err != nil {
 		return err
 	}
-	return validateActions(def.Actions)
+	return validateNodes(def.Nodes)
 }
 
 func validateTrigger(t Trigger) error {
@@ -478,35 +555,3 @@ func validateCriteria(c criteria.Criteria) error {
 	}
 }
 
-func validateActions(actions []action.Action) error {
-	if len(actions) == 0 {
-		return apperror.NewBadRequestError("At least one action is required", nil)
-	}
-	for i, act := range actions {
-		n := i + 1
-		switch ctx := act.Context.(type) {
-		case action.CreateRecordContext:
-			if strings.TrimSpace(ctx.SchemaID) == "" {
-				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a schema to create a record", n), nil)
-			}
-		case action.UpdateRecordContext:
-			if strings.TrimSpace(ctx.RecordID) == "" {
-				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a record to update", n), nil)
-			}
-		case action.UpsertRecordContext:
-			if strings.TrimSpace(ctx.SchemaID) == "" {
-				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a schema to create or update a record", n), nil)
-			}
-		case action.TriggerPipelineContext:
-			if strings.TrimSpace(ctx.Pipeline) == "" {
-				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a pipeline to run", n), nil)
-			}
-			if !uuid.Valid(ctx.Pipeline) {
-				return apperror.NewBadRequestError(fmt.Sprintf("Action %d needs a pipeline definition ID", n), nil)
-			}
-		default:
-			return apperror.NewBadRequestError(fmt.Sprintf("Action %d has an invalid type", n), nil)
-		}
-	}
-	return nil
-}

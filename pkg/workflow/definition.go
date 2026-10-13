@@ -1,24 +1,20 @@
-package pipeline
+package workflow
 
 import (
 	"encoding/json"
 	"strings"
 
 	"github.com/lutia-io/huma/pkg/apperror"
+	"github.com/lutia-io/huma/pkg/criteria"
 	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/slug"
 )
 
-// Node is one step in a pipeline definition. Config lives on the pipeline
-// document, the same way workflow actions live on the workflow definition.
+// Node is one step in a workflow definition level.
 type Node struct {
 	Name       string    `json:"name"`
 	Type       node.Type `json:"type"`
 	Definition any       `json:"definition"`
-}
-
-type definition struct {
-	Nodes [][]Node `json:"nodes"`
 }
 
 // UnmarshalJSON decodes the type-specific definition so callers can type-assert
@@ -44,13 +40,13 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func validateDefinition(def definition) error {
-	if len(def.Nodes) == 0 {
-		return apperror.NewBadRequestError("Pipeline definition requires at least one level", nil)
+func validateNodes(nodes [][]Node) error {
+	if len(nodes) == 0 {
+		return apperror.NewBadRequestError("Workflow definition requires at least one level", nil)
 	}
-	for _, level := range def.Nodes {
+	for _, level := range nodes {
 		if len(level) == 0 {
-			return apperror.NewBadRequestError("Pipeline definition levels cannot be empty", nil)
+			return apperror.NewBadRequestError("Workflow definition levels cannot be empty", nil)
 		}
 		for _, n := range level {
 			if n.Name == "" {
@@ -78,8 +74,28 @@ func nodeSlug(n Node) string {
 	return s
 }
 
-func snapshotDefinition(def definition) SnapshotDefinition {
-	out := SnapshotDefinition{Nodes: make([][]SnapshotNode, len(def.Nodes))}
+// SnapshotNode is a node frozen onto a workflow run.
+type SnapshotNode struct {
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	Type       node.Type `json:"type"`
+	Definition any       `json:"definition"`
+}
+
+// RunDefinition is the definition snapshotted on a workflow run.
+type RunDefinition struct {
+	Trigger  Trigger           `json:"trigger"`
+	Criteria criteria.Criteria `json:"criteria"`
+	Nodes    [][]SnapshotNode  `json:"nodes"`
+}
+
+// SnapshotRunDefinition freezes a definition for persistence on a run.
+func SnapshotRunDefinition(def Definition) RunDefinition {
+	out := RunDefinition{
+		Trigger:  def.Trigger,
+		Criteria: def.Criteria,
+		Nodes:    make([][]SnapshotNode, len(def.Nodes)),
+	}
 	for i, level := range def.Nodes {
 		out.Nodes[i] = make([]SnapshotNode, len(level))
 		for j, n := range level {

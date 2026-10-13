@@ -44,81 +44,89 @@ func NewService(logger *logger.Logger, store store, js jetstream.JetStream, sche
 	}
 }
 
-// Create applies schema defaults for missing properties, validates, and
-// inserts a record, then publishes records.created.
-// When IdempotencyKey is set, a replay resolves to the existing record and
-// the event is published with that key as the JetStream message ID.
-func (s *Service) Create(ctx context.Context, params CreateParams) (string, error) {
+// PrepareCreate validates and normalizes a create payload without persisting.
+func (s *Service) PrepareCreate(ctx context.Context, params CreateParams) (*Record, error) {
 	if len(params.Data) == 0 {
 		s.logger.WarnContext(ctx, "Empty data")
-		return "", apperror.NewBadRequestError("Data is required", nil)
+		return nil, apperror.NewBadRequestError("Data is required", nil)
 	}
 
 	schemaID := strings.TrimSpace(params.SchemaID)
 	if schemaID == "" {
 		s.logger.WarnContext(ctx, "Empty schema ID")
-		return "", apperror.NewBadRequestError("Schema ID is required", nil)
+		return nil, apperror.NewBadRequestError("Schema ID is required", nil)
 	}
 
 	organizationID := strings.TrimSpace(params.OrganizationID)
 	if organizationID == "" {
 		s.logger.WarnContext(ctx, "Empty organization ID")
-		return "", apperror.NewBadRequestError("Organization ID is required", nil)
+		return nil, apperror.NewBadRequestError("Organization ID is required", nil)
 	}
 
 	organizationUserID := strings.TrimSpace(params.OrganizationUserID)
 	if organizationUserID == "" {
 		s.logger.WarnContext(ctx, "Empty organization user ID")
-		return "", apperror.NewBadRequestError("Organization user ID is required", nil)
+		return nil, apperror.NewBadRequestError("Organization user ID is required", nil)
 	}
 
 	networkID := strings.TrimSpace(params.NetworkID)
 	if networkID == "" {
 		s.logger.WarnContext(ctx, "Empty network ID")
-		return "", apperror.NewBadRequestError("Network ID is required", nil)
+		return nil, apperror.NewBadRequestError("Network ID is required", nil)
 	}
 
 	snap, err := s.schemaService.SnapshotByID(ctx, schemaID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if snap.NetworkID != networkID {
 		s.logger.WarnContext(ctx, "Schema network mismatch", "schema_id", schemaID, "network_id", networkID)
-		return "", apperror.NewBadRequestError("Schema does not belong to this network", nil)
+		return nil, apperror.NewBadRequestError("Schema does not belong to this network", nil)
 	}
 	if snap.OrganizationID != nil && *snap.OrganizationID != organizationID {
 		s.logger.WarnContext(ctx, "Schema organization mismatch", "schema_id", schemaID, "organization_id", organizationID)
-		return "", apperror.NewBadRequestError("Schema does not belong to this organization", nil)
+		return nil, apperror.NewBadRequestError("Schema does not belong to this organization", nil)
 	}
 
 	data, err := validator.ApplyDefaults(snap.Definition, params.Data)
 	if err != nil {
 		s.logger.WarnContext(ctx, "Failed to apply schema defaults", "schema_id", schemaID, logger.KeyError, err)
-		return "", apperror.NewBadRequestError(err.Error(), err)
+		return nil, apperror.NewBadRequestError(err.Error(), err)
 	}
 
 	if err := s.schemaService.ValidateRecordData(ctx, schemaID, data); err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := s.validateForeignRefs(ctx, schemaID, params.NetworkID, params.OrganizationID, data); err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := s.validateUserRefs(ctx, schemaID, params.NetworkID, params.OrganizationID, data); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	rec := &Record{
+	return &Record{
 		Data:               data,
 		SchemaID:           schemaID,
 		OrganizationID:     organizationID,
 		OrganizationUserID: organizationUserID,
 		NetworkID:          networkID,
 		IdempotencyKey:     params.IdempotencyKey,
+	}, nil
+}
+
+// Create applies schema defaults for missing properties, validates, and
+// inserts a record, then publishes records.created.
+// When IdempotencyKey is set, a replay resolves to the existing record and
+// the event is published with that key as the JetStream message ID.
+func (s *Service) Create(ctx context.Context, params CreateParams) (string, error) {
+	rec, err := s.PrepareCreate(ctx, params)
+	if err != nil {
+		return "", err
 	}
 
 	id, err := s.store.Insert(ctx, rec)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to insert record", "schema_id", schemaID, "organization_id", organizationID, logger.KeyError, err)
+		s.logger.ErrorContext(ctx, "Failed to insert record", "schema_id", rec.SchemaID, "organization_id", rec.OrganizationID, logger.KeyError, err)
 		return "", err
 	}
 	s.logger.InfoContext(ctx, "Successfully created record", logger.KeyID, id)

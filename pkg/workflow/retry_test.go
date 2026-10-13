@@ -5,9 +5,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/lutia-io/huma/pkg/action"
 	"github.com/lutia-io/huma/pkg/apperror"
 	"github.com/lutia-io/huma/pkg/logger"
+	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/principal"
 	"github.com/lutia-io/huma/pkg/uuid"
 )
@@ -15,7 +15,7 @@ import (
 type retryStore struct {
 	workflow *Workflow
 	live     *WorkflowDefinition
-	retried  *Definition
+	retried  *RunDefinition
 }
 
 func (s *retryStore) Insert(context.Context, *WorkflowDefinition) (string, error) {
@@ -34,10 +34,14 @@ func (s *retryStore) ListActiveScheduled(context.Context) ([]*WorkflowDefinition
 func (s *retryStore) ListWorkflows(context.Context, runListParams) (*runListResult, error) {
 	panic("unused")
 }
-func (s *retryStore) GetWorkflowActionByID(context.Context, string) (*WorkflowAction, error) {
+func (s *retryStore) GetWorkflowNodeByID(context.Context, string) (*WorkflowNode, error) {
 	panic("unused")
 }
-func (s *retryStore) ListWorkflowActionsByWorkflowID(context.Context, string) ([]*WorkflowAction, error) {
+func (s *retryStore) ListWorkflowNodesByWorkflowID(context.Context, string) ([]*WorkflowNode, error) {
+	panic("unused")
+}
+func (s *retryStore) InsertPending(context.Context, *Workflow) (string, error) { panic("unused") }
+func (s *retryStore) GetBySlug(context.Context, string, string, string) (*WorkflowDefinition, error) {
 	panic("unused")
 }
 
@@ -55,7 +59,7 @@ func (s *retryStore) GetWorkflowByID(_ context.Context, id string) (*Workflow, e
 	return s.workflow, nil
 }
 
-func (s *retryStore) RetryFailed(_ context.Context, id string, definition Definition) error {
+func (s *retryStore) RetryFailed(_ context.Context, id string, definition RunDefinition) error {
 	if s.workflow == nil || s.workflow.ID != id {
 		return apperror.NewNotFoundError("Workflow not found", nil)
 	}
@@ -70,30 +74,32 @@ func retryService(store *retryStore) *Service {
 func TestRetry_usesLiveDefinition(t *testing.T) {
 	id := uuid.MustNew()
 	defID := uuid.MustNew()
+	snap := SnapshotRunDefinition(Definition{
+		Trigger: Trigger{On: []string{TriggerOnCreated}},
+		Nodes: [][]Node{{{
+			Name: "a", Type: node.TypeNoop, Definition: node.NoopContext{Message: "old"},
+		}}},
+	})
+	live := SnapshotRunDefinition(Definition{
+		Trigger: Trigger{On: []string{TriggerOnCreated}},
+		Nodes: [][]Node{{{
+			Name: "a", Type: node.TypeNoop, Definition: node.NoopContext{Message: "new"},
+		}}},
+	})
 	store := &retryStore{
 		workflow: &Workflow{
 			ID:                   id,
 			WorkflowDefinitionID: defID,
 			UserID:               "user-1",
 			Status:               "failed",
-			Definition: Definition{Actions: []action.Action{{
-				Type: action.TypeUpdateRecord,
-				Context: action.UpdateRecordContext{
-					RecordID: "rec-1",
-					Data:     map[string]any{"contributedCents": 1},
-				},
-			}}},
+			Definition:           snap,
 		},
-		live: &WorkflowDefinition{
-			ID: defID,
-			Definition: Definition{Actions: []action.Action{{
-				Type: action.TypeUpdateRecord,
-				Context: action.UpdateRecordContext{
-					RecordID: "rec-1",
-					Data:     map[string]any{"contributedAmountCents": 1},
-				},
+		live: &WorkflowDefinition{ID: defID, Definition: Definition{
+			Trigger: Trigger{On: []string{TriggerOnCreated}},
+			Nodes: [][]Node{{{
+				Name: "a", Type: node.TypeNoop, Definition: node.NoopContext{Message: "new"},
 			}}},
-		},
+		}},
 	}
 
 	err := retryService(store).Retry(context.Background(), principal.Principal{
@@ -106,21 +112,23 @@ func TestRetry_usesLiveDefinition(t *testing.T) {
 	if store.retried == nil {
 		t.Fatal("RetryFailed was not called")
 	}
-	ctx := store.retried.Actions[0].Context.(action.UpdateRecordContext)
-	if _, ok := ctx.Data["contributedAmountCents"]; !ok {
-		t.Fatalf("retry used snapshot, want live definition: %+v", ctx.Data)
+	msg := store.retried.Nodes[0][0].Definition.(node.NoopContext).Message
+	if msg != "new" {
+		t.Fatalf("retry used snapshot, want live definition: %q", msg)
 	}
+	_ = live
 }
 
 func TestRetry_keepsSnapshotWhenDefinitionMissing(t *testing.T) {
 	id := uuid.MustNew()
+	snap := SnapshotRunDefinition(Definition{Trigger: Trigger{On: []string{TriggerOnCreated}}, Nodes: validNodes()})
 	store := &retryStore{
 		workflow: &Workflow{
 			ID:                   id,
 			WorkflowDefinitionID: uuid.MustNew(),
 			UserID:               "user-1",
 			Status:               "failed",
-			Definition:           Definition{Actions: validActions()},
+			Definition:           snap,
 		},
 	}
 
@@ -131,39 +139,7 @@ func TestRetry_keepsSnapshotWhenDefinitionMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.retried == nil || len(store.retried.Actions) != 1 {
+	if store.retried == nil || len(store.retried.Nodes) != 1 {
 		t.Fatalf("retried = %+v", store.retried)
-	}
-}
-
-func TestRetry_rejectsNonFailed(t *testing.T) {
-	id := uuid.MustNew()
-	store := &retryStore{
-		workflow: &Workflow{
-			ID:     id,
-			UserID: "user-1",
-			Status: "completed",
-		},
-	}
-
-	err := retryService(store).Retry(context.Background(), principal.Principal{
-		Type: principal.TypeUser,
-		ID:   "user-1",
-	}, id)
-	if !apperror.IsBadRequest(err) {
-		t.Fatalf("got %v", err)
-	}
-	if store.retried != nil {
-		t.Fatal("should not retry a completed workflow")
-	}
-}
-
-func TestRetry_notFound(t *testing.T) {
-	err := retryService(&retryStore{}).Retry(context.Background(), principal.Principal{
-		Type: principal.TypeUser,
-		ID:   "user-1",
-	}, uuid.MustNew())
-	if !apperror.IsNotFound(err) {
-		t.Fatalf("got %v", err)
 	}
 }

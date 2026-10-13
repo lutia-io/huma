@@ -5,7 +5,7 @@ import (
 	"strconv"
 )
 
-func indexedOutput(outputs map[int]json.RawMessage) map[string]any {
+func IndexedOutput(outputs map[int]json.RawMessage) map[string]any {
 	out := make(map[string]any, len(outputs))
 	for i, raw := range outputs {
 		var v any
@@ -21,7 +21,7 @@ func indexedOutput(outputs map[int]json.RawMessage) map[string]any {
 
 // mergeLevelInput keeps the pipeline enqueue fields (salePrice, schema ids)
 // available on later levels, then overlays previous-level outputs as "0", "1", …
-func mergeLevelInput(base, outputs map[string]any) map[string]any {
+func MergeLevelInput(base, outputs map[string]any) map[string]any {
 	if len(outputs) == 0 {
 		return base
 	}
@@ -35,7 +35,7 @@ func mergeLevelInput(base, outputs map[string]any) map[string]any {
 	return out
 }
 
-func nodeInputJSON(input map[string]any) []byte {
+func NodeInputJSON(input map[string]any) []byte {
 	if input == nil {
 		return []byte("{}")
 	}

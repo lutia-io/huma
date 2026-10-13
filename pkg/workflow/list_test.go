@@ -48,8 +48,8 @@ func TestParseListParams_paginationAndFilters(t *testing.T) {
 	if params.Network != "DHL" || params.NetworkOp != opContains {
 		t.Fatalf("got network=%s networkOp=%s", params.Network, params.NetworkOp)
 	}
-	if params.Actions == nil || *params.Actions != 3 || params.ActionsOp != opGte {
-		t.Fatalf("got actions=%v op=%s", params.Actions, params.ActionsOp)
+	if params.Stages == nil || *params.Stages != 3 || params.StagesOp != opGte {
+		t.Fatalf("got stages=%v op=%s", params.Stages, params.StagesOp)
 	}
 }
 
@@ -204,9 +204,9 @@ func TestBuildListQuery_schemaNetworkAndActions(t *testing.T) {
 		SchemaOp:  opStartsWith,
 		Network:   "DHL",
 		NetworkOp: opContains,
-		Actions:   &count,
-		ActionsOp: opGte,
-		Sort:      "actions",
+		Stages:    &count,
+		StagesOp:  opGte,
+		Sort:      "stages",
 		Order:     "desc",
 	}
 	countSQL, listSQL, _, _ := buildListQuery(params)
@@ -216,10 +216,10 @@ func TestBuildListQuery_schemaNetworkAndActions(t *testing.T) {
 	if !strings.Contains(countSQL, "n.name ILIKE") {
 		t.Fatalf("missing network name filter: %s", countSQL)
 	}
-	if !strings.Contains(countSQL, actionCountExpr) {
+	if !strings.Contains(countSQL, stageCountExpr) {
 		t.Fatalf("missing actions filter: %s", countSQL)
 	}
-	if !strings.Contains(listSQL, "ORDER BY ("+actionCountExpr+") DESC") {
+	if !strings.Contains(listSQL, "ORDER BY ("+stageCountExpr+") DESC") {
 		t.Fatalf("missing actions sort: %s", listSQL)
 	}
 }

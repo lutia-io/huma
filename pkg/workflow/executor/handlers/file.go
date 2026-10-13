@@ -10,8 +10,8 @@ import (
 
 	"github.com/lutia-io/huma/pkg/file"
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/pipeline"
-	"github.com/lutia-io/huma/pkg/pipeline/executor"
+	"github.com/lutia-io/huma/pkg/workflow"
+	"github.com/lutia-io/huma/pkg/workflow/executor"
 	"github.com/lutia-io/huma/pkg/resolver"
 )
 
@@ -35,7 +35,7 @@ func (h *File) Type() node.Type {
 	return node.TypeFile
 }
 
-func (h *File) Execute(ctx context.Context, execCtx executor.ExecutionContext, n pipeline.SnapshotNode) (executor.Result, error) {
+func (h *File) Execute(ctx context.Context, execCtx executor.ExecutionContext, n workflow.SnapshotNode) (executor.Result, error) {
 	if h.files == nil {
 		return executor.Result{}, fmt.Errorf("FILE node requires a file service")
 	}

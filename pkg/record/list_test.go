@@ -251,7 +251,7 @@ func TestBuildListQuery_userField(t *testing.T) {
 	params := listParams{
 		UserID: "user-1",
 		Fields: []fieldFilter{
-			{Name: "owner", Value: "Ada", Op: opContains, Kind: fieldKindUser},
+			{Name: "owner", Value: "11111111-1111-1111-1111-111111111111", Op: opEq, Kind: fieldKindUser},
 		},
 		SchemaFields: map[string]schemaField{
 			"owner": {Name: "owner", Kind: fieldKindUser},
@@ -260,14 +260,17 @@ func TestBuildListQuery_userField(t *testing.T) {
 		Order: "asc",
 	}
 	countSQL, listSQL, _, _ := buildListQuery(params)
-	if !strings.Contains(countSQL, "public.organization_users") || !strings.Contains(countSQL, "ou.first_name") {
-		t.Fatalf("missing user filter: %s", countSQL)
+	if !strings.Contains(countSQL, "= ANY (") {
+		t.Fatalf("missing user id membership filter: %s", countSQL)
 	}
-	if !strings.Contains(listSQL, "ORDER BY (SELECT string_agg(TRIM(CONCAT(ou.first_name, ' ', ou.last_name))") {
-		t.Fatalf("missing user sort: %s", listSQL)
+	if strings.Contains(countSQL, "ou.first_name") {
+		t.Fatalf("user filter should not join display names: %s", countSQL)
 	}
 	if !strings.Contains(countSQL, "jsonb_array_elements_text") {
 		t.Fatalf("user filter should match a list of ids: %s", countSQL)
+	}
+	if !strings.Contains(listSQL, "ORDER BY (SELECT string_agg(TRIM(CONCAT(ou.first_name, ' ', ou.last_name))") {
+		t.Fatalf("missing user sort: %s", listSQL)
 	}
 }
 

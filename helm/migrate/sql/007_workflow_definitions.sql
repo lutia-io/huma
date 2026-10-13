@@ -6,7 +6,7 @@ CREATE TABLE public.workflow_definitions (
     active BOOLEAN NOT NULL,
     internal BOOLEAN NOT NULL,
     definition JSONB NOT NULL,
-    schema_id UUID NOT NULL REFERENCES public.schemas(id) ON DELETE CASCADE,
+    schema_id UUID REFERENCES public.schemas(id) ON DELETE CASCADE,
     network_id UUID NOT NULL REFERENCES public.networks(id) ON DELETE CASCADE,
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.users(id),

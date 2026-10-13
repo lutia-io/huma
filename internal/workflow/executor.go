@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lutia-io/huma/pkg/file"
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/organizationuser"
-	"github.com/lutia-io/huma/pkg/pipeline"
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/schema"
+	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
 	"github.com/lutia-io/huma/pkg/workflow/executor/handlers"
 	"github.com/nats-io/nats.go"
@@ -23,18 +24,9 @@ import (
 const (
 	defaultWorkerCount = 4
 	workerPollInterval = time.Second
-
-	// workerLeaseTimeout bounds how long a crashed worker's workflow stays
-	// unclaimable. Workers heartbeat the lease after every action, so only a
-	// single action running longer than this can be claimed twice — which the
-	// action idempotency keys absorb.
 	workerLeaseTimeout = 2 * time.Minute
 )
 
-// NewExecutor runs the workflow executor service: a worker pool that claims
-// pending workflows from Postgres and executes their actions. It consumes no
-// events; work arrives as rows inserted by the evaluator service. It scales
-// horizontally, with workers coordinating through the claim query's row locks.
 func NewExecutor() {
 	log := logger.New()
 	ctx := context.Background()
@@ -46,8 +38,6 @@ func NewExecutor() {
 	}
 	defer pool.Close()
 
-	// NATS is not used for claiming work, but action handlers publish events
-	// (e.g. records created by workflows) through JetStream.
 	nc, err := nats.Connect(os.Getenv("HUMA_SERVICE_NATS_URI"))
 	if err != nil {
 		log.Error("Unable to create NATS connection", logger.KeyError, err)
@@ -61,17 +51,33 @@ func NewExecutor() {
 		os.Exit(1)
 	}
 
+	objCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	objs, err := js.CreateOrUpdateObjectStore(objCtx, jetstream.ObjectStoreConfig{
+		Bucket:  file.ObjectStoreBucket,
+		Storage: jetstream.FileStorage,
+	})
+	if err != nil {
+		log.Error("Unable to create files object store", logger.KeyError, err)
+		os.Exit(1)
+	}
+
 	workflowStore := executor.NewPostgresWorkflowStore(pool, workerLeaseTimeout)
 	schemaService := schema.NewWithPool(log, pool)
 	recordService := record.NewWithPool(log, pool, js, schemaService, nil)
-	pipelineService := pipeline.NewService(log, pipeline.NewPostgresStore(pool), nil)
+	fileService := file.NewWithPool(log, pool, objs, nil)
+	workflowService := workflow.NewService(log, workflow.NewPostgresStore(pool), nil)
 	orgUserService := organizationuser.NewWithPool(log, pool, nil)
 
 	registry := executor.NewRegistry(
-		handlers.NewCreateRecord(recordService, orgUserService),
-		handlers.NewUpdateRecord(recordService),
-		handlers.NewUpsertRecord(recordService, orgUserService),
-		handlers.NewTriggerPipeline(log, pipelineService),
+		handlers.NewNoop(),
+		handlers.NewHTTP(nil),
+		handlers.NewMapper(),
+		handlers.NewListMapper(),
+		handlers.NewFile(fileService),
+		handlers.NewRecord(recordService, orgUserService),
+		handlers.NewBulk(recordService, orgUserService),
+		handlers.NewTriggerWorkflow(log, workflowService),
 	)
 
 	service := executor.NewService(log, workflowStore, registry)

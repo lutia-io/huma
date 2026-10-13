@@ -25,7 +25,7 @@ const (
 	opGte        = "gte"
 	opLte        = "lte"
 
-	actionCountExpr = `CASE WHEN jsonb_typeof(wd.definition->'actions') = 'array' THEN jsonb_array_length(wd.definition->'actions') ELSE 0 END`
+	stageCountExpr = `CASE WHEN jsonb_typeof(wd.definition->'nodes') = 'array' THEN jsonb_array_length(wd.definition->'nodes') ELSE 0 END`
 )
 
 var listSortColumns = map[string]string{
@@ -36,7 +36,8 @@ var listSortColumns = map[string]string{
 	"schema":    "s.name",
 	"network":   "COALESCE(n.name, '')",
 	"scope":     "COALESCE(o.name, 'Network')",
-	"actions":   "(" + actionCountExpr + ")",
+	"stages":    "(" + stageCountExpr + ")",
+	"actions":   "(" + stageCountExpr + ")",
 	"createdAt": "wd.created_at",
 	"updatedAt": "wd.updated_at",
 }
@@ -57,7 +58,7 @@ func parseListParams(r *http.Request) (listParams, error) {
 		Field:          strings.TrimSpace(query.Get("field")),
 		Network:        strings.TrimSpace(query.Get("network")),
 		NetworkOp:      strings.TrimSpace(query.Get("networkOp")),
-		ActionsOp:      strings.TrimSpace(query.Get("actionsOp")),
+		StagesOp:       strings.TrimSpace(query.Get("stagesOp")),
 		NetworkID:      strings.TrimSpace(query.Get("networkId")),
 		OrganizationID: strings.TrimSpace(query.Get("organizationId")),
 		Scope:          strings.TrimSpace(query.Get("scope")),
@@ -133,22 +134,33 @@ func parseListParams(r *http.Request) (listParams, error) {
 		}
 	}
 
-	if params.ActionsOp == opEmpty {
+	stagesOp := strings.TrimSpace(query.Get("stagesOp"))
+	if stagesOp == "" {
+		stagesOp = strings.TrimSpace(query.Get("actionsOp"))
+	}
+	params.StagesOp = stagesOp
+	if params.StagesOp == opEmpty {
 		// value is optional for empty
-	} else if value := strings.TrimSpace(query.Get("actions")); value != "" {
-		count, convErr := strconv.Atoi(value)
-		if convErr != nil || count < 0 {
-			return listParams{}, apperror.NewBadRequestError("Invalid actions filter", nil)
+	} else {
+		value := strings.TrimSpace(query.Get("stages"))
+		if value == "" {
+			value = strings.TrimSpace(query.Get("actions"))
 		}
-		params.Actions = &count
-		op := params.ActionsOp
-		if op == "" {
-			op = opEq
+		if value != "" {
+			count, convErr := strconv.Atoi(value)
+			if convErr != nil || count < 0 {
+				return listParams{}, apperror.NewBadRequestError("Invalid stages filter", nil)
+			}
+			params.Stages = &count
+			op := params.StagesOp
+			if op == "" {
+				op = opEq
+			}
+			if op != opEq && op != opGte && op != opLte {
+				return listParams{}, apperror.NewBadRequestError("Invalid stages filter operator", nil)
+			}
+			params.StagesOp = op
 		}
-		if op != opEq && op != opGte && op != opLte {
-			return listParams{}, apperror.NewBadRequestError("Invalid actions filter operator", nil)
-		}
-		params.ActionsOp = op
 	}
 
 	if params.SchemaID != "" && !uuid.Valid(params.SchemaID) {
@@ -302,17 +314,17 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	if hasStringFilter(params.Network, params.NetworkOp) {
 		applyStringFilter(b, &where, "n.name", params.Network, params.NetworkOp)
 	}
-	if params.ActionsOp == opEmpty {
-		where = append(where, "("+actionCountExpr+") = 0")
-	} else if params.Actions != nil {
+	if params.StagesOp == opEmpty {
+		where = append(where, "("+stageCountExpr+") = 0")
+	} else if params.Stages != nil {
 		operator := "="
-		switch params.ActionsOp {
+		switch params.StagesOp {
 		case opGte:
 			operator = ">="
 		case opLte:
 			operator = "<="
 		}
-		where = append(where, fmt.Sprintf("(%s) %s %s", actionCountExpr, operator, b.add(*params.Actions)))
+		where = append(where, fmt.Sprintf("(%s) %s %s", stageCountExpr, operator, b.add(*params.Stages)))
 	}
 
 	fromSQL := `

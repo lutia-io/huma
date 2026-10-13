@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/pipeline"
-	"github.com/lutia-io/huma/pkg/pipeline/executor"
+	"github.com/lutia-io/huma/pkg/workflow"
+	"github.com/lutia-io/huma/pkg/workflow/executor"
 	"github.com/lutia-io/huma/pkg/resolver"
 )
 
@@ -20,7 +20,7 @@ func (h *Mapper) Type() node.Type {
 	return node.TypeMapper
 }
 
-func (h *Mapper) Execute(_ context.Context, execCtx executor.ExecutionContext, n pipeline.SnapshotNode) (executor.Result, error) {
+func (h *Mapper) Execute(_ context.Context, execCtx executor.ExecutionContext, n workflow.SnapshotNode) (executor.Result, error) {
 	def, err := parseDefinition[node.MapperContext](n, node.TypeMapper)
 	if err != nil {
 		return executor.Result{}, err

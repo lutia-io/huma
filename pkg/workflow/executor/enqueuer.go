@@ -171,15 +171,26 @@ func (e *Enqueuer) insertPending(ctx context.Context, logID string, workflows []
 }
 
 func pendingWorkflow(def *workflow.WorkflowDefinition, recordID string, data map[string]any, organizationID, organizationUserID, dedupeKey string) *Workflow {
+	input := map[string]any{
+		"recordId": recordID,
+		"data":     data,
+	}
+	if def.SchemaID != "" {
+		input["schemaId"] = def.SchemaID
+	}
+	for k, v := range data {
+		input[k] = v
+	}
 	return &Workflow{
 		WorkflowDefinitionID: def.ID,
 		NetworkID:            def.NetworkID,
 		RecordID:             recordID,
 		Data:                 data,
+		Input:                input,
 		OrganizationID:       organizationID,
 		OrganizationUserID:   organizationUserID,
 		DedupeKey:            dedupeKey,
-		Definition:           def.Definition,
+		Definition:           workflow.SnapshotRunDefinition(def.Definition),
 	}
 }
 

@@ -29,9 +29,11 @@ type store interface {
 
 	GetWorkflowByID(ctx context.Context, id string) (*Workflow, error)
 	ListWorkflows(ctx context.Context, params runListParams) (*runListResult, error)
-	GetWorkflowActionByID(ctx context.Context, id string) (*WorkflowAction, error)
-	ListWorkflowActionsByWorkflowID(ctx context.Context, workflowID string) ([]*WorkflowAction, error)
-	RetryFailed(ctx context.Context, id string, definition Definition) error
+	GetWorkflowNodeByID(ctx context.Context, id string) (*WorkflowNode, error)
+	ListWorkflowNodesByWorkflowID(ctx context.Context, workflowID string) ([]*WorkflowNode, error)
+	InsertPending(ctx context.Context, run *Workflow) (string, error)
+	GetBySlug(ctx context.Context, networkID, slug, organizationID string) (*WorkflowDefinition, error)
+	RetryFailed(ctx context.Context, id string, definition RunDefinition) error
 }
 
 type postgresStore struct {
@@ -43,52 +45,61 @@ func NewPostgresStore(pool *pgxpool.Pool) store {
 }
 
 func (store *postgresStore) Insert(ctx context.Context, workflow *WorkflowDefinition) (string, error) {
-	const sql = `
-		INSERT INTO public.workflow_definitions (
-			name,
-			slug,
-			description,
-			active,
-			internal,
-			definition,
-			schema_id,
-			network_id,
-			organization_id,
-			user_id,
-			created_by,
-			updated_by,
-			created_at,
-			updated_at
-		)
-		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), now()
-		FROM public.schemas
-		WHERE id = $7
-			AND network_id = $8
-			AND (
-				($9::uuid IS NULL AND organization_id IS NULL)
-				OR ($9::uuid IS NOT NULL AND (organization_id IS NULL OR organization_id = $9))
-			)
-		RETURNING id`
-
 	defJSON, err := json.Marshal(workflow.Definition)
 	if err != nil {
 		return "", err
 	}
 
-	err = store.db.QueryRow(ctx, sql,
-		workflow.Name,
-		workflow.Slug,
-		workflow.Description,
-		workflow.Active,
-		workflow.Internal,
-		defJSON,
-		workflow.SchemaID,
-		workflow.NetworkID,
-		workflow.OrganizationID,
-		workflow.UserID,
-		workflow.CreatedBy.ID,
-		workflow.UpdatedBy.ID,
-	).Scan(&workflow.ID)
+	schemaID := optionalID(workflow.SchemaID)
+	if schemaID != nil {
+		const sql = `
+		INSERT INTO public.workflow_definitions (
+			name, slug, description, active, internal, definition, schema_id,
+			network_id, organization_id, user_id, created_by, updated_by, created_at, updated_at
+		)
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), now()
+		FROM public.schemas
+		WHERE id = $7 AND network_id = $8
+			AND (
+				($9::uuid IS NULL AND organization_id IS NULL)
+				OR ($9::uuid IS NOT NULL AND (organization_id IS NULL OR organization_id = $9))
+			)
+		RETURNING id`
+		err = store.db.QueryRow(ctx, sql,
+			workflow.Name,
+			workflow.Slug,
+			workflow.Description,
+			workflow.Active,
+			workflow.Internal,
+			defJSON,
+			schemaID,
+			workflow.NetworkID,
+			workflow.OrganizationID,
+			workflow.UserID,
+			workflow.CreatedBy.ID,
+			workflow.UpdatedBy.ID,
+		).Scan(&workflow.ID)
+	} else {
+		const sql = `
+		INSERT INTO public.workflow_definitions (
+			name, slug, description, active, internal, definition, schema_id,
+			network_id, organization_id, user_id, created_by, updated_by, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, now(), now())
+		RETURNING id`
+		err = store.db.QueryRow(ctx, sql,
+			workflow.Name,
+			workflow.Slug,
+			workflow.Description,
+			workflow.Active,
+			workflow.Internal,
+			defJSON,
+			workflow.NetworkID,
+			workflow.OrganizationID,
+			workflow.UserID,
+			workflow.CreatedBy.ID,
+			workflow.UpdatedBy.ID,
+		).Scan(&workflow.ID)
+	}
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", apperror.NewBadRequestError("Schema not found in this network", err)
@@ -170,6 +181,7 @@ func (store *postgresStore) Update(ctx context.Context, workflow *WorkflowDefini
 
 func scanWorkflowDefinition(row pgx.Row, wf *WorkflowDefinition) error {
 	var defJSON []byte
+	var schemaID *string
 	if err := row.Scan(
 		&wf.ID,
 		&wf.Name,
@@ -178,7 +190,7 @@ func scanWorkflowDefinition(row pgx.Row, wf *WorkflowDefinition) error {
 		&wf.Active,
 		&wf.Internal,
 		&defJSON,
-		&wf.SchemaID,
+		&schemaID,
 		&wf.NetworkID,
 		&wf.OrganizationID,
 		&wf.UserID,
@@ -194,6 +206,9 @@ func scanWorkflowDefinition(row pgx.Row, wf *WorkflowDefinition) error {
 		&wf.UpdatedBy.Email,
 	); err != nil {
 		return err
+	}
+	if schemaID != nil {
+		wf.SchemaID = *schemaID
 	}
 	return json.Unmarshal(defJSON, &wf.Definition)
 }
@@ -292,4 +307,25 @@ func (store *postgresStore) ListActiveScheduled(ctx context.Context) ([]*Workflo
 		return nil, err
 	}
 	return collectWorkflowDefinitions(rows)
+}
+
+func (store *postgresStore) GetBySlug(ctx context.Context, networkID, slug, organizationID string) (*WorkflowDefinition, error) {
+	sql := `
+		SELECT` + workflowDefinitionSelectColumns + `
+		FROM public.workflow_definitions wd` + user.JoinSQL("wd") + `
+		WHERE wd.network_id = $1
+			AND wd.slug = $2
+			AND (wd.organization_id IS NULL OR wd.organization_id = NULLIF($3, '')::uuid)
+		ORDER BY wd.organization_id NULLS LAST
+		LIMIT 1`
+
+	wf := &WorkflowDefinition{}
+	err := scanWorkflowDefinition(store.db.QueryRow(ctx, sql, networkID, slug, organizationID), wf)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.NewNotFoundError("Workflow definition not found", err)
+		}
+		return nil, err
+	}
+	return wf, nil
 }

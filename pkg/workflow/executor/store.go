@@ -10,44 +10,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// WorkflowStore persists workflow state and the action journal.
 type WorkflowStore interface {
-	// InsertPending inserts pending workflows. Workflows whose (definition,
-	// dedupe key) pair already exists are silently skipped, which makes
-	// intake idempotent under event redelivery.
 	InsertPending(ctx context.Context, workflows []*Workflow) error
-
-	// ClaimOne atomically claims the oldest due workflow for a worker,
-	// marking it running, stamping the lease, and incrementing attempts.
-	// Workflows whose lease has expired (crashed worker) are reclaimed
-	// automatically. Returns nil when nothing is claimable.
 	ClaimOne(ctx context.Context, workerID string) (*Workflow, error)
-
-	// CompleteAction journals a successful action attempt and advances the
-	// workflow's cursor in one transaction. After it commits, the action
-	// never re-runs. It also refreshes the lease, acting as a per-action
-	// heartbeat.
-	CompleteAction(ctx context.Context, entry WorkflowAction) error
-
-	// FailAction journals a failed action attempt and advances the
-	// workflow's cursor in one transaction, so execution continues with the
-	// remaining actions (continue-on-error policy).
-	FailAction(ctx context.Context, entry WorkflowAction) error
-
-	// Finish terminates the workflow after all actions were attempted. The
-	// final status is derived from the journal so it stays correct across
-	// crash reclaims: failed if any action never completed, else completed.
-	Finish(ctx context.Context, workflowID string) (Status, error)
-
-	// FailExhausted marks workflows that exceeded max_attempts (crash loops)
-	// as failed so they stop being claimable limbo rows. Returns rows
-	// affected.
+	CompleteNode(ctx context.Context, entry WorkflowNode) error
+	FailNode(ctx context.Context, entry WorkflowNode) error
+	ListTerminalNodes(ctx context.Context, workflowID string, levelIndex int) ([]TerminalNode, error)
+	AdvanceLevel(ctx context.Context, workflowID string, nextLevel int) error
+	Finish(ctx context.Context, workflowID string, failed bool, message string) error
 	FailExhausted(ctx context.Context) (int64, error)
-
-	// CompletedActionIndexes returns action indexes that already have a
-	// completed journal row. Workers skip those on resume so a manual retry,
-	// which rewinds current_action, does not re-run successful side effects.
-	CompletedActionIndexes(ctx context.Context, workflowID string) (map[int]struct{}, error)
 }
 
 type postgresWorkflowStore struct {
@@ -55,15 +26,10 @@ type postgresWorkflowStore struct {
 	lease time.Duration
 }
 
-// NewPostgresWorkflowStore returns a WorkflowStore backed by Postgres.
-// lease is how long a crashed worker's row stays unclaimable before another
-// worker may reclaim it.
 func NewPostgresWorkflowStore(pool *pgxpool.Pool, lease time.Duration) WorkflowStore {
 	return &postgresWorkflowStore{db: pool, lease: lease}
 }
 
-// InsertPending inserts each workflow as pending. Conflicts on
-// (workflow_definition_id, dedupe_key) are ignored so event redelivery is safe.
 func (s *postgresWorkflowStore) InsertPending(ctx context.Context, workflows []*Workflow) error {
 	const sql = `
 		INSERT INTO public.workflows (
@@ -71,13 +37,14 @@ func (s *postgresWorkflowStore) InsertPending(ctx context.Context, workflows []*
 			network_id,
 			record_id,
 			data,
+			input,
 			organization_id,
 			organization_user_id,
 			dedupe_key,
 			definition,
 			status
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, 'pending'
+			$1, $2, NULLIF($3, '')::uuid, $4, $5, $6, $7, $8, $9, 'pending'
 		)
 		ON CONFLICT (workflow_definition_id, dedupe_key) DO NOTHING`
 
@@ -87,23 +54,28 @@ func (s *postgresWorkflowStore) InsertPending(ctx context.Context, workflows []*
 	}
 	defer tx.Rollback(ctx)
 
-	for _, workflow := range workflows {
-		dataJSON, err := json.Marshal(workflow.Data)
+	for _, wf := range workflows {
+		dataJSON, err := json.Marshal(wf.Data)
 		if err != nil {
 			return err
 		}
-		defJSON, err := json.Marshal(workflow.Definition)
+		inputJSON, err := json.Marshal(wf.Input)
+		if err != nil {
+			return err
+		}
+		defJSON, err := json.Marshal(wf.Definition)
 		if err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, sql,
-			workflow.WorkflowDefinitionID,
-			workflow.NetworkID,
-			workflow.RecordID,
+			wf.WorkflowDefinitionID,
+			wf.NetworkID,
+			wf.RecordID,
 			dataJSON,
-			workflow.OrganizationID,
-			workflow.OrganizationUserID,
-			workflow.DedupeKey,
+			inputJSON,
+			wf.OrganizationID,
+			wf.OrganizationUserID,
+			wf.DedupeKey,
 			defJSON,
 		); err != nil {
 			return err
@@ -112,19 +84,6 @@ func (s *postgresWorkflowStore) InsertPending(ctx context.Context, workflows []*
 	return tx.Commit(ctx)
 }
 
-// ClaimOne is a single atomic statement, which is what makes the pool safe
-// without any coordinator:
-//
-//   - FOR UPDATE SKIP LOCKED lets concurrent workers claim different rows
-//     without ever blocking or colliding on the same workflow.
-//   - The locked_at predicate reclaims workflows whose worker died
-//     mid-execution: once the lease ages out, the workflow becomes claimable
-//     again and the new worker resumes from current_action.
-//   - attempts < max_attempts stops crash-looping workflows from being
-//     retried forever; the sweeper later marks them failed.
-//
-// The claimable set is served by a partial index on next_attempt_at, so this
-// stays fast no matter how many terminal rows accumulate.
 func (s *postgresWorkflowStore) ClaimOne(ctx context.Context, workerID string) (*Workflow, error) {
 	const sql = `
 		UPDATE public.workflows SET
@@ -146,35 +105,38 @@ func (s *postgresWorkflowStore) ClaimOne(ctx context.Context, workerID string) (
 			id,
 			workflow_definition_id,
 			network_id,
-			record_id,
+			COALESCE(record_id::text, ''),
 			data,
+			input,
 			organization_id,
 			organization_user_id,
 			dedupe_key,
 			definition,
 			status,
-			current_action,
+			current_level,
 			attempts,
 			max_attempts,
 			created_at`
 
-	workflow := &Workflow{}
-	var dataJSON, defJSON []byte
+	wf := &Workflow{}
+	var dataJSON, inputJSON, defJSON []byte
+	var recordID *string
 	err := s.db.QueryRow(ctx, sql, workerID, s.lease.Seconds()).Scan(
-		&workflow.ID,
-		&workflow.WorkflowDefinitionID,
-		&workflow.NetworkID,
-		&workflow.RecordID,
+		&wf.ID,
+		&wf.WorkflowDefinitionID,
+		&wf.NetworkID,
+		&recordID,
 		&dataJSON,
-		&workflow.OrganizationID,
-		&workflow.OrganizationUserID,
-		&workflow.DedupeKey,
+		&inputJSON,
+		&wf.OrganizationID,
+		&wf.OrganizationUserID,
+		&wf.DedupeKey,
 		&defJSON,
-		&workflow.Status,
-		&workflow.CurrentAction,
-		&workflow.Attempts,
-		&workflow.MaxAttempts,
-		&workflow.CreatedAt,
+		&wf.Status,
+		&wf.CurrentLevel,
+		&wf.Attempts,
+		&wf.MaxAttempts,
+		&wf.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -182,109 +144,126 @@ func (s *postgresWorkflowStore) ClaimOne(ctx context.Context, workerID string) (
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(dataJSON, &workflow.Data); err != nil {
+	if recordID != nil {
+		wf.RecordID = *recordID
+	}
+	if err := json.Unmarshal(dataJSON, &wf.Data); err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(defJSON, &workflow.Definition); err != nil {
+	if err := json.Unmarshal(inputJSON, &wf.Input); err != nil {
 		return nil, err
 	}
-	return workflow, nil
+	if err := json.Unmarshal(defJSON, &wf.Definition); err != nil {
+		return nil, err
+	}
+	return wf, nil
 }
 
-const insertActionSQL = `
-	INSERT INTO public.workflow_actions (
+const insertNodeSQL = `
+	INSERT INTO public.workflow_nodes (
 		workflow_id,
-		action_index,
+		level_index,
+		node_index,
 		attempt,
-		action_type,
+		node_slug,
+		node_type,
 		status,
 		input,
 		output,
+		payload,
 		error,
 		started_at,
 		completed_at
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, now()
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11, ''), $12, now()
 	)`
 
-func (s *postgresWorkflowStore) CompleteAction(ctx context.Context, entry WorkflowAction) error {
-	return s.journalAndAdvance(ctx, entry, ActionStatusCompleted)
-}
-
-func (s *postgresWorkflowStore) FailAction(ctx context.Context, entry WorkflowAction) error {
-	return s.journalAndAdvance(ctx, entry, ActionStatusFailed)
-}
-
-// journalAndAdvance appends the action attempt to the journal and advances
-// the workflow's cursor in one transaction. After it commits, the action
-// never re-runs, whatever its outcome. It also refreshes the lease so long
-// action lists do not expire mid-workflow.
-func (s *postgresWorkflowStore) journalAndAdvance(ctx context.Context, entry WorkflowAction, status ActionStatus) error {
-	const advanceSQL = `
-		UPDATE public.workflows
-		SET current_action = $2, locked_at = now()
-		WHERE id = $1`
-
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := tx.Exec(ctx, insertActionSQL,
+func (s *postgresWorkflowStore) journalNode(ctx context.Context, entry WorkflowNode, status NodeStatus) error {
+	_, err := s.db.Exec(ctx, insertNodeSQL,
 		entry.WorkflowID,
-		entry.ActionIndex,
+		entry.LevelIndex,
+		entry.NodeIndex,
 		entry.Attempt,
-		entry.ActionType,
+		entry.NodeSlug,
+		entry.NodeType,
 		status,
 		entry.Input,
 		entry.Output,
+		entry.Payload,
 		entry.Error,
 		entry.StartedAt,
-	); err != nil {
+	)
+	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, advanceSQL, entry.WorkflowID, entry.ActionIndex+1); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	_, err = s.db.Exec(ctx, `UPDATE public.workflows SET locked_at = now() WHERE id = $1`, entry.WorkflowID)
+	return err
 }
 
-// Finish derives terminal status from the journal and clears the lease.
-// An action index counts as failed only if it never completed: a crash
-// between the side effect and the journal commit can leave a failed attempt
-// followed by a completed one for the same index.
-func (s *postgresWorkflowStore) Finish(ctx context.Context, workflowID string) (Status, error) {
+func (s *postgresWorkflowStore) CompleteNode(ctx context.Context, entry WorkflowNode) error {
+	return s.journalNode(ctx, entry, NodeStatusCompleted)
+}
+
+func (s *postgresWorkflowStore) FailNode(ctx context.Context, entry WorkflowNode) error {
+	return s.journalNode(ctx, entry, NodeStatusFailed)
+}
+
+func (s *postgresWorkflowStore) ListTerminalNodes(ctx context.Context, workflowID string, levelIndex int) ([]TerminalNode, error) {
 	const sql = `
-		WITH failed AS (
-			SELECT count(*) AS n FROM (
-				SELECT action_index
-				FROM public.workflow_actions
-				WHERE workflow_id = $1
-				GROUP BY action_index
-				HAVING bool_and(status = 'failed')
-			) f
-		)
-		UPDATE public.workflows w
-		SET status = CASE WHEN failed.n > 0 THEN 'failed' ELSE 'completed' END,
-			error = CASE WHEN failed.n > 0 THEN failed.n::text || ' action(s) failed' END,
+		SELECT DISTINCT ON (node_index) node_index, status, output
+		FROM public.workflow_nodes
+		WHERE workflow_id = $1 AND level_index = $2
+		ORDER BY node_index,
+			CASE status WHEN 'completed' THEN 0 ELSE 1 END,
+			completed_at DESC`
+
+	rows, err := s.db.Query(ctx, sql, workflowID, levelIndex)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]TerminalNode, 0)
+	for rows.Next() {
+		var n TerminalNode
+		var status string
+		if err := rows.Scan(&n.NodeIndex, &status, &n.Output); err != nil {
+			return nil, err
+		}
+		n.Status = NodeStatus(status)
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+func (s *postgresWorkflowStore) AdvanceLevel(ctx context.Context, workflowID string, nextLevel int) error {
+	const sql = `
+		UPDATE public.workflows
+		SET current_level = $2, locked_at = now()
+		WHERE id = $1`
+	_, err := s.db.Exec(ctx, sql, workflowID, nextLevel)
+	return err
+}
+
+func (s *postgresWorkflowStore) Finish(ctx context.Context, workflowID string, failed bool, message string) error {
+	status := StatusCompleted
+	var errMsg *string
+	if failed {
+		status = StatusFailed
+		errMsg = &message
+	}
+	const sql = `
+		UPDATE public.workflows
+		SET status = $2,
+			error = $3,
 			completed_at = now(),
 			locked_by = NULL,
 			locked_at = NULL
-		FROM failed
-		WHERE w.id = $1
-		RETURNING w.status`
-
-	var status Status
-	if err := s.db.QueryRow(ctx, sql, workflowID).Scan(&status); err != nil {
-		return "", err
-	}
-	return status, nil
+		WHERE id = $1`
+	_, err := s.db.Exec(ctx, sql, workflowID, status, errMsg)
+	return err
 }
 
-// FailExhausted terminalizes workflows that have been claimed MaxAttempts
-// times without finishing, once their lease has expired so an in-flight
-// worker is not racing the update.
 func (s *postgresWorkflowStore) FailExhausted(ctx context.Context) (int64, error) {
 	const sql = `
 		UPDATE public.workflows
@@ -302,27 +281,4 @@ func (s *postgresWorkflowStore) FailExhausted(ctx context.Context) (int64, error
 		return 0, err
 	}
 	return tag.RowsAffected(), nil
-}
-
-func (s *postgresWorkflowStore) CompletedActionIndexes(ctx context.Context, workflowID string) (map[int]struct{}, error) {
-	const sql = `
-		SELECT DISTINCT action_index
-		FROM public.workflow_actions
-		WHERE workflow_id = $1 AND status = 'completed'`
-
-	rows, err := s.db.Query(ctx, sql, workflowID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	out := map[int]struct{}{}
-	for rows.Next() {
-		var index int
-		if err := rows.Scan(&index); err != nil {
-			return nil, err
-		}
-		out[index] = struct{}{}
-	}
-	return out, rows.Err()
 }

@@ -31,11 +31,12 @@ func (h *httpHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /workflow-definition", h.Insert)
 	mux.HandleFunc("PATCH /workflow-definition/{id}", h.Patch)
 
+	mux.HandleFunc("POST /workflow", h.InsertWorkflow)
 	mux.HandleFunc("GET /workflow", h.ListWorkflows)
 	mux.HandleFunc("GET /workflow/{id}", h.GetWorkflow)
 	mux.HandleFunc("POST /workflow/{id}/retry", h.RetryWorkflow)
-	mux.HandleFunc("GET /workflow/{id}/action", h.ListWorkflowActions)
-	mux.HandleFunc("GET /workflow-action/{id}", h.GetWorkflowAction)
+	mux.HandleFunc("GET /workflow/{id}/node", h.ListWorkflowNodes)
+	mux.HandleFunc("GET /workflow-node/{id}", h.GetWorkflowNode)
 }
 
 func (h *httpHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -195,30 +196,60 @@ func (h *httpHandler) RetryWorkflow(w http.ResponseWriter, r *http.Request) {
 	render.WriteJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 
-func (h *httpHandler) ListWorkflowActions(w http.ResponseWriter, r *http.Request) {
+func (h *httpHandler) InsertWorkflow(w http.ResponseWriter, r *http.Request) {
 	p, ok := principal.FromContext(r.Context())
 	if !ok {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	actions, err := h.service.ListWorkflowActions(r.Context(), p, r.PathValue("id"))
+	if err := principal.RequireOrganizationUser(p, p.NetworkID, p.OrganizationID); err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	var req insertWorkflowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.WriteError(w, apperror.NewBadRequestError("Invalid request body", err))
+		return
+	}
+	id, err := h.service.Enqueue(r.Context(), EnqueueRequest{
+		WorkflowDefinitionID: req.WorkflowDefinitionID,
+		NetworkID:            p.NetworkID,
+		OrganizationID:       p.OrganizationID,
+		OrganizationUserID:   p.ID,
+		Input:                req.Input,
+		DedupeKey:            req.DedupeKey,
+	})
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, actions)
+	render.WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 
-func (h *httpHandler) GetWorkflowAction(w http.ResponseWriter, r *http.Request) {
+func (h *httpHandler) ListWorkflowNodes(w http.ResponseWriter, r *http.Request) {
 	p, ok := principal.FromContext(r.Context())
 	if !ok {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	action, err := h.service.GetWorkflowAction(r.Context(), p, r.PathValue("id"))
+	nodes, err := h.service.ListWorkflowNodes(r.Context(), p, r.PathValue("id"))
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, action)
+	render.WriteJSON(w, http.StatusOK, nodes)
+}
+
+func (h *httpHandler) GetWorkflowNode(w http.ResponseWriter, r *http.Request) {
+	p, ok := principal.FromContext(r.Context())
+	if !ok {
+		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
+		return
+	}
+	node, err := h.service.GetWorkflowNode(r.Context(), p, r.PathValue("id"))
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, node)
 }

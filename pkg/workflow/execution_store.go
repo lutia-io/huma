@@ -13,13 +13,14 @@ const workflowSelectColumns = `
 	w.id,
 	w.workflow_definition_id,
 	w.network_id,
-	w.record_id,
+	COALESCE(w.record_id::text, ''),
 	w.data,
+	w.input,
 	w.organization_id,
 	w.organization_user_id,
 	w.definition,
 	w.status,
-	w.current_action,
+	w.current_level,
 	w.attempts,
 	w.max_attempts,
 	w.error,
@@ -27,12 +28,12 @@ const workflowSelectColumns = `
 	w.completed_at,
 	n.user_id`
 
-const workflowActionSelectColumns = `
-	id, workflow_id, action_index, attempt, action_type, status,
-	input, output, error, started_at, completed_at`
+const workflowNodeSelectColumns = `
+	id, workflow_id, level_index, node_index, attempt,
+	node_slug, node_type, status, input, output, payload, error, started_at, completed_at`
 
 func scanWorkflow(row pgx.Row, wf *Workflow) error {
-	var dataJSON, defJSON []byte
+	var dataJSON, inputJSON, defJSON []byte
 	var errMsg *string
 	if err := row.Scan(
 		&wf.ID,
@@ -40,11 +41,12 @@ func scanWorkflow(row pgx.Row, wf *Workflow) error {
 		&wf.NetworkID,
 		&wf.RecordID,
 		&dataJSON,
+		&inputJSON,
 		&wf.OrganizationID,
 		&wf.OrganizationUserID,
 		&defJSON,
 		&wf.Status,
-		&wf.CurrentAction,
+		&wf.CurrentLevel,
 		&wf.Attempts,
 		&wf.MaxAttempts,
 		&errMsg,
@@ -58,6 +60,9 @@ func scanWorkflow(row pgx.Row, wf *Workflow) error {
 		wf.Error = *errMsg
 	}
 	if err := json.Unmarshal(dataJSON, &wf.Data); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(inputJSON, &wf.Input); err != nil {
 		return err
 	}
 	return json.Unmarshal(defJSON, &wf.Definition)
@@ -135,87 +140,145 @@ func optionalJSON(raw []byte) json.RawMessage {
 	return json.RawMessage(raw)
 }
 
-func scanWorkflowAction(row pgx.Row, action *WorkflowAction) error {
-	var input, output []byte
+func scanWorkflowNode(row pgx.Row, node *WorkflowNode) error {
+	var input, output, payload []byte
 	var errMsg *string
 	if err := row.Scan(
-		&action.ID,
-		&action.WorkflowID,
-		&action.ActionIndex,
-		&action.Attempt,
-		&action.ActionType,
-		&action.Status,
+		&node.ID,
+		&node.WorkflowID,
+		&node.LevelIndex,
+		&node.NodeIndex,
+		&node.Attempt,
+		&node.NodeSlug,
+		&node.NodeType,
+		&node.Status,
 		&input,
 		&output,
+		&payload,
 		&errMsg,
-		&action.StartedAt,
-		&action.CompletedAt,
+		&node.StartedAt,
+		&node.CompletedAt,
 	); err != nil {
 		return err
 	}
-	action.Input = optionalJSON(input)
-	action.Output = optionalJSON(output)
+	node.Input = optionalJSON(input)
+	node.Output = optionalJSON(output)
+	node.Payload = optionalJSON(payload)
 	if errMsg != nil {
-		action.Error = *errMsg
+		node.Error = *errMsg
 	}
 	return nil
 }
 
-func collectWorkflowActions(rows pgx.Rows) ([]*WorkflowAction, error) {
+func collectWorkflowNodes(rows pgx.Rows) ([]*WorkflowNode, error) {
 	defer rows.Close()
 
-	actions := make([]*WorkflowAction, 0)
+	nodes := make([]*WorkflowNode, 0)
 	for rows.Next() {
-		action := &WorkflowAction{}
-		if err := scanWorkflowAction(rows, action); err != nil {
+		n := &WorkflowNode{}
+		if err := scanWorkflowNode(rows, n); err != nil {
 			return nil, err
 		}
-		actions = append(actions, action)
+		nodes = append(nodes, n)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return actions, nil
+	return nodes, nil
 }
 
-func (store *postgresStore) GetWorkflowActionByID(ctx context.Context, id string) (*WorkflowAction, error) {
+func (store *postgresStore) GetWorkflowNodeByID(ctx context.Context, id string) (*WorkflowNode, error) {
 	const sql = `
-		SELECT` + workflowActionSelectColumns + `
-		FROM public.workflow_actions
+		SELECT` + workflowNodeSelectColumns + `
+		FROM public.workflow_nodes
 		WHERE id = $1`
 
-	action := &WorkflowAction{}
-	err := scanWorkflowAction(store.db.QueryRow(ctx, sql, id), action)
+	n := &WorkflowNode{}
+	err := scanWorkflowNode(store.db.QueryRow(ctx, sql, id), n)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperror.NewNotFoundError("Workflow action not found", err)
+			return nil, apperror.NewNotFoundError("Workflow node not found", err)
 		}
 		return nil, err
 	}
-	return action, nil
+	return n, nil
 }
 
-func (store *postgresStore) ListWorkflowActionsByWorkflowID(ctx context.Context, workflowID string) ([]*WorkflowAction, error) {
+func (store *postgresStore) ListWorkflowNodesByWorkflowID(ctx context.Context, workflowID string) ([]*WorkflowNode, error) {
 	const sql = `
-		SELECT` + workflowActionSelectColumns + `
-		FROM public.workflow_actions
+		SELECT` + workflowNodeSelectColumns + `
+		FROM public.workflow_nodes
 		WHERE workflow_id = $1
-		ORDER BY action_index, attempt`
+		ORDER BY level_index, node_index, attempt`
 
 	rows, err := store.db.Query(ctx, sql, workflowID)
 	if err != nil {
 		return nil, err
 	}
-	return collectWorkflowActions(rows)
+	return collectWorkflowNodes(rows)
 }
 
-// RetryFailed reopens a failed workflow so a worker will claim it again.
-// current_action is rewound to 0; workers skip indexes that already completed.
-// attempts is left as-is so the next journal row does not collide on
-// (workflow_id, action_index, attempt); max_attempts grows by 5 so exhausted
-// rows become claimable. definition is the live (or still-snapshotted) action
-// list to execute.
-func (store *postgresStore) RetryFailed(ctx context.Context, id string, definition Definition) error {
+func (store *postgresStore) InsertPending(ctx context.Context, run *Workflow) (string, error) {
+	const insertSQL = `
+		INSERT INTO public.workflows (
+			workflow_definition_id,
+			network_id,
+			record_id,
+			data,
+			input,
+			organization_id,
+			organization_user_id,
+			dedupe_key,
+			definition,
+			status
+		) VALUES (
+			$1, $2, NULLIF($3, '')::uuid, $4, $5, $6, $7, $8, $9, 'pending'
+		)
+		ON CONFLICT (workflow_definition_id, dedupe_key) DO NOTHING
+		RETURNING id`
+
+	dataJSON, err := json.Marshal(run.Data)
+	if err != nil {
+		return "", err
+	}
+	inputJSON, err := json.Marshal(run.Input)
+	if err != nil {
+		return "", err
+	}
+	defJSON, err := json.Marshal(run.Definition)
+	if err != nil {
+		return "", err
+	}
+
+	err = store.db.QueryRow(ctx, insertSQL,
+		run.WorkflowDefinitionID,
+		run.NetworkID,
+		run.RecordID,
+		dataJSON,
+		inputJSON,
+		run.OrganizationID,
+		run.OrganizationUserID,
+		run.DedupeKey,
+		defJSON,
+	).Scan(&run.ID)
+	if err == nil {
+		return run.ID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+
+	const selectSQL = `
+		SELECT id FROM public.workflows
+		WHERE workflow_definition_id = $1 AND dedupe_key = $2`
+
+	if err := store.db.QueryRow(ctx, selectSQL, run.WorkflowDefinitionID, run.DedupeKey).Scan(&run.ID); err != nil {
+		return "", err
+	}
+	return run.ID, nil
+}
+
+func (store *postgresStore) RetryFailed(ctx context.Context, id string, definition RunDefinition) error {
 	defJSON, err := json.Marshal(definition)
 	if err != nil {
 		return err
@@ -223,7 +286,7 @@ func (store *postgresStore) RetryFailed(ctx context.Context, id string, definiti
 	const sql = `
 		UPDATE public.workflows
 		SET status = 'pending',
-			current_action = 0,
+			current_level = 0,
 			max_attempts = attempts + 5,
 			error = NULL,
 			completed_at = NULL,

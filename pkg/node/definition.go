@@ -11,13 +11,14 @@ import (
 type Type string
 
 const (
-	TypeNoop       Type = "NOOP"
-	TypeHTTP       Type = "HTTP"
-	TypeMapper     Type = "MAPPER"
-	TypeListMapper Type = "LIST_MAPPER"
-	TypeFile       Type = "FILE"
-	TypeRecord     Type = "RECORD"
-	TypeBulk       Type = "BULK"
+	TypeNoop            Type = "NOOP"
+	TypeHTTP            Type = "HTTP"
+	TypeMapper          Type = "MAPPER"
+	TypeListMapper      Type = "LIST_MAPPER"
+	TypeFile            Type = "FILE"
+	TypeRecord          Type = "RECORD"
+	TypeBulk            Type = "BULK"
+	TypeTriggerWorkflow Type = "TRIGGER_WORKFLOW"
 )
 
 const (
@@ -92,6 +93,11 @@ type BulkRecord struct {
 type BulkContext struct {
 	Operation string       `json:"operation,omitempty"`
 	Records   []BulkRecord `json:"records"`
+}
+
+type TriggerWorkflowContext struct {
+	Workflow string         `json:"workflow"`
+	Input    map[string]any `json:"input"`
 }
 
 func ParseDefinition(t Type, data json.RawMessage) (any, error) {
@@ -215,6 +221,19 @@ func ParseDefinition(t Type, data json.RawMessage) (any, error) {
 			if item.Data == nil {
 				item.Data = map[string]any{}
 			}
+		}
+		return ctx, nil
+	case TypeTriggerWorkflow:
+		var ctx TriggerWorkflowContext
+		if err := json.Unmarshal(data, &ctx); err != nil {
+			return nil, fmt.Errorf("invalid TRIGGER_WORKFLOW definition: %w", err)
+		}
+		ctx.Workflow = strings.TrimSpace(ctx.Workflow)
+		if ctx.Workflow == "" {
+			return nil, fmt.Errorf("invalid TRIGGER_WORKFLOW definition: workflow is required")
+		}
+		if ctx.Input == nil {
+			ctx.Input = map[string]any{}
 		}
 		return ctx, nil
 	default:

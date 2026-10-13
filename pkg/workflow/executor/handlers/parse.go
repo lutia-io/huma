@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/pipeline"
+	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/resolver"
 )
 
-func parseDefinition[T any](n pipeline.SnapshotNode, t node.Type) (T, error) {
+func parseDefinition[T any](n workflow.SnapshotNode, t node.Type) (T, error) {
 	var zero T
 	raw, err := json.Marshal(n.Definition)
 	if err != nil {

@@ -18,7 +18,6 @@ import (
 	"github.com/lutia-io/huma/pkg/organization"
 	"github.com/lutia-io/huma/pkg/organizationaccess"
 	"github.com/lutia-io/huma/pkg/organizationuser"
-	"github.com/lutia-io/huma/pkg/pipeline"
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/schema"
 	"github.com/lutia-io/huma/pkg/user"
@@ -81,7 +80,6 @@ func New() {
 	organization.New(log, pool, mux, orgUserService, engine)
 	organizationaccess.New(log, pool, mux, engine)
 	schemaService := schema.New(log, pool, mux, engine)
-	pipeline.New(log, pool, mux, engine)
 	workflow.New(log, pool, mux, engine)
 	file.New(log, pool, mux, objs, orgUserService, engine)
 	record.New(log, pool, mux, js, schemaService, orgUserService, engine)

@@ -411,7 +411,7 @@ func applyFieldFilter(b *queryBuilder, where *[]string, field fieldFilter) {
 	case fieldKindFile:
 		applyStringFilter(b, where, fileFilenamesExpr(key), field.Value, field.Op)
 	case fieldKindUser:
-		applyStringFilter(b, where, userNameExpr(key), field.Value, field.Op)
+		applyUserIDFilter(b, where, key, field.Value, field.Op)
 	case fieldKindForeign:
 		applyStringFilter(b, where, relatedTitleExpr(b, key, field.TitleKey), field.Value, field.Op)
 	case fieldKindAddress:
@@ -458,6 +458,33 @@ func fileIDsArrayExpr(jsonExpr string) string {
 	)`, jsonExpr)
 }
 
+// userIDsArrayExpr unwraps a scalar user id or list of user ids from r.data.
+func userIDsArrayExpr(key string) string {
+	return fileIDsArrayExpr(fmt.Sprintf("r.data -> %s", key))
+}
+
+// applyUserIDFilter matches format:user fields against the stored organization
+// user UUID(s), not display names.
+func applyUserIDFilter(b *queryBuilder, where *[]string, key, value, op string) {
+	ids := userIDsArrayExpr(key)
+	switch op {
+	case opEq:
+		*where = append(*where, fmt.Sprintf("%s = ANY (%s)", b.add(value), ids))
+	case opStartsWith:
+		pattern := escapeLike(value) + "%"
+		*where = append(*where, fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM unnest(%s) AS user_id WHERE user_id ILIKE %s ESCAPE '%s')",
+			ids, b.add(pattern), likeEscapeChar,
+		))
+	default:
+		pattern := "%" + escapeLike(value) + "%"
+		*where = append(*where, fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM unnest(%s) AS user_id WHERE user_id ILIKE %s ESCAPE '%s')",
+			ids, b.add(pattern), likeEscapeChar,
+		))
+	}
+}
+
 func fileFilenamesExpr(key string) string {
 	return fmt.Sprintf(
 		"(SELECT string_agg(f.filename, ' ' ORDER BY f.filename) FROM public.files f WHERE f.id::text = ANY (%s))",
@@ -468,7 +495,7 @@ func fileFilenamesExpr(key string) string {
 func userNameExpr(key string) string {
 	return fmt.Sprintf(
 		"(SELECT string_agg(TRIM(CONCAT(ou.first_name, ' ', ou.last_name)), ' ' ORDER BY ou.first_name, ou.last_name) FROM public.organization_users ou WHERE ou.id::text = ANY (%s) AND ou.internal = FALSE)",
-		fileIDsArrayExpr(fmt.Sprintf("r.data -> %s", key)),
+		userIDsArrayExpr(key),
 	)
 }
 

@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/pipeline"
-	"github.com/lutia-io/huma/pkg/pipeline/executor"
+	"github.com/lutia-io/huma/pkg/workflow"
+	"github.com/lutia-io/huma/pkg/workflow/executor"
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/resolver"
 )
@@ -27,7 +27,7 @@ func (h *Bulk) Type() node.Type {
 	return node.TypeBulk
 }
 
-func (h *Bulk) Execute(ctx context.Context, execCtx executor.ExecutionContext, n pipeline.SnapshotNode) (executor.Result, error) {
+func (h *Bulk) Execute(ctx context.Context, execCtx executor.ExecutionContext, n workflow.SnapshotNode) (executor.Result, error) {
 	if h.records == nil {
 		return executor.Result{}, fmt.Errorf("BULK node requires a record service")
 	}
