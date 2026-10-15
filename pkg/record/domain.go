@@ -80,19 +80,21 @@ type ListForOrgParams struct {
 }
 
 type listParams struct {
-	UserID         string
-	Query          string
-	SchemaID       string
-	NetworkID      string
-	OrganizationID string
-	Organization   string
-	OrganizationOp string
-	Fields         []fieldFilter
-	SchemaFields   map[string]schemaField
-	Sort           string
-	Order          string
-	Page           int
-	PageSize       int
+	UserID             string
+	Query              string
+	SchemaID           string
+	NetworkID          string
+	OrganizationID     string
+	OrganizationUserID string
+	FileID             string
+	Organization       string
+	OrganizationOp     string
+	Fields             []fieldFilter
+	SchemaFields       map[string]schemaField
+	Sort               string
+	Order              string
+	Page               int
+	PageSize           int
 }
 
 type RelatedRecord struct {

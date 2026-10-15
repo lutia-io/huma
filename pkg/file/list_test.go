@@ -114,6 +114,37 @@ func TestBuildListQuery_networkAndOrganization(t *testing.T) {
 	}
 }
 
+func TestParseListParams_organizationUserId(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/file?organizationUserId=44444444-4444-4444-4444-444444444444", nil)
+	params, err := parseListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.OrganizationUserID != "44444444-4444-4444-4444-444444444444" {
+		t.Fatalf("got organizationUserId=%s", params.OrganizationUserID)
+	}
+}
+
+func TestParseListParams_rejectsInvalidOrganizationUserId(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/file?organizationUserId=not-a-uuid", nil)
+	if _, err := parseListParams(r); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestBuildListQuery_organizationUserId(t *testing.T) {
+	params := listParams{
+		UserID:             "user-1",
+		OrganizationUserID: "user-org-1",
+		Sort:               "filename",
+		Order:              "asc",
+	}
+	countSQL, _, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "f.organization_user_id = $2") {
+		t.Fatalf("missing organization user filter: %s", countSQL)
+	}
+}
+
 func TestBuildListQuery_typeSizeAndOrganization(t *testing.T) {
 	size := int64(2048)
 	params := listParams{

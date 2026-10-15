@@ -47,18 +47,19 @@ var fileContentTypes = map[string]struct{}{
 func parseListParams(r *http.Request) (listParams, error) {
 	query := r.URL.Query()
 	params := listParams{
-		Query:          strings.TrimSpace(query.Get("q")),
-		Sort:           strings.TrimSpace(query.Get("sort")),
-		Order:          strings.ToLower(strings.TrimSpace(query.Get("order"))),
-		Filename:       strings.TrimSpace(query.Get("filename")),
-		FilenameOp:     strings.TrimSpace(query.Get("filenameOp")),
-		ContentType:    strings.TrimSpace(query.Get("contentType")),
-		SizeBytesOp:    strings.TrimSpace(query.Get("sizeBytesOp")),
-		Organization:   strings.TrimSpace(query.Get("organization")),
-		OrganizationOp: strings.TrimSpace(query.Get("organizationOp")),
-		NetworkID:      strings.TrimSpace(query.Get("networkId")),
-		OrganizationID: strings.TrimSpace(query.Get("organizationId")),
-		Page:           defaultPage,
+		Query:              strings.TrimSpace(query.Get("q")),
+		Sort:               strings.TrimSpace(query.Get("sort")),
+		Order:              strings.ToLower(strings.TrimSpace(query.Get("order"))),
+		Filename:           strings.TrimSpace(query.Get("filename")),
+		FilenameOp:         strings.TrimSpace(query.Get("filenameOp")),
+		ContentType:        strings.TrimSpace(query.Get("contentType")),
+		SizeBytesOp:        strings.TrimSpace(query.Get("sizeBytesOp")),
+		Organization:       strings.TrimSpace(query.Get("organization")),
+		OrganizationOp:     strings.TrimSpace(query.Get("organizationOp")),
+		NetworkID:          strings.TrimSpace(query.Get("networkId")),
+		OrganizationID:     strings.TrimSpace(query.Get("organizationId")),
+		OrganizationUserID: strings.TrimSpace(query.Get("organizationUserId")),
+		Page:               defaultPage,
 	}
 
 	if params.Sort == "" {
@@ -117,6 +118,9 @@ func parseListParams(r *http.Request) (listParams, error) {
 	}
 	if params.OrganizationID != "" && !uuid.Valid(params.OrganizationID) {
 		return listParams{}, apperror.NewBadRequestError("Invalid organization ID", nil)
+	}
+	if params.OrganizationUserID != "" && !uuid.Valid(params.OrganizationUserID) {
+		return listParams{}, apperror.NewBadRequestError("Invalid organization user ID", nil)
 	}
 
 	if value := strings.TrimSpace(query.Get("page")); value != "" {
@@ -204,6 +208,9 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	}
 	if params.OrganizationID != "" {
 		where = append(where, "f.organization_id = "+b.add(params.OrganizationID))
+	}
+	if params.OrganizationUserID != "" {
+		where = append(where, "f.organization_user_id = "+b.add(params.OrganizationUserID))
 	}
 	if params.Query != "" {
 		pattern := "%" + escapeLike(params.Query) + "%"

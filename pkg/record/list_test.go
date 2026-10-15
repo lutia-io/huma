@@ -175,6 +175,48 @@ func TestBuildListQuery_schemaNetworkAndOrganization(t *testing.T) {
 	}
 }
 
+func TestParseListParams_organizationUserAndFileId(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/record?organizationUserId=44444444-4444-4444-4444-444444444444&fileId=55555555-5555-5555-5555-555555555555", nil)
+	params, err := parseListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.OrganizationUserID != "44444444-4444-4444-4444-444444444444" {
+		t.Fatalf("got organizationUserId=%s", params.OrganizationUserID)
+	}
+	if params.FileID != "55555555-5555-5555-5555-555555555555" {
+		t.Fatalf("got fileId=%s", params.FileID)
+	}
+}
+
+func TestParseListParams_rejectsInvalidOrganizationUserAndFileId(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/record?organizationUserId=bad", nil)
+	if _, err := parseListParams(r); err == nil {
+		t.Fatal("expected organization user error")
+	}
+	r = httptest.NewRequest(http.MethodGet, "/record?fileId=bad", nil)
+	if _, err := parseListParams(r); err == nil {
+		t.Fatal("expected file error")
+	}
+}
+
+func TestBuildListQuery_organizationUserAndFileId(t *testing.T) {
+	params := listParams{
+		UserID:             "user-1",
+		OrganizationUserID: "user-org-1",
+		FileID:             "file-1",
+		Sort:               "createdAt",
+		Order:              "asc",
+	}
+	countSQL, _, _, _ := buildListQuery(params)
+	if !strings.Contains(countSQL, "r.organization_user_id = $2") {
+		t.Fatalf("missing organization user filter: %s", countSQL)
+	}
+	if !strings.Contains(countSQL, "jsonb_each(r.data)") {
+		t.Fatalf("missing file reverse lookup: %s", countSQL)
+	}
+}
+
 func TestBuildListQuery_dynamicFields(t *testing.T) {
 	value := 100.0
 	captured := true

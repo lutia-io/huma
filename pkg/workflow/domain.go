@@ -160,21 +160,22 @@ type listResult struct {
 }
 
 type runListParams struct {
-	UserID         string
-	Query          string
-	NetworkID      string
-	OrganizationID string
-	Name           string
-	NameOp         string
-	Status         string
-	Network        string
-	NetworkOp      string
-	Organization   string
-	OrganizationOp string
-	Sort           string
-	Order          string
-	Page           int
-	PageSize       int
+	UserID               string
+	Query                string
+	NetworkID            string
+	OrganizationID       string
+	WorkflowDefinitionID string
+	Name                 string
+	NameOp               string
+	Status               string
+	Network              string
+	NetworkOp            string
+	Organization         string
+	OrganizationOp       string
+	Sort                 string
+	Order                string
+	Page                 int
+	PageSize             int
 }
 
 type runListResult struct {

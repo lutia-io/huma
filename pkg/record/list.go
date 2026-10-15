@@ -53,15 +53,17 @@ var (
 func parseListParams(r *http.Request) (listParams, error) {
 	query := r.URL.Query()
 	params := listParams{
-		Query:          strings.TrimSpace(query.Get("q")),
-		Sort:           strings.TrimSpace(query.Get("sort")),
-		Order:          strings.ToLower(strings.TrimSpace(query.Get("order"))),
-		SchemaID:       strings.TrimSpace(query.Get("schemaId")),
-		NetworkID:      strings.TrimSpace(query.Get("networkId")),
-		OrganizationID: strings.TrimSpace(query.Get("organizationId")),
-		Organization:   strings.TrimSpace(query.Get("organization")),
-		OrganizationOp: strings.TrimSpace(query.Get("organizationOp")),
-		Page:           defaultPage,
+		Query:              strings.TrimSpace(query.Get("q")),
+		Sort:               strings.TrimSpace(query.Get("sort")),
+		Order:              strings.ToLower(strings.TrimSpace(query.Get("order"))),
+		SchemaID:           strings.TrimSpace(query.Get("schemaId")),
+		NetworkID:          strings.TrimSpace(query.Get("networkId")),
+		OrganizationID:     strings.TrimSpace(query.Get("organizationId")),
+		OrganizationUserID: strings.TrimSpace(query.Get("organizationUserId")),
+		FileID:             strings.TrimSpace(query.Get("fileId")),
+		Organization:       strings.TrimSpace(query.Get("organization")),
+		OrganizationOp:     strings.TrimSpace(query.Get("organizationOp")),
+		Page:               defaultPage,
 	}
 
 	if params.Sort == "" {
@@ -93,6 +95,12 @@ func parseListParams(r *http.Request) (listParams, error) {
 	}
 	if params.OrganizationID != "" && !uuid.Valid(params.OrganizationID) {
 		return listParams{}, apperror.NewBadRequestError("Invalid organization ID", nil)
+	}
+	if params.OrganizationUserID != "" && !uuid.Valid(params.OrganizationUserID) {
+		return listParams{}, apperror.NewBadRequestError("Invalid organization user ID", nil)
+	}
+	if params.FileID != "" && !uuid.Valid(params.FileID) {
+		return listParams{}, apperror.NewBadRequestError("Invalid file ID", nil)
 	}
 
 	fields, err := parseFieldFilters(query)
@@ -533,6 +541,21 @@ func buildListQuery(params listParams) (countSQL, listSQL string, countArgs, lis
 	}
 	if params.OrganizationID != "" {
 		where = append(where, "r.organization_id = "+b.add(params.OrganizationID))
+	}
+	if params.OrganizationUserID != "" {
+		where = append(where, "r.organization_user_id = "+b.add(params.OrganizationUserID))
+	}
+	if params.FileID != "" {
+		filePlaceholder := b.add(params.FileID)
+		where = append(where, fmt.Sprintf(
+			`EXISTS (
+				SELECT 1
+				FROM jsonb_each(r.data) kv
+				WHERE %s = ANY (%s)
+			)`,
+			filePlaceholder,
+			fileIDsArrayExpr("kv.value"),
+		))
 	}
 	if params.Query != "" {
 		pattern := "%" + escapeLike(params.Query) + "%"

@@ -122,3 +122,34 @@ func TestBuildRunListQuery_networkOrganizationAndStatus(t *testing.T) {
 		t.Fatalf("missing status sort: %s", listSQL)
 	}
 }
+
+func TestParseRunListParams_workflowDefinitionId(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/workflow?workflowDefinitionId=66666666-6666-6666-6666-666666666666", nil)
+	params, err := parseRunListParams(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params.WorkflowDefinitionID != "66666666-6666-6666-6666-666666666666" {
+		t.Fatalf("got workflowDefinitionId=%s", params.WorkflowDefinitionID)
+	}
+}
+
+func TestParseRunListParams_rejectsInvalidWorkflowDefinitionId(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/workflow?workflowDefinitionId=bad", nil)
+	if _, err := parseRunListParams(r); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestBuildRunListQuery_workflowDefinitionId(t *testing.T) {
+	params := runListParams{
+		UserID:               "user-1",
+		WorkflowDefinitionID: "def-1",
+		Sort:                 "createdAt",
+		Order:                "desc",
+	}
+	countSQL, _, _, _ := buildRunListQuery(params)
+	if !strings.Contains(countSQL, "w.workflow_definition_id = $2") {
+		t.Fatalf("missing workflow definition filter: %s", countSQL)
+	}
+}

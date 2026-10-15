@@ -34,19 +34,20 @@ var workflowStatuses = map[string]struct{}{
 func parseRunListParams(r *http.Request) (runListParams, error) {
 	query := r.URL.Query()
 	params := runListParams{
-		Query:          strings.TrimSpace(query.Get("q")),
-		Sort:           strings.TrimSpace(query.Get("sort")),
-		Order:          strings.ToLower(strings.TrimSpace(query.Get("order"))),
-		Name:           strings.TrimSpace(query.Get("name")),
-		NameOp:         strings.TrimSpace(query.Get("nameOp")),
-		Status:         strings.TrimSpace(query.Get("status")),
-		Network:        strings.TrimSpace(query.Get("network")),
-		NetworkOp:      strings.TrimSpace(query.Get("networkOp")),
-		Organization:   strings.TrimSpace(query.Get("organization")),
-		OrganizationOp: strings.TrimSpace(query.Get("organizationOp")),
-		NetworkID:      strings.TrimSpace(query.Get("networkId")),
-		OrganizationID: strings.TrimSpace(query.Get("organizationId")),
-		Page:           defaultPage,
+		Query:                strings.TrimSpace(query.Get("q")),
+		Sort:                 strings.TrimSpace(query.Get("sort")),
+		Order:                strings.ToLower(strings.TrimSpace(query.Get("order"))),
+		Name:                 strings.TrimSpace(query.Get("name")),
+		NameOp:               strings.TrimSpace(query.Get("nameOp")),
+		Status:               strings.TrimSpace(query.Get("status")),
+		Network:              strings.TrimSpace(query.Get("network")),
+		NetworkOp:            strings.TrimSpace(query.Get("networkOp")),
+		Organization:         strings.TrimSpace(query.Get("organization")),
+		OrganizationOp:       strings.TrimSpace(query.Get("organizationOp")),
+		NetworkID:            strings.TrimSpace(query.Get("networkId")),
+		OrganizationID:       strings.TrimSpace(query.Get("organizationId")),
+		WorkflowDefinitionID: strings.TrimSpace(query.Get("workflowDefinitionId")),
+		Page:                 defaultPage,
 	}
 
 	if params.Sort == "" {
@@ -94,6 +95,9 @@ func parseRunListParams(r *http.Request) (runListParams, error) {
 	if params.OrganizationID != "" && !uuid.Valid(params.OrganizationID) {
 		return runListParams{}, apperror.NewBadRequestError("Invalid organization ID", nil)
 	}
+	if params.WorkflowDefinitionID != "" && !uuid.Valid(params.WorkflowDefinitionID) {
+		return runListParams{}, apperror.NewBadRequestError("Invalid workflow definition ID", nil)
+	}
 
 	if value := strings.TrimSpace(query.Get("page")); value != "" {
 		page, convErr := strconv.Atoi(value)
@@ -135,6 +139,9 @@ func buildRunListQuery(params runListParams) (countSQL, listSQL string, countArg
 	}
 	if params.OrganizationID != "" {
 		where = append(where, "w.organization_id = "+b.add(params.OrganizationID))
+	}
+	if params.WorkflowDefinitionID != "" {
+		where = append(where, "w.workflow_definition_id = "+b.add(params.WorkflowDefinitionID))
 	}
 	if params.Query != "" {
 		pattern := "%" + escapeLike(params.Query) + "%"

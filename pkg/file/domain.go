@@ -30,21 +30,22 @@ type File struct {
 }
 
 type listParams struct {
-	UserID         string
-	Query          string
-	NetworkID      string
-	OrganizationID string
-	Filename       string
-	FilenameOp     string
-	ContentType    string
-	SizeBytes      *int64
-	SizeBytesOp    string
-	Organization   string
-	OrganizationOp string
-	Sort           string
-	Order          string
-	Page           int
-	PageSize       int
+	UserID             string
+	Query              string
+	NetworkID          string
+	OrganizationID     string
+	OrganizationUserID string
+	Filename           string
+	FilenameOp         string
+	ContentType        string
+	SizeBytes          *int64
+	SizeBytesOp        string
+	Organization       string
+	OrganizationOp     string
+	Sort               string
+	Order              string
+	Page               int
+	PageSize           int
 }
 
 type listResult struct {
