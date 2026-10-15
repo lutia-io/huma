@@ -30,11 +30,11 @@ func (s *service) requireVisible(ctx context.Context, p principal.Principal, net
 	return s.authz.VisibleNetwork(ctx, p, networkID)
 }
 
-func (s *service) ListGroups(ctx context.Context, p principal.Principal, networkID, organizationID string) ([]*group, error) {
-	if err := s.requireVisible(ctx, p, networkID); err != nil {
+func (s *service) ListGroups(ctx context.Context, p principal.Principal, params listParams) (*groupListResult, error) {
+	if err := s.requireVisible(ctx, p, params.NetworkID); err != nil {
 		return nil, err
 	}
-	return s.store.ListGroups(ctx, organizationID)
+	return s.store.ListGroups(ctx, params)
 }
 
 func (s *service) GetGroup(ctx context.Context, p principal.Principal, id string) (*group, error) {
@@ -144,11 +144,11 @@ func (s *service) RemoveMember(ctx context.Context, p principal.Principal, exist
 	return s.store.RemoveMember(ctx, existing.ID, organizationUserID)
 }
 
-func (s *service) ListPermissions(ctx context.Context, p principal.Principal, networkID, organizationID string) ([]*permission, error) {
-	if err := s.requireVisible(ctx, p, networkID); err != nil {
+func (s *service) ListPermissions(ctx context.Context, p principal.Principal, params listParams) (*permissionListResult, error) {
+	if err := s.requireVisible(ctx, p, params.NetworkID); err != nil {
 		return nil, err
 	}
-	return s.store.ListPermissions(ctx, organizationID)
+	return s.store.ListPermissions(ctx, params)
 }
 
 func (s *service) GetPermission(ctx context.Context, p principal.Principal, id string) (*permission, error) {

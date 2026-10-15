@@ -31,11 +31,11 @@ func (s *service) requireManage(ctx context.Context, p principal.Principal, netw
 	return s.authz.RequireManageAccess(ctx, p, networkID)
 }
 
-func (s *service) ListGroups(ctx context.Context, p principal.Principal, networkID string) ([]*group, error) {
-	if err := s.requireVisible(ctx, p, networkID); err != nil {
+func (s *service) ListGroups(ctx context.Context, p principal.Principal, params listParams) (*groupListResult, error) {
+	if err := s.requireVisible(ctx, p, params.NetworkID); err != nil {
 		return nil, err
 	}
-	return s.store.ListGroups(ctx, networkID)
+	return s.store.ListGroups(ctx, params)
 }
 
 func (s *service) GetGroup(ctx context.Context, p principal.Principal, id string) (*group, error) {
@@ -130,19 +130,9 @@ func (s *service) InviteMember(ctx context.Context, p principal.Principal, netwo
 	if err := s.requireManage(ctx, p, networkID); err != nil {
 		return err
 	}
-	groups, err := s.store.ListGroups(ctx, networkID)
+	members, err := s.store.GetGroupBySlug(ctx, networkID, authz.SlugMembers)
 	if err != nil {
 		return err
-	}
-	var members *group
-	for _, g := range groups {
-		if g.Slug == authz.SlugMembers {
-			members = g
-			break
-		}
-	}
-	if members == nil {
-		return apperror.NewNotFoundError("Members group not found", nil)
 	}
 	return s.AddMember(ctx, p, members, email)
 }
@@ -164,11 +154,11 @@ func (s *service) RemoveMember(ctx context.Context, p principal.Principal, exist
 	return s.store.RemoveMember(ctx, existing.ID, userID)
 }
 
-func (s *service) ListPermissions(ctx context.Context, p principal.Principal, networkID string) ([]*permission, error) {
-	if err := s.requireVisible(ctx, p, networkID); err != nil {
+func (s *service) ListPermissions(ctx context.Context, p principal.Principal, params listParams) (*permissionListResult, error) {
+	if err := s.requireVisible(ctx, p, params.NetworkID); err != nil {
 		return nil, err
 	}
-	return s.store.ListPermissions(ctx, networkID)
+	return s.store.ListPermissions(ctx, params)
 }
 
 func (s *service) GetPermission(ctx context.Context, p principal.Principal, id string) (*permission, error) {

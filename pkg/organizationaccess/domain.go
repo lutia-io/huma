@@ -3,17 +3,18 @@ package organizationaccess
 import "time"
 
 type group struct {
-	ID            string    `json:"id"`
-	OrganizationID string   `json:"organizationId"`
-	NetworkID     string    `json:"networkId"`
-	Name          string    `json:"name"`
-	Slug          string    `json:"slug"`
-	Description   string    `json:"description"`
-	System        bool      `json:"system"`
-	Members       []member  `json:"members"`
-	PermissionIDs []string  `json:"permissionIds"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID             string        `json:"id"`
+	OrganizationID string        `json:"organizationId"`
+	NetworkID      string        `json:"networkId"`
+	Name           string        `json:"name"`
+	Slug           string        `json:"slug"`
+	Description    string        `json:"description"`
+	System         bool          `json:"system"`
+	Members        []member      `json:"members"`
+	PermissionIDs  []string      `json:"permissionIds"`
+	Permissions    []*permission `json:"permissions,omitempty"`
+	CreatedAt      time.Time     `json:"createdAt"`
+	UpdatedAt      time.Time     `json:"updatedAt"`
 }
 
 type member struct {
@@ -23,17 +24,48 @@ type member struct {
 	Email     string `json:"email"`
 }
 
+type groupSummary struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	MemberCount int    `json:"memberCount"`
+}
+
 type permission struct {
-	ID             string    `json:"id"`
-	OrganizationID string    `json:"organizationId"`
-	NetworkID      string    `json:"networkId"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
-	Description    string    `json:"description"`
-	System         bool      `json:"system"`
-	Grants         []grant   `json:"grants"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID             string         `json:"id"`
+	OrganizationID string         `json:"organizationId"`
+	NetworkID      string         `json:"networkId"`
+	Name           string         `json:"name"`
+	Slug           string         `json:"slug"`
+	Description    string         `json:"description"`
+	System         bool           `json:"system"`
+	Grants         []grant        `json:"grants"`
+	Groups         []groupSummary `json:"groups,omitempty"`
+	CreatedAt      time.Time      `json:"createdAt"`
+	UpdatedAt      time.Time      `json:"updatedAt"`
+}
+
+type listParams struct {
+	NetworkID                string
+	OrganizationID           string
+	Query                    string
+	Page                     int
+	PageSize                 int
+	ExcludeAssignedToGroupID string
+}
+
+type groupListResult struct {
+	Items    []*group `json:"items"`
+	Total    int      `json:"total"`
+	Page     int      `json:"page"`
+	PageSize int      `json:"pageSize"`
+}
+
+type permissionListResult struct {
+	Items    []*permission `json:"items"`
+	Total    int           `json:"total"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"pageSize"`
 }
 
 type fieldGrant struct {

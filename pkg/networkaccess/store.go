@@ -16,7 +16,8 @@ type store interface {
 	UpdateGroup(ctx context.Context, g *group) error
 	DeleteGroup(ctx context.Context, id string) error
 	GetGroup(ctx context.Context, id string) (*group, error)
-	ListGroups(ctx context.Context, networkID string) ([]*group, error)
+	GetGroupBySlug(ctx context.Context, networkID, slug string) (*group, error)
+	ListGroups(ctx context.Context, params listParams) (*groupListResult, error)
 	AddMember(ctx context.Context, groupID, userID string) error
 	RemoveMember(ctx context.Context, groupID, userID string) error
 	GroupHasMember(ctx context.Context, groupID, userID string) (bool, error)
@@ -25,7 +26,7 @@ type store interface {
 	UpdatePermission(ctx context.Context, p *permission) error
 	DeletePermission(ctx context.Context, id string) error
 	GetPermission(ctx context.Context, id string) (*permission, error)
-	ListPermissions(ctx context.Context, networkID string) ([]*permission, error)
+	ListPermissions(ctx context.Context, params listParams) (*permissionListResult, error)
 	AssignPermission(ctx context.Context, groupID, permissionID string) error
 	UnassignPermission(ctx context.Context, groupID, permissionID string) error
 }
@@ -106,15 +107,36 @@ func (s *postgresStore) GetGroup(ctx context.Context, id string) (*group, error)
 	if err := s.attachGroup(ctx, g); err != nil {
 		return nil, err
 	}
+	if err := s.attachGroupPermissions(ctx, g); err != nil {
+		return nil, err
+	}
 	return g, nil
 }
 
-func (s *postgresStore) ListGroups(ctx context.Context, networkID string) ([]*group, error) {
+func (s *postgresStore) GetGroupBySlug(ctx context.Context, networkID, slug string) (*group, error) {
 	sql := `SELECT` + groupSelect + `
 		FROM public.network_groups g
-		WHERE g.network_id = $1 AND g.deleted_at IS NULL
-		ORDER BY g.system DESC, g.name ASC`
-	rows, err := s.db.Query(ctx, sql, networkID)
+		WHERE g.network_id = $1 AND g.slug = $2 AND g.deleted_at IS NULL`
+	g := &group{}
+	if err := scanGroup(s.db.QueryRow(ctx, sql, networkID, slug), g); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.NewNotFoundError("Group not found", err)
+		}
+		return nil, err
+	}
+	if err := s.attachGroup(ctx, g); err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+func (s *postgresStore) ListGroups(ctx context.Context, params listParams) (*groupListResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildGroupListQuery(params)
+	var total int
+	if err := s.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +157,12 @@ func (s *postgresStore) ListGroups(ctx context.Context, networkID string) ([]*gr
 			return nil, err
 		}
 	}
-	return groups, nil
+	return &groupListResult{
+		Items:    groups,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: params.PageSize,
+	}, nil
 }
 
 func (s *postgresStore) attachGroup(ctx context.Context, g *group) error {
@@ -147,6 +174,45 @@ func (s *postgresStore) attachGroup(ctx context.Context, g *group) error {
 	ids, err := s.groupPermissionIDs(ctx, g.ID)
 	if err != nil {
 		return err
+	}
+	g.PermissionIDs = ids
+	return nil
+}
+
+func (s *postgresStore) attachGroupPermissions(ctx context.Context, g *group) error {
+	const sql = `
+		SELECT p.id, p.network_id, p.name, p.slug, p.description, p.system, p.created_at, p.updated_at
+		FROM public.network_permissions p
+		JOIN public.network_group_permissions ngp ON ngp.permission_id = p.id
+		WHERE ngp.group_id = $1 AND p.deleted_at IS NULL
+		ORDER BY p.system DESC, p.name ASC`
+	rows, err := s.db.Query(ctx, sql, g.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	items := make([]*permission, 0)
+	for rows.Next() {
+		p := &permission{}
+		if err := rows.Scan(&p.ID, &p.NetworkID, &p.Name, &p.Slug, &p.Description, &p.System, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return err
+		}
+		items = append(items, p)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, p := range items {
+		grants, err := s.permissionGrants(ctx, p.ID)
+		if err != nil {
+			return err
+		}
+		p.Grants = grants
+	}
+	g.Permissions = items
+	ids := make([]string, 0, len(items))
+	for _, p := range items {
+		ids = append(ids, p.ID)
 	}
 	g.PermissionIDs = ids
 	return nil
@@ -343,16 +409,21 @@ func (s *postgresStore) GetPermission(ctx context.Context, id string) (*permissi
 		return nil, err
 	}
 	p.Grants = grants
+	groups, err := s.permissionGroups(ctx, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	p.Groups = groups
 	return p, nil
 }
 
-func (s *postgresStore) ListPermissions(ctx context.Context, networkID string) ([]*permission, error) {
-	const sql = `
-		SELECT id, network_id, name, slug, description, system, created_at, updated_at
-		FROM public.network_permissions
-		WHERE network_id = $1 AND deleted_at IS NULL
-		ORDER BY system DESC, name ASC`
-	rows, err := s.db.Query(ctx, sql, networkID)
+func (s *postgresStore) ListPermissions(ctx context.Context, params listParams) (*permissionListResult, error) {
+	countSQL, listSQL, countArgs, listArgs := buildPermissionListQuery(params)
+	var total int
+	if err := s.db.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +446,36 @@ func (s *postgresStore) ListPermissions(ctx context.Context, networkID string) (
 		}
 		p.Grants = grants
 	}
-	return items, nil
+	return &permissionListResult{
+		Items:    items,
+		Total:    total,
+		Page:     params.Page,
+		PageSize: params.PageSize,
+	}, nil
+}
+
+func (s *postgresStore) permissionGroups(ctx context.Context, permissionID string) ([]groupSummary, error) {
+	const sql = `
+		SELECT g.id, g.name, g.slug,
+			(SELECT count(*) FROM public.network_group_members ngm WHERE ngm.group_id = g.id)
+		FROM public.network_groups g
+		JOIN public.network_group_permissions ngp ON ngp.group_id = g.id
+		WHERE ngp.permission_id = $1 AND g.deleted_at IS NULL
+		ORDER BY g.system DESC, g.name ASC`
+	rows, err := s.db.Query(ctx, sql, permissionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	groups := make([]groupSummary, 0)
+	for rows.Next() {
+		var g groupSummary
+		if err := rows.Scan(&g.ID, &g.Name, &g.Slug, &g.MemberCount); err != nil {
+			return nil, err
+		}
+		groups = append(groups, g)
+	}
+	return groups, rows.Err()
 }
 
 func (s *postgresStore) permissionGrants(ctx context.Context, permissionID string) ([]grant, error) {

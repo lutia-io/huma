@@ -44,22 +44,29 @@ func (h *httpHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	networkID, ok := network.ResolveID(r, p, r.URL.Query().Get("networkId"))
-	if !ok {
-		render.WriteError(w, apperror.NewBadRequestError("Network ID is required", nil))
-		return
-	}
-	organizationID, ok := organization.ResolveID(r, p, r.URL.Query().Get("organizationId"))
-	if !ok {
-		render.WriteError(w, apperror.NewBadRequestError("Organization ID is required", nil))
-		return
-	}
-	items, err := h.service.ListGroups(r.Context(), p, networkID, organizationID)
+	params, err := parseListParams(r)
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, items)
+	networkID, ok := network.ResolveID(r, p, params.NetworkID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Network ID is required", nil))
+		return
+	}
+	organizationID, ok := organization.ResolveID(r, p, params.OrganizationID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Organization ID is required", nil))
+		return
+	}
+	params.NetworkID = networkID
+	params.OrganizationID = organizationID
+	result, err := h.service.ListGroups(r.Context(), p, params)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, result)
 }
 
 func (h *httpHandler) GetGroup(w http.ResponseWriter, r *http.Request) {
@@ -236,22 +243,29 @@ func (h *httpHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 		render.WriteError(w, apperror.NewUnauthorizedError("Authentication required", nil))
 		return
 	}
-	networkID, ok := network.ResolveID(r, p, r.URL.Query().Get("networkId"))
-	if !ok {
-		render.WriteError(w, apperror.NewBadRequestError("Network ID is required", nil))
-		return
-	}
-	organizationID, ok := organization.ResolveID(r, p, r.URL.Query().Get("organizationId"))
-	if !ok {
-		render.WriteError(w, apperror.NewBadRequestError("Organization ID is required", nil))
-		return
-	}
-	items, err := h.service.ListPermissions(r.Context(), p, networkID, organizationID)
+	params, err := parseListParams(r)
 	if err != nil {
 		render.WriteError(w, err)
 		return
 	}
-	render.WriteJSON(w, http.StatusOK, items)
+	networkID, ok := network.ResolveID(r, p, params.NetworkID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Network ID is required", nil))
+		return
+	}
+	organizationID, ok := organization.ResolveID(r, p, params.OrganizationID)
+	if !ok {
+		render.WriteError(w, apperror.NewBadRequestError("Organization ID is required", nil))
+		return
+	}
+	params.NetworkID = networkID
+	params.OrganizationID = organizationID
+	result, err := h.service.ListPermissions(r.Context(), p, params)
+	if err != nil {
+		render.WriteError(w, err)
+		return
+	}
+	render.WriteJSON(w, http.StatusOK, result)
 }
 
 func (h *httpHandler) GetPermission(w http.ResponseWriter, r *http.Request) {
