@@ -7,7 +7,6 @@ import (
 	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
-	"github.com/lutia-io/huma/pkg/resolver"
 )
 
 type Noop struct{}
@@ -27,13 +26,11 @@ func (h *Noop) Execute(_ context.Context, execCtx executor.ExecutionContext, n w
 	}
 	message := ctx.Message
 	if message != "" {
-		resolved, resolveErr := resolver.ResolveString(message, execCtx.Input)
+		resolved, resolveErr := resolveAny(message, execCtx)
 		if resolveErr != nil {
 			return executor.Result{}, fmt.Errorf("resolving NOOP message: %w", resolveErr)
 		}
-		if s, ok := resolved.(string); ok {
-			message = s
-		}
+		message = stringifyResolved(resolved)
 	}
 	return executor.MarshalOutput(map[string]any{"message": message})
 }

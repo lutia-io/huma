@@ -12,7 +12,6 @@ import (
 	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
-	"github.com/lutia-io/huma/pkg/resolver"
 )
 
 const fileContentLimit = 1 << 20
@@ -23,6 +22,14 @@ type FileStore interface {
 	OpenContent(ctx context.Context, fileID string) (*file.Content, bool, error)
 }
 
+// File reads or writes workspace files.
+//
+// WRITE config: filename (required), content (templated string or value),
+// contentType (default text/plain). Content may be a pure template path to a
+// string or JSON value; non-strings are JSON-marshaled.
+//
+// WRITE output: { fileId, filename, contentType, sizeBytes }
+// READ output:  { fileId, filename, contentType, sizeBytes, content }
 type File struct {
 	files FileStore
 }
@@ -54,25 +61,28 @@ func (h *File) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 }
 
 func (h *File) write(ctx context.Context, execCtx executor.ExecutionContext, def node.FileContext) (executor.Result, error) {
-	filename, err := resolveString(def.Filename, execCtx.Input)
+	filename, err := resolveString(def.Filename, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving FILE filename: %w", err)
 	}
 	if filename == "" {
 		return executor.Result{}, fmt.Errorf("FILE WRITE requires a filename")
 	}
-	contentType, err := resolveString(def.ContentType, execCtx.Input)
+	contentType, err := resolveString(def.ContentType, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving FILE contentType: %w", err)
 	}
 	if contentType == "" {
 		contentType = "text/plain"
 	}
-	contentVal, err := resolver.ResolveString(def.Content, execCtx.Input)
+	contentVal, err := resolveAny(def.Content, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving FILE content: %w", err)
 	}
-	content := stringifyResolved(contentVal)
+	content, err := contentString(contentVal)
+	if err != nil {
+		return executor.Result{}, fmt.Errorf("encoding FILE content: %w", err)
+	}
 
 	id, err := h.files.Create(ctx, file.CreateParams{
 		Filename:           filename,
@@ -118,7 +128,7 @@ func (h *File) write(ctx context.Context, execCtx executor.ExecutionContext, def
 }
 
 func (h *File) read(ctx context.Context, execCtx executor.ExecutionContext, def node.FileContext) (executor.Result, error) {
-	fileID, err := resolveString(def.FileID, execCtx.Input)
+	fileID, err := resolveString(def.FileID, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving FILE fileId: %w", err)
 	}

@@ -13,9 +13,13 @@ import (
 	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
-	"github.com/lutia-io/huma/pkg/resolver"
 )
 
+// HTTP calls an external HTTP API. Output is always:
+//
+//	{ "status": <int>, "headers": { <string>: <string> }, "body": <any> }
+//
+// body is parsed JSON when the response looks like JSON; otherwise a string.
 type HTTP struct {
 	client *http.Client
 }
@@ -49,7 +53,7 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 		payload["body"] = body
 	}
 
-	resolved, err := resolver.ResolveInput(payload, execCtx.Input)
+	resolved, err := resolveInput(payload, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving HTTP definition: %w", err)
 	}
@@ -60,16 +64,20 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 	}
 
 	var bodyReader io.Reader
+	bodyIsJSON := false
 	if body, ok := resolved["body"]; ok && body != nil {
 		switch v := body.(type) {
 		case string:
 			bodyReader = strings.NewReader(v)
+			trimmed := strings.TrimSpace(v)
+			bodyIsJSON = json.Valid([]byte(trimmed))
 		default:
 			encoded, err := json.Marshal(v)
 			if err != nil {
 				return executor.Result{}, err
 			}
 			bodyReader = bytes.NewReader(encoded)
+			bodyIsJSON = true
 		}
 	}
 
@@ -83,6 +91,9 @@ func (h *HTTP) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 				req.Header.Set(key, s)
 			}
 		}
+	}
+	if bodyReader != nil && bodyIsJSON && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	if httpDef.Method != http.MethodGet && httpDef.Method != http.MethodHead {
 		if req.Header.Get("Idempotency-Key") == "" {

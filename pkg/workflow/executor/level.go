@@ -19,8 +19,10 @@ func IndexedOutput(outputs map[int]json.RawMessage) map[string]any {
 	return out
 }
 
-// mergeLevelInput keeps the pipeline enqueue fields (salePrice, schema ids)
+// MergeLevelInput keeps the pipeline enqueue fields (salePrice, schema ids)
 // available on later levels, then overlays previous-level outputs as "0", "1", …
+// Only the immediately previous level's outputs are present — earlier levels
+// must be copied forward with a MAPPER (pass-through) if later levels need them.
 func MergeLevelInput(base, outputs map[string]any) map[string]any {
 	if len(outputs) == 0 {
 		return base

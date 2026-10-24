@@ -62,7 +62,7 @@ func TestParseDefinition_file(t *testing.T) {
 }
 
 func TestParseDefinition_listMapper(t *testing.T) {
-	got, err := ParseDefinition(TypeListMapper, []byte(`{"from":"{{ .Input.0.records }}","as":"investor","mapping":{"id":"{{ .investor.id }}"}}`))
+	got, err := ParseDefinition(TypeListMapper, []byte(`{"from":"{{ .Input.0.items }}","as":"investor","mapping":{"id":"{{ .investor.id }}"}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,13 +73,40 @@ func TestParseDefinition_listMapper(t *testing.T) {
 }
 
 func TestParseDefinition_listMapperDefaultsAs(t *testing.T) {
-	got, err := ParseDefinition(TypeListMapper, []byte(`{"from":"{{ .Input.0.records }}"}`))
+	got, err := ParseDefinition(TypeListMapper, []byte(`{"from":"{{ .Input.0.items }}"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, ok := got.(ListMapperContext)
 	if !ok || ctx.As != "item" {
 		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestParseDefinition_fileRequiresFilenameOnWrite(t *testing.T) {
+	if _, err := ParseDefinition(TypeFile, []byte(`{"operation":"write","content":"x"}`)); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestParseDefinition_fileRequiresFileIDOnRead(t *testing.T) {
+	if _, err := ParseDefinition(TypeFile, []byte(`{"operation":"read"}`)); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestCatalogCoversAllTypes(t *testing.T) {
+	types := []Type{
+		TypeNoop, TypeHTTP, TypeMapper, TypeListMapper,
+		TypeFile, TypeRecord, TypeBulk, TypeTriggerWorkflow,
+	}
+	if len(Catalog) != len(types) {
+		t.Fatalf("Catalog len=%d, want %d", len(Catalog), len(types))
+	}
+	for _, typ := range types {
+		if _, ok := CatalogByType(typ); !ok {
+			t.Fatalf("missing catalog entry for %s", typ)
+		}
 	}
 }
 

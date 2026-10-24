@@ -7,7 +7,6 @@ import (
 	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
-	"github.com/lutia-io/huma/pkg/resolver"
 )
 
 type Mapper struct{}
@@ -25,7 +24,7 @@ func (h *Mapper) Execute(_ context.Context, execCtx executor.ExecutionContext, n
 	if err != nil {
 		return executor.Result{}, err
 	}
-	resolved, err := resolver.ResolveInput(def.Mapping, execCtx.Input)
+	resolved, err := resolveInput(def.Mapping, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving MAPPER mapping: %w", err)
 	}

@@ -58,6 +58,11 @@ type ListMapperContext struct {
 	Mapping map[string]any `json:"mapping"`
 }
 
+// FileContext configures FILE READ or WRITE.
+//
+// WRITE: filename (required after resolve), content (templated string or value;
+// non-string resolved values are JSON-marshaled), contentType (default text/plain).
+// READ: fileId (required after resolve).
 type FileContext struct {
 	Operation   string `json:"operation"`
 	FileID      string `json:"fileId,omitempty"`
@@ -166,7 +171,19 @@ func ParseDefinition(t Type, data json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("invalid FILE definition: %w", err)
 		}
 		ctx.Operation = strings.ToUpper(strings.TrimSpace(ctx.Operation))
-		if ctx.Operation != FileOpRead && ctx.Operation != FileOpWrite {
+		switch ctx.Operation {
+		case FileOpWrite:
+			ctx.Filename = strings.TrimSpace(ctx.Filename)
+			if ctx.Filename == "" {
+				return nil, fmt.Errorf("invalid FILE definition: WRITE requires filename")
+			}
+			ctx.ContentType = strings.TrimSpace(ctx.ContentType)
+		case FileOpRead:
+			ctx.FileID = strings.TrimSpace(ctx.FileID)
+			if ctx.FileID == "" {
+				return nil, fmt.Errorf("invalid FILE definition: READ requires fileId")
+			}
+		default:
 			return nil, fmt.Errorf("invalid FILE definition: operation must be READ or WRITE")
 		}
 		return ctx, nil

@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/workflow"
-	"github.com/lutia-io/huma/pkg/workflow/executor"
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/resolver"
+	"github.com/lutia-io/huma/pkg/workflow"
+	"github.com/lutia-io/huma/pkg/workflow/executor"
 )
 
 const bulkMax = 10000
@@ -44,7 +44,7 @@ func (h *Bulk) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 	created := make([]map[string]any, 0, len(def.Records))
 	total := 0
 	for i, group := range def.Records {
-		schemaID, schemaErr := resolveString(group.SchemaID, execCtx.Input)
+		schemaID, schemaErr := resolveString(group.SchemaID, execCtx)
 		if schemaErr != nil {
 			return executor.Result{}, fmt.Errorf("resolving BULK records[%d].schemaId: %w", i, schemaErr)
 		}
@@ -52,7 +52,7 @@ func (h *Bulk) Execute(ctx context.Context, execCtx executor.ExecutionContext, n
 			return executor.Result{}, fmt.Errorf("BULK records[%d] requires a schemaId", i)
 		}
 
-		from, fromErr := resolver.ResolveString(group.From, execCtx.Input)
+		from, fromErr := resolveAny(group.From, execCtx)
 		if fromErr != nil {
 			return executor.Result{}, fmt.Errorf("resolving BULK records[%d].from: %w", i, fromErr)
 		}
@@ -106,7 +106,7 @@ func (h *Bulk) writeItem(
 	groupIndex, itemIndex int,
 ) (string, bool, error) {
 	if operation == node.BulkOpUpsert {
-		recordID, err := resolveStringWith(group.RecordID, execCtx.Input, extras)
+		recordID, err := resolveStringWith(group.RecordID, execCtx, extras)
 		if err != nil {
 			return "", false, fmt.Errorf("resolving BULK records[%d] recordId at index %d: %w", groupIndex, itemIndex, err)
 		}
@@ -128,7 +128,7 @@ func (h *Bulk) writeItem(
 		}
 	}
 
-	data, err := resolver.ResolveInputWith(group.Data, execCtx.Input, extras)
+	data, err := resolveInputWith(group.Data, execCtx, extras)
 	if err != nil {
 		return "", false, fmt.Errorf("resolving BULK records[%d] data at index %d: %w", groupIndex, itemIndex, err)
 	}
@@ -161,7 +161,7 @@ func (h *Bulk) updateItem(
 	if err != nil {
 		return "", err
 	}
-	resolved, err := resolver.ResolveInputWithAndTarget(data, execCtx.Input, extras, resolver.Target{
+	resolved, err := resolveInputWithAndTarget(data, execCtx, extras, resolver.Target{
 		ID:   existing.ID,
 		Data: existingData,
 	})

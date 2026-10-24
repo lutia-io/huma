@@ -7,7 +7,6 @@ import (
 
 	"github.com/lutia-io/huma/pkg/logger"
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/resolver"
 	"github.com/lutia-io/huma/pkg/uuid"
 	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
@@ -18,7 +17,7 @@ type WorkflowEnqueuer interface {
 }
 
 type TriggerWorkflow struct {
-	logger   *logger.Logger
+	logger    *logger.Logger
 	workflows WorkflowEnqueuer
 }
 
@@ -36,7 +35,8 @@ func (h *TriggerWorkflow) Execute(ctx context.Context, execCtx executor.Executio
 		return executor.Result{}, err
 	}
 
-	input, err := resolver.ResolveInputWith(def.Input, execCtx.Input, triggerExtras(execCtx))
+	// Same .Record / .Input contract as every other node.
+	input, err := resolveInput(def.Input, execCtx)
 	if err != nil {
 		return executor.Result{}, err
 	}
@@ -65,15 +65,4 @@ func (h *TriggerWorkflow) Execute(ctx context.Context, execCtx executor.Executio
 		return executor.Result{}, err
 	}
 	return executor.Result{Output: out}, nil
-}
-
-func triggerExtras(execCtx executor.ExecutionContext) map[string]any {
-	extras := map[string]any{}
-	if execCtx.TriggerRecordID != "" {
-		extras["Record"] = map[string]any{
-			"id":   execCtx.TriggerRecordID,
-			"data": execCtx.TriggerData,
-		}
-	}
-	return extras
 }

@@ -13,6 +13,8 @@
 //
 // The root data object is env: the trigger record is .Record, the record an
 // update action is writing to is .Context, and pipeline level data is .Input.
+// Workflow node handlers always inject .Record (trigger row { id, data }) when
+// resolving configs; enqueue also flattens trigger fields onto .Input.
 // Numeric pipeline indexes are written as {{ .Input.1.body.name }} and
 // rewritten to index calls because Go templates cannot parse ".1" as a field
 // name. Custom functions:
@@ -184,14 +186,16 @@ func ResolveOne(s string, trigger Trigger) (any, error) {
 }
 
 // ResolveInput is like Resolve but templates read from .Input (pipeline level
-// data) instead of .Record.
+// data). .Record is empty unless callers pass it via ResolveInputWith extras
+// (workflow handlers always inject the trigger row as extras["Record"]).
 func ResolveInput(data map[string]any, input map[string]any) (map[string]any, error) {
 	return ResolveInputWith(data, input, nil)
 }
 
-// ResolveInputWith is ResolveInput plus extra root names for list mapping
-// ({{ .investor.id }} when extras["investor"] is set). Extra keys must not
-// shadow Record, Context, or Input.
+// ResolveInputWith is ResolveInput plus extra root names. Workflow handlers pass
+// Record (trigger row { id, data }) and list aliases ({{ .investor.id }} when
+// extras["investor"] is set). Extra keys must not shadow Context or Input;
+// Record may be set to expose the trigger.
 func ResolveInputWith(data map[string]any, input map[string]any, extras map[string]any) (map[string]any, error) {
 	resolved, err := resolveValue(data, pipelineEnv(input, extras, Target{}))
 	if err != nil {

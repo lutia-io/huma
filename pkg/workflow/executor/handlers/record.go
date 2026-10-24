@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	"github.com/lutia-io/huma/pkg/node"
-	"github.com/lutia-io/huma/pkg/workflow"
-	"github.com/lutia-io/huma/pkg/workflow/executor"
 	"github.com/lutia-io/huma/pkg/record"
 	"github.com/lutia-io/huma/pkg/resolver"
+	"github.com/lutia-io/huma/pkg/workflow"
+	"github.com/lutia-io/huma/pkg/workflow/executor"
 )
 
 const (
@@ -68,7 +68,7 @@ func (h *Record) Execute(ctx context.Context, execCtx executor.ExecutionContext,
 }
 
 func (h *Record) list(ctx context.Context, execCtx executor.ExecutionContext, def node.RecordContext) (executor.Result, error) {
-	schemaID, err := resolveString(def.SchemaID, execCtx.Input)
+	schemaID, err := resolveString(def.SchemaID, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving RECORD schemaId: %w", err)
 	}
@@ -78,18 +78,18 @@ func (h *Record) list(ctx context.Context, execCtx executor.ExecutionContext, de
 
 	filters := make([]record.ListFieldFilter, 0, len(def.Filters))
 	for _, filter := range def.Filters {
-		field, fieldErr := resolveString(filter.Field, execCtx.Input)
+		field, fieldErr := resolveString(filter.Field, execCtx)
 		if fieldErr != nil {
 			return executor.Result{}, fmt.Errorf("resolving RECORD filter field: %w", fieldErr)
 		}
 		if field == "" {
 			continue
 		}
-		op, opErr := resolveString(filter.Op, execCtx.Input)
+		op, opErr := resolveString(filter.Op, execCtx)
 		if opErr != nil {
 			return executor.Result{}, fmt.Errorf("resolving RECORD filter op: %w", opErr)
 		}
-		value, valueErr := resolveString(filter.Value, execCtx.Input)
+		value, valueErr := resolveString(filter.Value, execCtx)
 		if valueErr != nil {
 			return executor.Result{}, fmt.Errorf("resolving RECORD filter value: %w", valueErr)
 		}
@@ -123,13 +123,13 @@ func (h *Record) list(ctx context.Context, execCtx executor.ExecutionContext, de
 	}
 
 	return executor.MarshalOutput(map[string]any{
-		"records": items,
-		"total":   total,
+		"items": items,
+		"total": total,
 	})
 }
 
 func (h *Record) get(ctx context.Context, execCtx executor.ExecutionContext, def node.RecordContext) (executor.Result, error) {
-	recordID, err := resolveString(def.RecordID, execCtx.Input)
+	recordID, err := resolveString(def.RecordID, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving RECORD recordId: %w", err)
 	}
@@ -141,14 +141,14 @@ func (h *Record) get(ctx context.Context, execCtx executor.ExecutionContext, def
 }
 
 func (h *Record) create(ctx context.Context, execCtx executor.ExecutionContext, def node.RecordContext) (executor.Result, error) {
-	schemaID, err := resolveString(def.SchemaID, execCtx.Input)
+	schemaID, err := resolveString(def.SchemaID, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving RECORD schemaId: %w", err)
 	}
 	if schemaID == "" {
 		return executor.Result{}, fmt.Errorf("RECORD CREATE requires a schemaId")
 	}
-	data, err := resolver.ResolveInput(def.Data, execCtx.Input)
+	data, err := resolveInput(def.Data, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving RECORD data: %w", err)
 	}
@@ -175,7 +175,7 @@ func (h *Record) create(ctx context.Context, execCtx executor.ExecutionContext, 
 }
 
 func (h *Record) update(ctx context.Context, execCtx executor.ExecutionContext, def node.RecordContext) (executor.Result, error) {
-	recordID, err := resolveString(def.RecordID, execCtx.Input)
+	recordID, err := resolveString(def.RecordID, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving RECORD recordId: %w", err)
 	}
@@ -192,7 +192,7 @@ func (h *Record) update(ctx context.Context, execCtx executor.ExecutionContext, 
 		return executor.Result{}, err
 	}
 
-	resolved, err := resolver.ResolveInputWithTarget(def.Data, execCtx.Input, resolver.Target{
+	resolved, err := resolveInputWithTarget(def.Data, execCtx, resolver.Target{
 		ID:   existing.ID,
 		Data: existingData,
 	})
@@ -211,7 +211,7 @@ func (h *Record) update(ctx context.Context, execCtx executor.ExecutionContext, 
 }
 
 func (h *Record) upsert(ctx context.Context, execCtx executor.ExecutionContext, def node.RecordContext) (executor.Result, error) {
-	recordID, err := resolveString(def.RecordID, execCtx.Input)
+	recordID, err := resolveString(def.RecordID, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving RECORD recordId: %w", err)
 	}

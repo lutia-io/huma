@@ -8,7 +8,6 @@ import (
 	"github.com/lutia-io/huma/pkg/node"
 	"github.com/lutia-io/huma/pkg/workflow"
 	"github.com/lutia-io/huma/pkg/workflow/executor"
-	"github.com/lutia-io/huma/pkg/resolver"
 )
 
 type ListMapper struct{}
@@ -27,18 +26,18 @@ func (h *ListMapper) Execute(_ context.Context, execCtx executor.ExecutionContex
 		return executor.Result{}, err
 	}
 
-	from, err := resolver.ResolveString(def.From, execCtx.Input)
+	from, err := resolveAny(def.From, execCtx)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("resolving LIST_MAPPER from: %w", err)
 	}
-		items, err := toSlice(from)
+	items, err := toSlice(from)
 	if err != nil {
 		return executor.Result{}, fmt.Errorf("LIST_MAPPER from: %w", err)
 	}
 
 	out := make([]any, 0, len(items))
 	for i, item := range items {
-		resolved, resolveErr := resolver.ResolveInputWith(def.Mapping, execCtx.Input, map[string]any{
+		resolved, resolveErr := resolveInputWith(def.Mapping, execCtx, map[string]any{
 			def.As: item,
 		})
 		if resolveErr != nil {
